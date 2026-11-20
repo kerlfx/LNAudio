@@ -335,7 +335,7 @@ public:
         const uint8_t* overlay,
         int overlay_stride)
     {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::unique_lock<std::mutex> lock(mutex_);
         if (!native_texture || width <= 0 || height <= 0 ||
             !frame_owner || !swap_chain_ || !device_ || !video_device_ || !video_context_)
             return false;
@@ -557,7 +557,19 @@ public:
         }
 
         context_->CopyResource(back_buffer.Get(), hardware_output_texture_.Get());
-        return SUCCEEDED(swap_chain_->Present(1, 0));
+        const HRESULT present_result = swap_chain_->Present(1, 0);
+        if (present_result == DXGI_ERROR_DEVICE_REMOVED ||
+            present_result == DXGI_ERROR_DEVICE_RESET ||
+            present_result == DXGI_ERROR_DEVICE_HUNG ||
+            present_result == DXGI_ERROR_DRIVER_INTERNAL_ERROR)
+        {
+            const HWND target = window_;
+            release_resources();
+            lock.unlock();
+            initialize(target);
+            return false;
+        }
+        return SUCCEEDED(present_result);
     }
 
     bool capture_bgra(std::vector<uint8_t>& pixels, int& width, int& height)

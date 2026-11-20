@@ -23,14 +23,111 @@ PlaybackSession::~PlaybackSession()
 }
 
 #ifdef _WIN32
-void PlaybackSession::set_video_device(void* device)
+SessionResult PlaybackSession::set_video_device(void* device)
 {
     std::lock_guard<std::mutex> lock(mutex_);
+    if (device == video_device_)
+    {
+        if (device)
+            static_cast<ID3D11Device*>(device)->Release();
+        return make_result(true);
+    }
+
+    const SessionState previous_state = snapshot_.state;
+    const int64_t previous_position = backend_
+        ? backend_->position_ms()
+        : snapshot_.position_ms;
+
     if (backend_)
-        backend_->set_video_device(device);
+    {
+        const MediaBackendResult close_result = backend_->close();
+        if (!close_result.success)
+        {
+            if (device)
+                static_cast<ID3D11Device*>(device)->Release();
+            return make_result(false, close_result.message);
+        }
+        backend_.reset();
+    }
+
     if (video_device_)
         static_cast<ID3D11Device*>(video_device_)->Release();
     video_device_ = device;
+    ++snapshot_.generation;
+
+    if (source_.empty() || !backend_factory_)
+        return make_result(true);
+
+    backend_ = backend_factory_();
+    if (!backend_)
+    {
+        snapshot_.state = SessionState::Error;
+        return make_result(false, "Unable to recreate media backend after D3D11 device change.");
+    }
+
+    backend_->set_video_device(video_device_);
+    backend_->set_volume(volume_);
+    backend_->set_playback_rate(playback_rate_);
+    backend_->set_playback_end_callback(playback_end_callback_);
+    backend_->set_playback_error_callback(playback_error_callback_);
+
+    MediaInfo info;
+    MediaBackendResult result = backend_->open(source_, info);
+    if (!result.success)
+    {
+        backend_.reset();
+        snapshot_.state = SessionState::Error;
+        return make_result(false, "Unable to reopen media after D3D11 device change: " + result.message);
+    }
+
+    snapshot_.duration_ms = info.duration_ms;
+    snapshot_.has_audio = info.has_audio;
+    snapshot_.has_video = info.has_video;
+
+    if (previous_position > 0)
+    {
+        result = backend_->seek(previous_position);
+        if (!result.success)
+        {
+            backend_->close();
+            backend_.reset();
+            snapshot_.state = SessionState::Error;
+            return make_result(false, "Unable to restore playback position after D3D11 device change: " + result.message);
+        }
+    }
+
+    snapshot_.position_ms = previous_position;
+    if (previous_state == SessionState::Playing || previous_state == SessionState::Paused)
+    {
+        result = backend_->play();
+        if (!result.success)
+        {
+            backend_->close();
+            backend_.reset();
+            snapshot_.state = SessionState::Error;
+            return make_result(false, "Unable to resume playback after D3D11 device change: " + result.message);
+        }
+        if (previous_state == SessionState::Paused)
+        {
+            result = backend_->pause();
+            if (!result.success)
+            {
+                backend_->close();
+                backend_.reset();
+                snapshot_.state = SessionState::Error;
+                return make_result(false, "Unable to restore paused state after D3D11 device change: " + result.message);
+            }
+        }
+        snapshot_.state = previous_state;
+    }
+    else
+    {
+        snapshot_.state = previous_state == SessionState::Ended
+            ? SessionState::Ready
+            : previous_state;
+    }
+
+    return make_result(true);
 }
 #endif
 
@@ -58,6 +155,8 @@ SessionResult PlaybackSession::open(const std::string& source)
         }
         backend_.reset();
     }
+
+    source_.clear();
 
     if (!backend_factory_)
     {
@@ -89,6 +188,7 @@ SessionResult PlaybackSession::open(const std::string& source)
         return make_result(false, result.message);
     }
 
+    source_ = source;
     snapshot_.state = SessionState::Ready;
     snapshot_.duration_ms = info.duration_ms;
     snapshot_.has_audio = info.has_audio;
@@ -200,6 +300,7 @@ SessionResult PlaybackSession::close()
     }
 
     ++snapshot_.generation;
+    source_.clear();
     reset_media_state();
     return make_result(true);
 }

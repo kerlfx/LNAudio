@@ -91,6 +91,7 @@ private:
     QTimer* snapshot_timer_;
     QTimer* video_timer_;
     lnplayer_t* player_ = nullptr;
+    void* video_device_identity_ = nullptr;
     int64_t duration_ms_ = -1;
     bool slider_dragging_ = false;
     bool has_video_ = false;

@@ -227,9 +227,12 @@ public:
     }
 
 #ifdef _WIN32
-    void set_video_device(void* device)
+    lnplayer_result_t set_video_device(void* device)
     {
-        session_.set_video_device(device);
+        const lnplayer::SessionResult result = session_.set_video_device(device);
+        if (!result.success)
+            return set_error(LNPLAYER_RESULT_INTERNAL_ERROR, result.message.c_str());
+        return LNPLAYER_RESULT_OK;
     }
 
     lnplayer_result_t read_video_frame(
@@ -761,7 +764,9 @@ lnplayer_result_t lnplayer_windows_set_d3d11_device(
     if (!d3d11_device)
         return set_error(LNPLAYER_RESULT_INVALID_ARGUMENT, "D3D11 device is null.");
 
-    player->controller->set_video_device(d3d11_device);
+    const lnplayer_result_t result = player->controller->set_video_device(d3d11_device);
+    if (result != LNPLAYER_RESULT_OK)
+        return result;
     return finish_result(LNPLAYER_RESULT_OK);
 }
 

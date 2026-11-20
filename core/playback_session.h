@@ -52,7 +52,7 @@ public:
 
     SessionResult open(const std::string& source);
 #ifdef _WIN32
-    void set_video_device(void* device);
+    SessionResult set_video_device(void* device);
 #endif
     SessionResult play();
     SessionResult pause();
@@ -78,6 +78,7 @@ private:
     mutable std::mutex mutex_;
     std::unique_ptr<MediaBackend> backend_;
     SessionSnapshot snapshot_;
+    std::string source_;
     float volume_ = 1.0f;
     float playback_rate_ = 1.0f;
     std::function<void()> playback_end_callback_;
