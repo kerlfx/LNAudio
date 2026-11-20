@@ -537,9 +537,9 @@ Core 内部可以使用 FFmpeg AVFrame 和 AVBufferRef 管理帧生命周期，�
 - **Windows / Qt**：GUI 主线程只提交任务、处理输入和更新 QWidget。UI 调度器拥有一个单线程 `io_context` 作为提交/分发入口，以及一套三线程共享 `asio::thread_pool`。所有后台任务先通过 `asio::post(ui_io_context, ...)` 进入调度入口，再投递到线程池执行。
 - **Windows 命令执行器**：同步完成型 `play/pause/stop/close`、轨道切换、设备更新等 C ABI 调用通过绑定在线程池的 Player command strand 串行执行，避免 UI 阻塞并保持调用顺序。提交型 `open/seek` 也通过该入口提交；其 C ABI 返回只表示请求已入队，实际完成仍由 Core 事件回调通知。
 - **Windows 视频帧执行器**：同步视频帧 Pull 通过独立 frame strand 执行，避免帧读取等待占住命令 strand。UI 只允许一个帧读取任务在途；帧完成后使用 Qt queued connection 回到 GUI 线程更新状态。帧队列必须有界，不能持续向线程池堆积帧任务。
-- **Windows 媒体/音乐库执行器**：目录扫描、媒体探测、音乐库扫描和查询通过 library strand 执行，避免共享音乐库访问并发冲突。截图编码/写入等独立任务可以直接投递共享线程池。
+- **Windows 媒体/音乐库执行器**：目录扫描、媒体探测、音乐库扫描和查询通过 library strand 执行，避免共享音乐库访问并发冲突；外挂字幕基础文本回退解析也在后台执行。截图编码/写入等独立任务可以直接投递共享线程池。
 - **快速查询**：线程安全快照接口可在 GUI 线程直接调用；不得为了查询状态再创建一个后台任务或阻塞等待。
-- **完成通知**：UI 层使用 Qt queued connection/回调更新界面，不在 GUI 线程调用 `future.get()`、`wait()` 或同步等待线程池。Asio `use_future` 只适用于确实需要 Future 语义且不会阻塞 UI 的调用路径。
+- **完成通知**：UI 层使用 Qt queued connection/回调更新界面，不在正常交互路径调用 `future.get()`、`wait()` 或同步等待线程池。窗口析构时允许执行一次关闭屏障：先停止接收新提交、排空已提交任务，再销毁 Player。Asio `use_future` 只适用于确实需要 Future 语义且不会阻塞 UI 的调用路径。
 - **Android / Kotlin**：Kotlin 通过 JNI 调用相同 C ABI。提交型接口和快速查询可直接调用；同步完成型接口应由后台 Dispatcher/线程调用，不得阻塞 Android Main Thread。
 - **Core 内部**：命令由 Core Runtime 的 `io_context` 协调，实际业务由 Core 共享 `thread_pool` 执行。Windows UI 调度器不替代、不访问 Core 的执行器。
 
