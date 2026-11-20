@@ -162,8 +162,8 @@ LNPLAYER_API lnplayer_result_t lnplayer_create(
 
 /*
  * Synchronous destruction barrier.
- * The caller must prevent concurrent API calls and must not call this from
- * the Player event callback.
+ * New API calls are rejected once destruction starts. Destruction waits for
+ * API calls already in progress to return. Do not call from a Player callback.
  */
 LNPLAYER_API lnplayer_result_t lnplayer_destroy(lnplayer_t* player);
 
