@@ -2809,6 +2809,135 @@ void MainWindow::loadExternalSubtitlePath(const QString& path, bool remember)
     }, Qt::QueuedConnection);
 }
 
+void MainWindow::selectSubtitleTrack(int stream_index)
+{
+    const QString media_path = current_media_path_;
+    QMetaObject::invokeMethod(command_worker_, [this, stream_index, media_path]
+    {
+        if (!player_)
+            return;
+
+        lnplayer_snapshot_t snapshot{};
+        snapshot.struct_size = sizeof(snapshot);
+        if (lnplayer_get_snapshot(player_, &snapshot) != LNPLAYER_RESULT_OK)
+            return;
+
+        const bool resume_playback = snapshot.state == LNPLAYER_STATE_PLAYING;
+        if (resume_playback && lnplayer_pause(player_) != LNPLAYER_RESULT_OK)
+            return;
+
+        const lnplayer_result_t result = lnplayer_select_subtitle_track(player_, stream_index);
+        const lnplayer_result_t resume_result = resume_playback
+            ? lnplayer_play(player_)
+            : LNPLAYER_RESULT_OK;
+
+        QMetaObject::invokeMethod(this,
+            [this, result, resume_playback, resume_result, stream_index, media_path]
+        {
+            is_playing_ = resume_playback && resume_result == LNPLAYER_RESULT_OK;
+            if (result == LNPLAYER_RESULT_OK)
+            {
+                if (!media_path.isEmpty())
+                {
+                    QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+                    settings.setValue(
+                        mediaPreferenceKey(QStringLiteral("SubtitleTrack"), media_path),
+                        stream_index);
+                    settings.remove(
+                        mediaPreferenceKey(QStringLiteral("ExternalSubtitle"), media_path));
+                    settings.sync();
+                }
+                pending_embedded_subtitle_.clear();
+                pending_embedded_subtitle_bitmap_ = {};
+                video_frame_history_.clear();
+                video_frame_history_index_ = -1;
+                pending_video_frame_valid_ = false;
+                requestVideoFrame();
+                showOsd(resume_result == LNPLAYER_RESULT_OK
+                    ? QStringLiteral("内嵌字幕已切换")
+                    : QStringLiteral("内嵌字幕已切换，但恢复播放失败"));
+            }
+            else
+            {
+                statusBar()->showMessage(QStringLiteral("内嵌字幕切换失败"));
+            }
+        }, Qt::QueuedConnection);
+    }, Qt::QueuedConnection);
+}
+
+void MainWindow::selectAudioTrack(int stream_index)
+{
+    const QString media_path = current_media_path_;
+    QMetaObject::invokeMethod(command_worker_, [this, stream_index, media_path]
+    {
+        if (!player_)
+            return;
+
+        lnplayer_snapshot_t snapshot{};
+        snapshot.struct_size = sizeof(snapshot);
+        if (lnplayer_get_snapshot(player_, &snapshot) != LNPLAYER_RESULT_OK)
+            return;
+
+        const bool resume_playback = snapshot.state == LNPLAYER_STATE_PLAYING;
+        if (resume_playback && lnplayer_pause(player_) != LNPLAYER_RESULT_OK)
+            return;
+
+        const lnplayer_result_t result = lnplayer_select_audio_track(player_, stream_index);
+        const lnplayer_result_t resume_result = resume_playback
+            ? lnplayer_play(player_)
+            : LNPLAYER_RESULT_OK;
+
+        QMetaObject::invokeMethod(this,
+            [this, result, resume_playback, resume_result, stream_index, media_path]
+        {
+            is_playing_ = resume_playback && resume_result == LNPLAYER_RESULT_OK;
+            if (result == LNPLAYER_RESULT_OK)
+            {
+                if (!media_path.isEmpty())
+                {
+                    QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+                    settings.setValue(
+                        mediaPreferenceKey(QStringLiteral("AudioTrack"), media_path),
+                        stream_index);
+                    settings.sync();
+                }
+                video_frame_history_.clear();
+                video_frame_history_index_ = -1;
+                pending_video_frame_valid_ = false;
+                requestVideoFrame();
+                showOsd(resume_result == LNPLAYER_RESULT_OK
+                    ? QStringLiteral("音轨已切换")
+                    : QStringLiteral("音轨已切换，但恢复播放失败"));
+            }
+            else
+            {
+                statusBar()->showMessage(QStringLiteral("音轨切换失败"));
+            }
+        }, Qt::QueuedConnection);
+    }, Qt::QueuedConnection);
+}
+
+void MainWindow::setSubtitleOffset(int64_t offset_ms)
+{
+    subtitle_offset_ms_ = std::clamp<int64_t>(offset_ms, -60000, 60000);
+    QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+    settings.setValue(QStringLiteral("Video/Subtitle/OffsetMs"), subtitle_offset_ms_);
+    settings.sync();
+
+    const int64_t applied_offset = subtitle_offset_ms_;
+    QMetaObject::invokeMethod(command_worker_, [this, applied_offset]
+    {
+        if (player_)
+            lnplayer_set_subtitle_offset(player_, applied_offset);
+        QMetaObject::invokeMethod(this, [this, applied_offset]
+        {
+            pending_video_frame_valid_ = false;
+            requestVideoFrame();
+            showOsd(QStringLiteral("字幕偏移：%1 ms").arg(applied_offset));
+        }, Qt::QueuedConnection);
+    }, Qt::QueuedConnection);
+}
+
 QString MainWindow::subtitleAt(int64_t position_ms) const
 {
     return subtitle_manager_.text_at(
