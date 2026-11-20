@@ -74,6 +74,7 @@ typedef struct lnplayer_event
 /*
  * Event callbacks are invoked on the Core event thread.
  * The event and its message are valid only for the duration of the callback.
+ * user_data must remain valid until lnplayer_destroy returns.
  * Callbacks must not invoke play, pause, stop, close, or destroy.
  */
 typedef void (*lnplayer_event_callback_t)(
