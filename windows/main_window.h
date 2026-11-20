@@ -95,6 +95,7 @@ private:
     void clearPlaylist();
     void openVideoSettings();
     void showOsd(const QString& message);
+    void positionOsd();
     void showPlaybackInfo();
     void moveSelectedPlaylistItem(int offset);
     void cycleRepeatMode();
@@ -166,6 +167,7 @@ private:
     bool playlist_panel_visible_ = true;
     int fullscreen_hide_delay_ms_ = 2000;
     int osd_duration_ms_ = 1500;
+    int osd_position_ = 1;
     QString subtitle_font_family_ = QStringLiteral("Segoe UI");
     QString subtitle_color_ = QStringLiteral("#ffffff");
     int subtitle_font_size_ = 0;
