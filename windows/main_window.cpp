@@ -2650,7 +2650,14 @@ void MainWindow::openVideoSettings()
     auto* remember_position = new QCheckBox(
         QStringLiteral("记住每个视频上次播放位置"), playback_page);
     remember_position->setChecked(remember_position_);
+    auto* default_playback_rate = new QDoubleSpinBox(playback_page);
+    default_playback_rate->setRange(0.25, 4.0);
+    default_playback_rate->setSingleStep(0.25);
+    default_playback_rate->setDecimals(2);
+    default_playback_rate->setSuffix(QStringLiteral(" ×"));
+    default_playback_rate->setValue(playback_rate_);
     playback_form->addRow(remember_position);
+    playback_form->addRow(QStringLiteral("默认播放速度"), default_playback_rate);
     tabs->addTab(playback_page, QStringLiteral("播放"));
 
     auto* interface_page = new QWidget(tabs);
@@ -2846,6 +2853,7 @@ void MainWindow::openVideoSettings()
     connect(defaults, &QPushButton::clicked, &dialog, [=]
     {
         remember_position->setChecked(true);
+        default_playback_rate->setValue(1.0);
         hide_delay->setValue(2);
         osd_duration->setValue(1500);
         osd_position->setCurrentIndex(1);
@@ -2911,6 +2919,8 @@ void MainWindow::openVideoSettings()
         return;
 
     remember_position_ = remember_position->isChecked();
+    if (std::abs(playback_rate_ - default_playback_rate->value()) > 0.001)
+        setPlaybackRate(static_cast<float>(default_playback_rate->value()));
     fullscreen_hide_delay_ms_ = hide_delay->value() * 1000;
     osd_duration_ms_ = osd_duration->value();
     osd_position_ = osd_position->currentData().toInt();
