@@ -9,6 +9,12 @@ bool UiTaskTracker::try_begin()
     return true;
 }
 
+bool UiTaskTracker::accepting() const
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    return accepting_;
+}
+
 void UiTaskTracker::finish()
 {
     std::lock_guard<std::mutex> lock(mutex_);
