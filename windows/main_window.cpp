@@ -1070,11 +1070,6 @@ void MainWindow::requestVideoFrame()
                 pending_video_pts_ms_ = pts_ms;
                 pending_video_generation_ = generation;
                 pending_video_frame_valid_ = true;
-                if (!video_clock_.isValid() && !has_audio_)
-                {
-                    video_clock_base_pts_ms_ = pts_ms;
-                    video_clock_.start();
-                }
                 presentPendingVideoFrame();
             }
         }, Qt::QueuedConnection);
@@ -1088,11 +1083,7 @@ void MainWindow::presentPendingVideoFrame()
 
     if (is_playing_)
     {
-        int64_t clock_ms = current_position_ms_;
-        if (!has_audio_ && video_clock_.isValid())
-            clock_ms = video_clock_base_pts_ms_ +
-                static_cast<int64_t>(video_clock_.elapsed() * playback_rate_);
-
+        const int64_t clock_ms = current_position_ms_;
         if (pending_video_pts_ms_ > clock_ms + 8)
             return;
     }
@@ -1338,14 +1329,6 @@ void MainWindow::takeScreenshot()
 
 void MainWindow::setPlaybackRate(float rate)
 {
-    const float previous_rate = playback_rate_;
-    if (!has_audio_ && video_clock_.isValid())
-    {
-        const int64_t current_clock = video_clock_base_pts_ms_ +
-            static_cast<int64_t>(video_clock_.elapsed() * previous_rate);
-        video_clock_base_pts_ms_ = current_clock;
-        video_clock_.restart();
-    }
     playback_rate_ = rate;
 
     QMetaObject::invokeMethod(command_worker_, [this, rate]
@@ -1399,7 +1382,6 @@ void MainWindow::handleCoreEvent(
             video_first_frame_received_ = false;
             video_end_of_stream_ = false;
             last_video_frame_ = {};
-            video_clock_.invalidate();
             if (video_surface_)
                 video_surface_->set_frame(QImage());
         }
@@ -1420,7 +1402,6 @@ void MainWindow::handleCoreEvent(
             pending_hardware_texture_ = nullptr;
             video_first_frame_received_ = false;
             video_end_of_stream_ = false;
-            video_clock_.invalidate();
             requestVideoFrame();
         }
         break;
@@ -1501,7 +1482,6 @@ void MainWindow::updatePlaybackState(
         else
         {
             video_timer_->stop();
-            video_clock_.invalidate();
             presentPendingVideoFrame();
         }
     }
