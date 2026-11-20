@@ -844,6 +844,8 @@ MainWindow::MainWindow(
     connect(seek_slider_, &QSlider::sliderReleased, this, [this]
     {
         slider_dragging_ = false;
+        if (video_seek_pending_)
+            return;
         viewing_historical_frame_ = false;
         video_frame_history_.clear();
         video_frame_history_index_ = -1;
@@ -856,6 +858,7 @@ MainWindow::MainWindow(
         }
 
         video_seek_pending_ = true;
+        seek_slider_->setEnabled(false);
         video_timer_->start();
         const int64_t target = duration_ms_ * seek_slider_->value() / 1000;
         QMetaObject::invokeMethod(command_worker_, [this, target]
@@ -869,6 +872,7 @@ MainWindow::MainWindow(
                 QMetaObject::invokeMethod(this, [this]
                 {
                     video_seek_pending_ = false;
+                    seek_slider_->setEnabled(duration_ms_ > 0);
                     requestVideoFrame();
                 }, Qt::QueuedConnection);
             }
@@ -1907,11 +1911,12 @@ void MainWindow::togglePlayback()
 
 void MainWindow::seekRelative(int64_t offset_ms)
 {
-    if (duration_ms_ <= 0)
+    if (duration_ms_ <= 0 || video_seek_pending_)
         return;
 
     viewing_historical_frame_ = false;
     video_seek_pending_ = true;
+    seek_slider_->setEnabled(false);
     video_frame_history_.clear();
     video_frame_history_index_ = -1;
     pending_video_frame_valid_ = false;
@@ -1930,6 +1935,7 @@ void MainWindow::seekRelative(int64_t offset_ms)
             QMetaObject::invokeMethod(this, [this]
             {
                 video_seek_pending_ = false;
+                seek_slider_->setEnabled(duration_ms_ > 0);
                 requestVideoFrame();
             }, Qt::QueuedConnection);
         }
@@ -1966,7 +1972,7 @@ void MainWindow::setPlaybackRate(float rate)
 
 void MainWindow::stepVideoFrame(bool backwards)
 {
-    if (mode_ != PlayerMode::Video || !has_video_)
+    if (mode_ != PlayerMode::Video || !has_video_ || video_seek_pending_)
         return;
 
     if (is_playing_)
@@ -2212,6 +2218,7 @@ void MainWindow::handleCoreEvent(
         if (mode_ == PlayerMode::Video)
         {
             video_seek_pending_ = false;
+            seek_slider_->setEnabled(duration_ms_ > 0);
             pending_video_frame_valid_ = false;
             pending_hardware_frame_owner_.reset();
             pending_hardware_texture_ = nullptr;
