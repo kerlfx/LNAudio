@@ -857,7 +857,9 @@ private:
             static_cast<float>(hdr_transfer_),
             static_cast<float>(color_primaries_),
             hdr_peak_luminance_,
-            0.0f
+            0.0f,
+            zoom_,
+            {0.0f, 0.0f, 0.0f}
         };
         context_->UpdateSubresource(filter_constants_buffer_.Get(), 0, nullptr, &values, 0, 0);
         ID3D11Buffer* buffers[] = {filter_constants_buffer_.Get()};
