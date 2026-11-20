@@ -1247,6 +1247,7 @@ void MainWindow::openPlaylistIndex(int index)
     pending_video_display_aspect_ratio_ = 0.0f;
     pending_hdr_transfer_ = 0;
     pending_color_primaries_ = 0;
+    pending_hdr_peak_luminance_ = 1000.0f;
     pending_video_ycbcr_matrix_ = 0;
     pending_video_ycbcr_full_range_ = 0;
     video_frame_history_.clear();
@@ -1460,6 +1461,7 @@ void MainWindow::requestVideoFrame()
             float display_aspect_ratio = 0.0f;
             int hdr_transfer = 0;
             int color_primaries = 0;
+            float hdr_peak_luminance = 1000.0f;
             int ycbcr_matrix = 0;
             int ycbcr_full_range = 0;
             QString subtitle;
@@ -1477,6 +1479,7 @@ void MainWindow::requestVideoFrame()
                 context->display_aspect_ratio = frame->display_aspect_ratio;
                 context->hdr_transfer = frame->hdr_transfer;
                 context->color_primaries = frame->color_primaries;
+                context->hdr_peak_luminance = frame->hdr_peak_luminance;
                 context->ycbcr_matrix = frame->ycbcr_matrix;
                 context->ycbcr_full_range = frame->ycbcr_full_range;
                 context->subtitle = QString::fromUtf8(
@@ -1532,6 +1535,7 @@ void MainWindow::requestVideoFrame()
         const float display_aspect_ratio = context.display_aspect_ratio;
         const int hdr_transfer = context.hdr_transfer;
         const int color_primaries = context.color_primaries;
+        const float hdr_peak_luminance = context.hdr_peak_luminance;
         const int ycbcr_matrix = context.ycbcr_matrix;
         const int ycbcr_full_range = context.ycbcr_full_range;
         const QString embedded_subtitle = context.subtitle;
@@ -1540,7 +1544,8 @@ void MainWindow::requestVideoFrame()
             [this, result, end_of_stream, image, hardware_owner, hardware_texture,
              hardware_array_slice, hardware_format, hardware_width, hardware_height,
              pts_ms, generation, requested_generation, display_aspect_ratio,
-             hdr_transfer, color_primaries, ycbcr_matrix, ycbcr_full_range,
+             hdr_transfer, color_primaries, hdr_peak_luminance,
+             ycbcr_matrix, ycbcr_full_range,
              embedded_subtitle, embedded_subtitle_bitmap]
         {
             video_frame_pending_ = false;
@@ -1571,7 +1576,8 @@ void MainWindow::requestVideoFrame()
                 video_first_frame_received_ = true;
                 if (video_surface_)
                 {
-                    video_surface_->set_hdr_metadata(hdr_transfer, color_primaries);
+                    video_surface_->set_hdr_metadata(
+                        hdr_transfer, color_primaries, hdr_peak_luminance);
                     video_surface_->set_video_color_space(ycbcr_matrix, ycbcr_full_range);
                     video_surface_->set_source_aspect_ratio(display_aspect_ratio);
                 }
@@ -1589,6 +1595,7 @@ void MainWindow::requestVideoFrame()
                 pending_video_display_aspect_ratio_ = display_aspect_ratio;
                 pending_hdr_transfer_ = hdr_transfer;
                 pending_color_primaries_ = color_primaries;
+                pending_hdr_peak_luminance_ = hdr_peak_luminance;
                 pending_video_ycbcr_matrix_ = ycbcr_matrix;
                 pending_video_ycbcr_full_range_ = ycbcr_full_range;
                 pending_video_frame_valid_ = true;
@@ -1682,6 +1689,7 @@ void MainWindow::presentPendingVideoFrame()
         history_entry.hardware_height = pending_hardware_height_;
         history_entry.hdr_transfer = pending_hdr_transfer_;
         history_entry.color_primaries = pending_color_primaries_;
+        history_entry.hdr_peak_luminance = pending_hdr_peak_luminance_;
         history_entry.display_aspect_ratio = pending_video_display_aspect_ratio_;
         history_entry.ycbcr_matrix = pending_video_ycbcr_matrix_;
         history_entry.ycbcr_full_range = pending_video_ycbcr_full_range_;
@@ -1820,6 +1828,7 @@ void MainWindow::presentPendingVideoFrame()
     history_entry.image = frame;
     history_entry.hdr_transfer = pending_hdr_transfer_;
     history_entry.color_primaries = pending_color_primaries_;
+    history_entry.hdr_peak_luminance = pending_hdr_peak_luminance_;
     history_entry.display_aspect_ratio = pending_video_display_aspect_ratio_;
     history_entry.ycbcr_matrix = pending_video_ycbcr_matrix_;
     history_entry.ycbcr_full_range = pending_video_ycbcr_full_range_;
@@ -2081,7 +2090,8 @@ void MainWindow::presentHistoricalVideoFrame()
             std::clamp<int64_t>(entry.pts_ms * 1000 / duration_ms_, 0, 1000)));
     if (video_surface_)
     {
-        video_surface_->set_hdr_metadata(entry.hdr_transfer, entry.color_primaries);
+        video_surface_->set_hdr_metadata(
+            entry.hdr_transfer, entry.color_primaries, entry.hdr_peak_luminance);
         video_surface_->set_video_color_space(entry.ycbcr_matrix, entry.ycbcr_full_range);
         video_surface_->set_source_aspect_ratio(entry.display_aspect_ratio);
     }

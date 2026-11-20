@@ -55,6 +55,7 @@ private:
         int hardware_height = 0;
         int hdr_transfer = 0;
         int color_primaries = 0;
+        float hdr_peak_luminance = 1000.0f;
         float display_aspect_ratio = 0.0f;
         int ycbcr_matrix = 0;
         int ycbcr_full_range = 0;
@@ -138,6 +139,7 @@ private:
     float pending_video_display_aspect_ratio_ = 0.0f;
     int pending_hdr_transfer_ = 0;
     int pending_color_primaries_ = 0;
+    float pending_hdr_peak_luminance_ = 1000.0f;
     int pending_video_ycbcr_matrix_ = 0;
     int pending_video_ycbcr_full_range_ = 0;
     QString pending_embedded_subtitle_;
