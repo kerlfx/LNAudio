@@ -54,6 +54,8 @@
 #include <QMessageBox>
 #include <QMetaObject>
 #include <QMimeData>
+#include <QMouseEvent>
+#include <QStyle>
 #include <QPushButton>
 #include <QPainter>
 #include <QRegularExpression>
@@ -1097,6 +1099,8 @@ MainWindow::MainWindow(
     }
 
     seek_slider_->setRange(0, 1000);
+    seek_slider_->setMouseTracking(true);
+    seek_slider_->installEventFilter(this);
     seek_slider_->setEnabled(false);
     volume_slider_->setRange(0, 1000);
     {
@@ -1674,6 +1678,22 @@ void MainWindow::updateFullscreenUi()
 
 bool MainWindow::eventFilter(QObject* watched, QEvent* event)
 {
+    if (watched == seek_slider_ && event->type() == QEvent::MouseMove &&
+        duration_ms_ > 0)
+    {
+        auto* mouse_event = static_cast<QMouseEvent*>(event);
+        const int handle_width = style()->pixelMetric(
+            QStyle::PM_SliderLength, nullptr, seek_slider_);
+        const int margin = handle_width / 2;
+        const int span = std::max(1, seek_slider_->width() - handle_width);
+        const int position = std::clamp(
+            mouse_event->position().toPoint().x() - margin, 0, span);
+        const int value = QStyle::sliderValueFromPosition(
+            seek_slider_->minimum(), seek_slider_->maximum(),
+            position, span, seek_slider_->invertedAppearance());
+        seek_slider_->setToolTip(format_position(duration_ms_ * value / 1000));
+    }
+
     if (isFullScreen())
     {
         QWidget* watched_widget = qobject_cast<QWidget*>(watched);
