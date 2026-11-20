@@ -8,6 +8,7 @@
 #include <Windows.h>
 
 #include <QMouseEvent>
+#include <QContextMenuEvent>
 #include <QPainter>
 #include <QPaintEvent>
 #include <QResizeEvent>
@@ -67,6 +68,12 @@ bool VideoSurface::has_renderer() const
 void* VideoSurface::native_device() const
 {
     return renderer_ ? renderer_->native_device() : nullptr;
+}
+
+void VideoSurface::set_gesture_enabled(bool enabled)
+{
+    gesture_enabled_ = enabled;
+    gesture_triggered_ = false;
 }
 
 void VideoSurface::set_stretch(bool enabled)
@@ -154,11 +161,13 @@ QImage VideoSurface::capture_frame() const
 void VideoSurface::set_interaction_callbacks(
     std::function<void()> double_click,
     std::function<void(int)> wheel,
-    std::function<void()> middle_click)
+    std::function<void()> middle_click,
+    std::function<void(int)> gesture)
 {
     double_click_callback_ = std::move(double_click);
     wheel_callback_ = std::move(wheel);
     middle_click_callback_ = std::move(middle_click);
+    gesture_callback_ = std::move(gesture);
 }
 
 void VideoSurface::mouseDoubleClickEvent(QMouseEvent* event)
@@ -170,6 +179,11 @@ void VideoSurface::mouseDoubleClickEvent(QMouseEvent* event)
 
 void VideoSurface::mousePressEvent(QMouseEvent* event)
 {
+    if (event->button() == Qt::RightButton)
+    {
+        right_press_position_ = event->pos();
+        gesture_triggered_ = false;
+    }
     if (event->button() == Qt::MiddleButton && middle_click_callback_)
     {
         middle_click_callback_();
@@ -177,6 +191,40 @@ void VideoSurface::mousePressEvent(QMouseEvent* event)
         return;
     }
     QWidget::mousePressEvent(event);
+}
+
+void VideoSurface::mouseMoveEvent(QMouseEvent* event)
+{
+    if (gesture_enabled_ && !gesture_triggered_ &&
+        (event->buttons() & Qt::RightButton))
+    {
+        const QPoint delta = event->pos() - right_press_position_;
+        if (std::abs(delta.x()) >= 36 || std::abs(delta.y()) >= 36)
+        {
+            if (gesture_callback_)
+            {
+                const int direction = std::abs(delta.x()) >= std::abs(delta.y())
+                    ? (delta.x() < 0 ? 0 : 1)
+                    : (delta.y() < 0 ? 2 : 3);
+                gesture_triggered_ = true;
+                gesture_callback_(direction);
+                event->accept();
+                return;
+            }
+        }
+    }
+    QWidget::mouseMoveEvent(event);
+}
+
+void VideoSurface::contextMenuEvent(QContextMenuEvent* event)
+{
+    if (gesture_triggered_)
+    {
+        gesture_triggered_ = false;
+        event->accept();
+        return;
+    }
+    QWidget::contextMenuEvent(event);
 }
 
 void VideoSurface::wheelEvent(QWheelEvent* event)
