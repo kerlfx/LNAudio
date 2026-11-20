@@ -183,7 +183,29 @@ public:
 
     lnplayer_result_t shutdown()
     {
-        return invoke_sync([this] { return session_.close(); }, true);
+        const lnplayer_result_t result =
+            invoke_sync([this] { return session_.close(); }, true);
+        if (result != LNPLAYER_RESULT_OK)
+            return result;
+
+        // The backend may have posted its final completion event immediately
+        // before the close operation completed. Drain those handlers while
+        // this Controller is still alive.
+        auto drained = std::make_shared<std::promise<void>>();
+        auto future = drained->get_future();
+        try
+        {
+            asio::post(runtime_.io_context(), [drained]
+            {
+                drained->set_value();
+            });
+        }
+        catch (...)
+        {
+            return LNPLAYER_RESULT_OUT_OF_MEMORY;
+        }
+        future.wait();
+        return result;
     }
 
     void get_snapshot(lnplayer_snapshot_t* output) const
