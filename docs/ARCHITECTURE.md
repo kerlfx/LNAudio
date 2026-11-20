@@ -96,7 +96,7 @@ flowchart TD
 - Audio Output：接收 Core/媒体管线提供的 PCM 音频数据并提交给平台音频设备。
 - Video Output：管理视频帧输出抽象、帧交付和平台渲染器之间的生命周期边界；Core 负责帧队列与播放时钟调度，平台 Renderer 负责 GPU 呈现。
 - 视频解码采用硬件解码优先策略；硬件解码不可用或不支持当前媒体时允许回退软件解码。
-- 渲染器按显示节奏从 Core 的可呈现帧队列获取帧（Pull），在自己的渲染线程执行图形 API 操作；解码线程不直接调用 UI 或 GPU 呈现接口。
+- 渲染任务由帧就绪、显示节奏或平台呈现时机触发，经 Runtime `io_context` 协调后提交到共享 `thread_pool`；不默认创建独立渲染线程或渲染线程池。解码任务不直接调用 UI 或 GPU 呈现接口。
 - 输出实现通过平台输出抽象与共享播放逻辑隔离。平台图形设备、Surface 和渲染资源由对应平台适配层管理，不暴露为通用 C ABI 类型。
 
 ### 2.6 本地数据层
@@ -115,7 +115,7 @@ SQLite 保存音乐条目、元数据、文件位置关联、目录配置、索�
 | Media Pipeline | 探测、解封装、解码、同步和缓冲 | 平台窗口生命周期 |
 | Audio Output | 音频设备输出及设备相关处理 | 音乐库管理 |
 | Video Output | 视频帧队列交接、呈现调度及输出生命周期协调 | 播放列表业务、具体平台 GPU 绘制 |
-| Platform Renderer | 在平台渲染线程获取帧并执行 GPU 呈现 | 媒体解封装、解码及播放状态机 |
+| Platform Renderer | 在共享 `thread_pool` 执行受调度的帧获取与 GPU 呈现任务，并遵守平台图形 API 的线程/上下文约束 | 媒体解封装、解码及播放状态机 |
 | Playlist | 播放队列、条目顺序和切换策略 | FFmpeg 解码 |
 | Music Library | 音乐条目、元数据、文件位置及查询 | 原始文件搬移 |
 | Storage | SQLite 访问、事务和数据迁移 | UI 展示 |
@@ -243,7 +243,7 @@ stateDiagram-v2
 | close | 关闭当前媒体会话并回到 Idle；与销毁 Player Instance 不同 |
 | destroy | 停止接受命令，清理会话及实例资源并销毁实例 |
 
-所有命令的错误码、同步/异步返回和取消语义由 C ABI 专题进一步确定。命令不能因异步执行而丢失顺序；同一 Player Instance 的状态转换由其 Controller 统一协调。
+C ABI 对调用方提供同步语义：调用返回时给出该操作的最终结果；Core 内部通过 `io_context` 和共享 `thread_pool` 异步执行。命令不能因内部异步执行而丢失顺序；同一 Player Instance 的状态转换由其 Controller 统一协调。
 
 ### 4.5 打开、切换与销毁顺序
 
@@ -314,11 +314,11 @@ flowchart TD
 
 ### 7.1 总体模型
 
-Core 使用 Boost.Asio 提供异步接口与并发任务执行能力。Asio 不承担播放器业务本身；实际业务任务通过 Asio 异步提交到 Runtime 共享的线程池执行。
+Core 使用 Boost.Asio 作为内部异步调度与并发执行基础。对外 C ABI 是同步接口；调用线程等待操作最终结果。Core 内部请求和业务任务统一经 `io_context` 协调，再提交到 Runtime 共享线程池执行。
 
 每个 Runtime 维护：
 
-- 一个 `boost::asio::io_context`，负责异步接口入口、异步操作协调、完成通知和事件分发。
+- 一个 `boost::asio::io_context`，负责所有 C ABI 请求入口、内部异步任务协调、任务分发、结果回收、响应路由和主动事件分发。
 - 一套共享的 `boost::asio::thread_pool`，作为 Runtime 内所有业务任务的统一执行池。
 - Player Manager 及其他 Runtime 级资源。
 
@@ -326,8 +326,8 @@ Core 使用 Boost.Asio 提供异步接口与并发任务执行能力。Asio 不�
 
 ~~~mermaid
 flowchart TD
-    A[平台 UI / JNI] --> B[C ABI]
-    B --> C[Asio 异步接口层]
+    A[平台 UI / JNI 调用线程] --> B[C ABI 同步接口]
+    B --> C[提交请求并等待结果]
     C --> D[io_context]
     D --> E[统一任务提交]
     E --> F[Runtime 共享 Asio thread_pool]
@@ -335,28 +335,30 @@ flowchart TD
     F --> H[媒体与 FFmpeg 调用任务]
     F --> I[文件 I/O 任务]
     F --> J[音乐库任务]
-    G --> K[任务结果 / 完成通知]
+    G --> K[任务结果]
     H --> K
     I --> K
     J --> K
     K --> D
-    D --> L[事件分发]
-    L --> B
+    D --> L[完成原请求并唤醒调用线程]
+    L --> C
+    D --> M[独立主动事件分发]
+    M --> N[C ABI 事件回调]
 ~~~
 
 ### 7.2 Asio 与业务任务职责
 
 | 组件 | 职责 |
 |---|---|
-| C ABI | 提供稳定的跨平台调用边界；校验参数并提交请求 |
-| `io_context` | 异步接口协调、完成通知、事件分发及轻量调度 |
+| C ABI | 提供稳定的跨平台同步调用边界；提交请求并等待最终结果 |
+| `io_context` | 接收全部请求、协调异步执行、分发任务、回收结果并路由同步响应；分发独立主动事件 |
 | 共享 `thread_pool` | 执行实际业务任务，包括播放控制、媒体处理调用、文件 I/O 和音乐库操作 |
 | Player Controller | 处理播放命令、状态转换和操作生命周期 |
 | FFmpeg | 执行媒体探测、解封装和解码，并管理其解码器内部线程 |
 
-C ABI 命令采用同步提交、异步执行。C ABI 请求首先进入 Runtime 的 `io_context`，由 `io_context` 协调请求并将实际业务任务提交到共享线程池；业务任务完成后再投递回 `io_context`。操作完成结果通过该请求对应的响应通道返回，不转化为主动事件回调。不得绕过 `io_context` 从 C ABI 直接提交线程池，也不得在 C ABI 调用栈中执行耗时解码或阻塞式媒体操作。
+C ABI 对调用方提供同步接口，播放控制命令和其他需要等待执行结果的操作在函数返回前给出最终结果。调用线程将请求提交到 Runtime 的 `io_context` 后等待；`io_context` 协调请求并把实际业务任务提交到共享 `thread_pool`。业务任务完成后将结果投递回 `io_context`，由其完成原请求的 Promise/Future 或等价内部等待机制，并唤醒对应 C ABI 调用线程。调用线程只负责等待，不执行耗时业务；`io_context` 和 `thread_pool` worker 均不得通过调用该同步 C ABI 接口来等待自身调度的任务。不得绕过 `io_context` 从 C ABI 直接提交线程池。请求完成结果直接作为 C ABI 函数返回值/输出参数返回，不进入主动事件回调。
 
-Asio 的 `io_context` worker 不应被当作长期业务工作线程。业务任务统一提交到共享 `thread_pool`；完成通知通过 `post` 等方式返回 `io_context`。
+Asio 的 `io_context` worker 不应被当作长期业务工作线程，也不能阻塞等待业务任务完成。业务任务统一提交到共享 `thread_pool`；结果通过 `post` 等方式返回 `io_context`，再唤醒等待中的 C ABI 调用线程。
 
 ### 7.3 共享线程池与任务并发
 
@@ -421,23 +423,25 @@ Core 内部可以使用 FFmpeg AVFrame 和 AVBufferRef 管理帧生命周期，�
 
 零拷贝是优先优化目标，不是所有设备和解码路径都能保证的契约。无法直接互操作时，允许执行必要的硬件帧传输/格式转换，或回退到软件解码；应避免无条件把硬件帧下载到 CPU 再重新上传 GPU。
 
-### 7.5.3 渲染线程与实时边界
+### 7.5.3 渲染任务调度与实时边界
 
-- 视频 GPU 资源的创建、绑定、提交和销毁必须遵循对应图形 API 的设备/上下文线程约束；由平台 Renderer 专属渲染线程或明确拥有该图形上下文的线程执行。
-- Qt GUI 线程负责窗口和 QWidget 生命周期、布局与用户交互，不负责 FFmpeg 解码或 GPU 呈现循环。渲染线程不得直接操作 QWidget。
-- Android UI 管理 Surface 生命周期；Native 输出适配层响应 Surface 创建、变化和销毁，并确保 Surface 失效后不再提交帧。
-- Asio 共享 thread_pool 负责媒体业务任务和解码调用调度，不承担持续的 GPU 呈现循环，也不应长期阻塞等待垂直同步或显示完成。
-- 音频设备实时回调与视频渲染线程均不得执行阻塞文件 I/O、SQLite 操作或等待共享线程池任务。
+- 视频帧 Pull 不采用独立忙轮询循环。帧就绪、Asio 定时器、平台 vsync/显示回调或其他呈现时机触发后，先进入 Runtime `io_context`，再由其协调并将实际帧获取/呈现工作提交到共享 `thread_pool`。
+- 视频 GPU 资源的创建、绑定、提交和销毁必须遵循对应图形 API 的设备、上下文及线程约束。普通渲染任务由共享 `thread_pool` 执行；通过 Renderer 内部的同步/串行化机制保护非线程安全的图形上下文，不默认创建独立渲染线程或渲染线程池。
+- 不得假设 `thread_pool` 的 strand 会固定到同一个操作系统线程。若目标平台 API 经验证确实要求线程亲和性，需单独定义满足该 API 约束的受控执行上下文；这属于平台 API 约束，不改变 Core 统一经 `io_context` 协调、共享线程池执行任务的原则。
+- Qt GUI 线程负责窗口和 QWidget 生命周期、布局与用户交互，不负责 FFmpeg 解码或 GPU 呈现工作。Core worker 不得直接操作 QWidget；需要更新窗口状态时，通过平台 UI 线程调度机制完成。
+- Android UI 管理 Surface 生命周期；Native 输出适配层响应 Surface 创建、变化和销毁，并确保 Surface 失效后不再提交帧。Android API 的线程要求由平台适配层遵守。
+- GPU Present、vsync 等可能长时间阻塞的调用不得无约束地占用共享 `thread_pool` worker；需验证使用可等待对象、低延迟呈现或其他非阻塞机制。确实无法避免的阻塞调用应采用有界、受控策略。
+- 音频设备实时回调属于平台驱动/系统回调上下文，不放入共享线程池等待；回调内只执行实时数据搬运和缓冲区填充。音频回调与普通渲染任务均不得执行阻塞文件 I/O、SQLite 操作或等待共享线程池任务。
 
 ### 7.5.4 Windows：Qt Widgets + Win32 + D3D11
 
 Windows 视频 UI 采用 Qt 6 Widgets 管理播放器窗口和常规控件，视频画面区域使用独立的原生 Win32 子窗口承载 D3D11 Renderer。Qt 负责布局、菜单、控制栏、窗口模式及交互；D3D11 Renderer 只负责视频画面呈现。
 
 - Video Container 由 Qt 管理尺寸和位置；其内部原生 HWND 作为视频显示目标。
-- D3D11 Renderer 在该 HWND 对应的渲染线程创建并管理 Swap Chain，执行纹理采样、颜色转换、缩放和 Present。
+- D3D11 Renderer 管理与该 HWND 关联的 Swap Chain；纹理采样、颜色转换和缩放等呈现任务由共享 `thread_pool` 执行，并通过 Renderer 内部同步机制保护 D3D11 Immediate Context 等共享图形上下文。Present 的阻塞特性及线程要求需在实现验证中确认。
 - 首期 Windows 硬件解码优先使用 FFmpeg D3D11VA；DXVA2 保留为兼容性候选。
 - 为避免解码纹理跨设备互操作，优先由 Windows Video Output 平台模块创建并管理 D3D11 Device，并将同一设备关联到 FFmpeg `AVHWDeviceContext` 与 Renderer。实际设备创建顺序和 FFmpeg 设备上下文接入方式以 D3D11VA 集成验证为准。
-- D3D11VA 产生的硬件帧通过 FFmpeg 硬件帧引用进入 Core 帧队列；Renderer 在其渲染线程取得帧引用并访问对应 D3D11 资源。
+- D3D11VA 产生的硬件帧通过 FFmpeg 硬件帧引用进入 Core 帧队列；Renderer 的呈现任务从队列取得帧引用并访问对应 D3D11 资源，GPU 资源访问遵守统一的同步规则。
 - 不能因 Renderer 已取得纹理接口就提前释放 AVFrame 或允许解码器复用表面。必须保证 GPU 最后一次读取完成后才释放对应帧引用；必要时使用 D3D11 同步机制或受控的渲染队列完成通知。
 - 窗口 resize 时调整 Swap Chain 尺寸，不重建 Player 或媒体 Session。窗口隐藏/最小化时可暂停不必要的呈现，但不得破坏播放状态。
 - 不将 D3D11VA 纹理强行接入 `QOpenGLWidget` 作为首期路径，避免引入 D3D11/OpenGL 互操作复杂度。
@@ -550,29 +554,30 @@ API 命名统一使用 `ln_...` 前缀。导出函数使用 C linkage，并明�
 
 ### 8.3 请求响应与异步执行
 
-播放控制命令采用异步请求/响应模型：
+C ABI 对调用方采用同步请求/响应模型，Core 内部采用异步执行模型：
 
-1. UI 调用 C ABI，C ABI 将请求提交到 Runtime 的 `io_context`。
-2. `io_context` 检查请求入口所需的参数和句柄，并协调该 Player 的命令顺序。
+1. UI 调用同步 C ABI 函数；该函数将请求提交到 Runtime 的 `io_context`。
+2. `io_context` 检查参数和句柄，并协调该 Player 的命令顺序。
 3. `io_context` 将实际业务任务提交到 Runtime 共享 `thread_pool`。
 4. 业务任务完成后，将结果投递回 `io_context`。
-5. `io_context` 将最终响应路由回发起该操作的原请求响应通道，并携带对应的 `operation_id`。
+5. `io_context` 将结果写入该请求对应的内部 Promise/Future 或等价结果载体，并唤醒正在等待的 C ABI 调用线程。
+6. C ABI 函数取得最终结果，通过返回值和输出参数返回给调用方。
 
-必须区分请求是否成功进入处理流程与业务执行的最终结果。请求响应属于原请求的响应通道，不属于 Event Manager 的主动事件流。C ABI 请求不得绕过 `io_context` 直接提交 `thread_pool`。
+因此，C ABI 不暴露 Future、Promise、异步操作句柄或请求完成回调。同步等待只发生在发起调用的线程；不得在 `io_context` worker 或共享 `thread_pool` worker 中阻塞等待由同一 Runtime 调度的任务。请求完成结果不进入 Event Manager 的主动事件流。C ABI 请求不得绕过 `io_context` 直接提交 `thread_pool`。
 
 视频帧交付是独立的实时数据通道，不属于普通控制请求响应，也不属于主动事件通知。帧由 Core Video Output 与平台 Renderer 之间的内部平台输出接口交接；通用播放控制 C ABI 不逐帧传递图像数据。
 
-同一 Player 的命令和状态变更遵守明确的提交顺序及状态机规则；这不要求该 Player 的所有异步任务串行执行。不同 Player 允许并发执行，同一 Player 内互不冲突的任务也允许并发。查询 API 返回调用时刻的一致状态快照，不应等待媒体解码或阻塞式文件读取完成。首期不要求所有查询都产生异步事件。
+同一 Player 的命令和状态变更遵守明确的提交顺序及状态机规则；这不要求该 Player 的所有内部任务串行执行。不同 Player 允许并发执行，同一 Player 内互不冲突的任务也允许并发。查询 API 采用同步语义，返回调用时刻的一致状态快照；查询不得隐式等待媒体解码或阻塞式文件读取完成。
 
 建议首期命令语义如下：
 
-| 命令 | 提交后的行为 |
+| 命令 | 同步 C ABI 返回语义 |
 |---|---|
-| open(source) | 异步打开媒体，完成后进入 Ready 或 Error |
-| play | 请求开始或恢复播放 |
-| pause | 请求暂停 |
-| stop | 停止播放、关闭当前 Session，回到 Idle，保留 Playlist |
-| seek(position) | 异步定位，完成后恢复定位前的播放/暂停状态 |
+| open(source) | 等待打开操作完成，返回成功或失败结果；成功后进入 Ready |
+| play | 等待播放命令执行并返回结果 |
+| pause | 等待暂停命令执行并返回结果 |
+| stop | 等待停止及当前 Session 关闭完成，回到 Idle，保留 Playlist |
+| seek(position) | 等待定位操作完成，返回定位结果并恢复定位前的播放/暂停状态 |
 | close | 关闭当前媒体 Session，回到 Idle，但不销毁 Player |
 
 参数错误、无效句柄、命令无法提交等情况通过 API 的同步返回码报告；已经接受的操作，其最终成功或失败通过事件报告。命令取消 API、命令替换策略和销毁期间的取消细节仍需在实现前进一步确定。
