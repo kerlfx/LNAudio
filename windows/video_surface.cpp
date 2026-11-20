@@ -46,17 +46,22 @@ VideoSurface::~VideoSurface()
 
 void VideoSurface::set_frame(const QImage& frame)
 {
-    frame_ = frame;
+    const QImage frame_copy = frame;
+    {
+        std::lock_guard<std::mutex> lock(frame_mutex_);
+        frame_ = frame_copy;
+    }
+
     if (renderer_)
     {
-        if (frame_.isNull())
+        if (frame_copy.isNull())
             renderer_->clear();
         else
             renderer_->present(
-                frame_.constBits(),
-                frame_.width(),
-                frame_.height(),
-                frame_.bytesPerLine());
+                frame_copy.constBits(),
+                frame_copy.width(),
+                frame_copy.height(),
+                frame_copy.bytesPerLine());
         return;
     }
     update();
@@ -170,13 +175,19 @@ bool VideoSurface::present_hardware_frame(
 
 QImage VideoSurface::capture_frame() const
 {
-    if (!renderer_)
+    const auto fallback_frame = [this]
+    {
+        std::lock_guard<std::mutex> lock(frame_mutex_);
         return frame_;
+    };
+
+    if (!renderer_)
+        return fallback_frame();
     std::vector<uint8_t> pixels;
     int width = 0;
     int height = 0;
     if (!renderer_->capture_bgra(pixels, width, height))
-        return frame_;
+        return fallback_frame();
     return QImage(
         pixels.data(), width, height, width * 4, QImage::Format_ARGB32).copy();
 }
@@ -265,17 +276,23 @@ void VideoSurface::paintEvent(QPaintEvent* event)
     if (renderer_)
         return;
 
+    QImage frame;
+    {
+        std::lock_guard<std::mutex> lock(frame_mutex_);
+        frame = frame_;
+    }
+
     QPainter painter(this);
     painter.fillRect(rect(), Qt::black);
-    if (frame_.isNull())
+    if (frame.isNull())
         return;
 
     const float display_aspect = aspect_ratio_ > 0.0f
         ? aspect_ratio_
         : source_aspect_ratio_;
     const QSize source_size = display_aspect > 0.0f
-        ? QSize(static_cast<int>(frame_.height() * display_aspect), frame_.height())
-        : frame_.size();
+        ? QSize(static_cast<int>(frame.height() * display_aspect), frame.height())
+        : frame.size();
     const QSize fitted = source_size.scaled(
         size(), stretch_ ? Qt::IgnoreAspectRatio : Qt::KeepAspectRatio);
     const QSize zoomed(
@@ -287,7 +304,7 @@ void VideoSurface::paintEvent(QPaintEvent* event)
         zoomed.width(),
         zoomed.height());
     painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
-    painter.drawImage(target, frame_);
+    painter.drawImage(target, frame);
 }
 
 void VideoSurface::resizeEvent(QResizeEvent* event)
