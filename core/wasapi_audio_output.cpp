@@ -328,7 +328,8 @@ bool WasapiAudioOutput::clock_position(uint64_t& frames) const
         return false;
 
     UINT64 position = 0;
-    if (FAILED(audio_clock_->GetPosition(&position, nullptr)))
+    UINT64 qpc_position = 0;
+    if (FAILED(audio_clock_->GetPosition(&position, &qpc_position)))
         return false;
 
     const long double device_frames =
