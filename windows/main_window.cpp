@@ -4361,29 +4361,47 @@ void MainWindow::presentPendingVideoFrame()
         QMetaObject::invokeMethod(this,
             [this, frame = std::move(frame), generation, media_path, use_renderer]() mutable
         {
-            video_frame_pending_ = false;
             if (current_media_path_ != media_path || generation != media_generation_ ||
                 video_seek_pending_)
+            {
+                video_frame_pending_ = false;
                 return;
+            }
 
             last_video_frame_ = frame;
             if (use_renderer && video_surface_->has_renderer())
             {
-                postCommand([this, frame = std::move(frame)]
+                postCommand([this, frame = std::move(frame), generation, media_path]
                 {
-                    if (video_surface_ && !video_surface_->present_frame_threadsafe(frame))
+                    lnplayer_t* player = player_.load(std::memory_order_acquire);
+                    lnplayer_snapshot_t snapshot{};
+                    snapshot.struct_size = sizeof(snapshot);
+                    if (!player || lnplayer_get_snapshot(player, &snapshot) != LNPLAYER_RESULT_OK ||
+                        snapshot.generation != generation)
                     {
-                        QMetaObject::invokeMethod(this, [this, frame]
+                        QMetaObject::invokeMethod(this, [this]
                         {
-                            if (video_surface_ && !video_surface_->has_renderer())
-                                video_surface_->set_frame(frame);
+                            video_frame_pending_ = false;
                         }, Qt::QueuedConnection);
+                        return;
                     }
+
+                    const bool presented = video_surface_ &&
+                        video_surface_->present_frame_threadsafe(frame);
+                    QMetaObject::invokeMethod(this,
+                        [this, frame, presented, media_path]
+                    {
+                        video_frame_pending_ = false;
+                        if (!presented && current_media_path_ == media_path &&
+                            video_surface_ && !video_surface_->has_renderer())
+                            video_surface_->set_frame(frame);
+                    }, Qt::QueuedConnection);
                 });
             }
             else
             {
                 video_surface_->set_frame(frame);
+                video_frame_pending_ = false;
             }
         }, Qt::QueuedConnection);
     });
