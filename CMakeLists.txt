@@ -46,6 +46,7 @@ if(WIN32)
         RMDir "$SMPROGRAMS\LNPlayer"
     ]=])
     set(CPACK_NSIS_EXTRA_INSTALL_COMMANDS [=[
+        SetRegView 64
         WriteRegStr HKCR "LNPlayer.Video" "" "LNPlayer Video"
         WriteRegStr HKCR "LNPlayer.Video\DefaultIcon" "" '"$INSTDIR\LNPlayer.exe",0'
         WriteRegStr HKCR "LNPlayer.Video\shell\open\command" "" '"$INSTDIR\LNPlayer.exe" --video "%1"'
@@ -124,6 +125,7 @@ if(WIN32)
         WriteRegStr HKLM "Software\Clients\Media\LNPlayer\Capabilities\FileAssociations" ".mpv" "LNPlayer.Video"
     ]=])
     set(CPACK_NSIS_EXTRA_UNINSTALL_COMMANDS [=[
+        SetRegView 64
         DeleteRegValue HKCR ".mp4\OpenWithProgids" "LNPlayer.Video"
         DeleteRegValue HKCR ".mkv\OpenWithProgids" "LNPlayer.Video"
         DeleteRegValue HKCR ".mov\OpenWithProgids" "LNPlayer.Video"
