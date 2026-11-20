@@ -1361,8 +1361,7 @@ private:
             }
         }
 
-        return av_hwdevice_ctx_create(
-            &hw_device_context_, AV_HWDEVICE_TYPE_D3D11VA, nullptr, nullptr, 0) >= 0;
+        return false;
     }
 
     static AVPixelFormat select_video_pixel_format(

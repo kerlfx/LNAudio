@@ -761,9 +761,6 @@ lnplayer_result_t lnplayer_windows_set_d3d11_device(
 {
     if (!is_current_player(player))
         return set_error(LNPLAYER_RESULT_INVALID_HANDLE, "Invalid Player handle.");
-    if (!d3d11_device)
-        return set_error(LNPLAYER_RESULT_INVALID_ARGUMENT, "D3D11 device is null.");
-
     const lnplayer_result_t result = player->controller->set_video_device(d3d11_device);
     if (result != LNPLAYER_RESULT_OK)
         return result;

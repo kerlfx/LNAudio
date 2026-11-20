@@ -687,30 +687,27 @@ MainWindow::MainWindow(PlayerMode mode, const QString& initial_media, QWidget* p
         if (video_surface_)
         {
             void* current_device = video_surface_->native_device();
-            if (current_device)
+            if (current_device != video_device_identity_)
             {
-                if (current_device != video_device_identity_)
+                video_device_identity_ = current_device;
+                QMetaObject::invokeMethod(command_worker_, [this, current_device]
                 {
-                    video_device_identity_ = current_device;
-                    QMetaObject::invokeMethod(command_worker_, [this, current_device]
+                    if (player_)
                     {
-                        if (player_)
-                        {
-                            const lnplayer_result_t result =
-                                lnplayer_windows_set_d3d11_device(player_, current_device);
-                            if (result != LNPLAYER_RESULT_OK)
-                                static_cast<ID3D11Device*>(current_device)->Release();
-                        }
-                        else
-                        {
+                        const lnplayer_result_t result =
+                            lnplayer_windows_set_d3d11_device(player_, current_device);
+                        if (result != LNPLAYER_RESULT_OK && current_device)
                             static_cast<ID3D11Device*>(current_device)->Release();
-                        }
-                    }, Qt::QueuedConnection);
-                }
-                else
-                {
-                    static_cast<ID3D11Device*>(current_device)->Release();
-                }
+                    }
+                    else if (current_device)
+                    {
+                        static_cast<ID3D11Device*>(current_device)->Release();
+                    }
+                }, Qt::QueuedConnection);
+            }
+            else if (current_device)
+            {
+                static_cast<ID3D11Device*>(current_device)->Release();
             }
         }
 
