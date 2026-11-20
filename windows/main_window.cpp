@@ -2,6 +2,8 @@
 
 #include <algorithm>
 
+#include <QByteArray>
+#include <QFont>
 #include <QDragEnterEvent>
 #include <QDropEvent>
 #include <QFileDialog>
