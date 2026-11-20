@@ -126,6 +126,8 @@ MainWindow::MainWindow(
             settings.value(QStringLiteral("Video/Subtitle/VerticalPosition"), 80).toInt(), 60, 80);
         middle_click_action_ = std::clamp(
             settings.value(QStringLiteral("Video/Mouse/MiddleClickAction"), 1).toInt(), 0, 2);
+        auto_match_subtitle_ = settings.value(
+            QStringLiteral("Video/Subtitle/AutoMatch"), true).toBool();
     }
     setAcceptDrops(true);
     resize(mode_ == PlayerMode::Video ? QSize(960, 600) : QSize(720, 480));
@@ -859,6 +861,7 @@ MainWindow::MainWindow(
                 settings.setValue(QStringLiteral("Video/Filter/Brightness"), video_brightness_);
                 settings.setValue(QStringLiteral("Video/Filter/Contrast"), video_contrast_);
                 settings.setValue(QStringLiteral("Video/Filter/Saturation"), video_saturation_);
+    settings.setValue(QStringLiteral("Video/Subtitle/AutoMatch"), auto_match_subtitle_);
     settings.setValue(QStringLiteral("Video/Subtitle/FontFamily"), subtitle_font_family_);
     settings.setValue(QStringLiteral("Video/Subtitle/FontSize"), subtitle_font_size_);
     settings.setValue(QStringLiteral("Video/Subtitle/Color"), subtitle_color_);
@@ -1778,6 +1781,9 @@ void MainWindow::openVideoSettings()
 
     auto* subtitle_page = new QWidget(tabs);
     auto* subtitle_form = new QFormLayout(subtitle_page);
+    auto* auto_match_subtitle = new QCheckBox(
+        QStringLiteral("自动加载同名外挂字幕"), subtitle_page);
+    auto_match_subtitle->setChecked(auto_match_subtitle_);
     auto* subtitle_font = new QFontComboBox(subtitle_page);
     subtitle_font->setCurrentFont(QFont(subtitle_font_family_));
     auto* subtitle_size = new QSpinBox(subtitle_page);
@@ -1796,6 +1802,7 @@ void MainWindow::openVideoSettings()
     subtitle_position->setRange(60, 80);
     subtitle_position->setSuffix(QStringLiteral(" %"));
     subtitle_position->setValue(subtitle_vertical_position_);
+    subtitle_form->addRow(auto_match_subtitle);
     subtitle_form->addRow(QStringLiteral("字体"), subtitle_font);
     subtitle_form->addRow(QStringLiteral("字号"), subtitle_size);
     subtitle_form->addRow(QStringLiteral("颜色"), subtitle_color);
@@ -1835,6 +1842,7 @@ void MainWindow::openVideoSettings()
         brightness->setValue(0.0);
         contrast->setValue(1.0);
         saturation->setValue(1.0);
+        auto_match_subtitle->setChecked(true);
         subtitle_font->setCurrentFont(QFont(QStringLiteral("Segoe UI")));
         subtitle_size->setValue(0);
         subtitle_color->setCurrentIndex(0);
@@ -1889,6 +1897,7 @@ void MainWindow::openVideoSettings()
     video_brightness_ = static_cast<float>(brightness->value());
     video_contrast_ = static_cast<float>(contrast->value());
     video_saturation_ = static_cast<float>(saturation->value());
+    auto_match_subtitle_ = auto_match_subtitle->isChecked();
     subtitle_font_family_ = subtitle_font->currentFont().family();
     subtitle_font_size_ = subtitle_size->value();
     subtitle_color_ = subtitle_color->currentData().toString();
@@ -2164,9 +2173,12 @@ void MainWindow::loadExternalSubtitle()
         QStringLiteral("加载外挂字幕"),
         QString(),
         QStringLiteral("字幕文件 (*.srt *.ass *.ssa);;SubRip (*.srt);;ASS/SSA (*.ass *.ssa);;所有文件 (*)"));
-    if (path.isEmpty())
-        return;
+    if (!path.isEmpty())
+        loadExternalSubtitlePath(path);
+}
 
+void MainWindow::loadExternalSubtitlePath(const QString& path)
+{
     const QByteArray path_utf8 = path.toUtf8();
     QMetaObject::invokeMethod(command_worker_, [this, path, path_utf8]
     {
@@ -3131,6 +3143,25 @@ void MainWindow::handleCoreEvent(
             status_label_->setText(QStringLiteral("媒体已打开"));
             statusBar()->showMessage(QStringLiteral("就绪"));
             seek_slider_->setEnabled(duration_ms > 0);
+            if (auto_match_subtitle_ && playlist_index_ >= 0 &&
+                playlist_index_ < playlist_.size())
+            {
+                const QFileInfo media_info(playlist_[playlist_index_].toLocalFile());
+                const QString base_name = media_info.completeBaseName();
+                const QStringList subtitle_extensions = {
+                    QStringLiteral(".srt"), QStringLiteral(".ass"), QStringLiteral(".ssa")
+                };
+                for (const QString& extension : subtitle_extensions)
+                {
+                    const QString candidate = QDir(media_info.absolutePath())
+                        .filePath(base_name + extension);
+                    if (QFileInfo::exists(candidate))
+                    {
+                        loadExternalSubtitlePath(candidate);
+                        break;
+                    }
+                }
+            }
             snapshot_timer_->setInterval(mode_ == PlayerMode::Video ? 25 : 250);
             snapshot_timer_->start();
             refreshSnapshot();
