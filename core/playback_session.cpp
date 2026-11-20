@@ -317,29 +317,16 @@ SessionResult PlaybackSession::close()
 
 MediaBackendResult PlaybackSession::read_video_frame(VideoFrame& frame, bool& end_of_stream)
 {
-    std::shared_ptr<MediaBackend> backend;
-    uint64_t generation = 0;
-    {
-        std::lock_guard<std::mutex> lock(mutex_);
-        if (!backend_)
-            return MediaBackendResult{false, "No media source is open."};
-        backend = backend_;
-        generation = media_generation_.load(std::memory_order_acquire);
-    }
+    // Backend operations share one stateful FFmpeg context. Keep the session
+    // lock for the complete pull so open/seek/close, stream changes and
+    // configuration updates cannot mutate that context while it is decoding.
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (!backend_)
+        return MediaBackendResult{false, "No media source is open."};
 
-    const MediaBackendResult result = backend->read_video_frame(frame, end_of_stream);
+    const MediaBackendResult result = backend_->read_video_frame(frame, end_of_stream);
     if (!result.success || end_of_stream)
         return result;
-
-    const uint64_t current_generation =
-        media_generation_.load(std::memory_order_acquire);
-    if (current_generation != generation)
-    {
-        frame = {};
-        frame.generation = current_generation;
-        end_of_stream = false;
-        return MediaBackendResult{true, {}};
-    }
 
 #ifdef _WIN32
     if (frame.bgra.empty() && !frame.d3d11_texture)
@@ -348,7 +335,7 @@ MediaBackendResult PlaybackSession::read_video_frame(VideoFrame& frame, bool& en
     if (frame.bgra.empty())
         return result;
 #endif
-    frame.generation = generation;
+    frame.generation = snapshot_.generation;
     return result;
 }
 
