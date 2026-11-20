@@ -540,7 +540,7 @@ Core 内部可以使用 FFmpeg AVFrame 和 AVBufferRef 管理帧生命周期，�
 - **Windows PTS 呈现调度（当前实现）**：UI 使用单次 `QTimer`，根据下一帧 PTS、插值媒体时钟、播放速度和呈现容差计算下一次唤醒延迟；不再使用固定 1ms/4ms 帧轮询。单帧呈现/处理完成后才拉取下一帧，保持单帧在途。暂停时停止播放时钟调度，Seek/逐帧仍通过显式请求触发。该实现尚未经过 Windows 实机帧率与刷新率矩阵验证。
 - **Windows 媒体/音乐库执行器**：目录扫描、媒体探测、音乐库扫描和查询通过 library strand 执行，避免共享音乐库访问并发冲突；播放列表媒体探测采用单任务在途队列，避免大量文件一次性向线程池堆积；外挂字幕基础文本回退解析也在后台执行。截图 GPU Readback、编码/写入，普通帧与历史帧的字幕叠加等独立 CPU/图像任务可以直接投递共享线程池。
 - **快速查询**：只有经确认不会等待媒体会话锁的纯缓存/原子快照才可在 GUI 线程直接调用。当前 `lnplayer_get_snapshot` 会读取 `PlaybackSession`，可能与持有 Session 锁的视频帧 Pull 竞争；Windows UI 因此将其放在 command strand，并限制同一时刻最多一个快照查询在途。后续应将 Core 快照改为独立缓存后再考虑直接查询。
-- **完成通知**：UI 层使用 Qt queued connection/回调更新界面，不在正常交互路径调用 `future.get()`、`wait()` 或同步等待线程池。窗口析构时由该窗口的任务跟踪器停止接收新提交并等待本窗口已提交任务完成，再销毁 Player；关闭一个窗口不会停止其他窗口共享的 UI 线程池。Asio `use_future` 只适用于确实需要 Future 语义且不会阻塞 UI 的调用路径。
+- **完成通知**：UI 层使用 Qt queued connection/回调更新界面，不在正常交互路径调用 `future.get()`、`wait()` 或同步等待线程池。窗口析构时由该窗口的任务跟踪器停止接收新提交并等待本窗口已提交任务完成，再销毁 Player；递归播放列表扫描通过原子 accepting 状态检查，在窗口关闭时提前退出。关闭一个窗口不会停止其他窗口共享的 UI 线程池。Asio `use_future` 只适用于确实需要 Future 语义且不会阻塞 UI 的调用路径。
 - **Android / Kotlin**：Kotlin 通过 JNI 调用相同 C ABI。提交型接口和快速查询可直接调用；同步完成型接口应由后台 Dispatcher/线程调用，不得阻塞 Android Main Thread。
 - **Core 内部**：命令由 Core Runtime 的 `io_context` 协调，实际业务由 Core 共享 `thread_pool` 执行。Windows UI 调度器不替代、不访问 Core 的执行器。
 
