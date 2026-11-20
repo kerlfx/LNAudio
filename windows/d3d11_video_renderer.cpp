@@ -362,7 +362,17 @@ public:
             content.Usage = D3D11_VIDEO_USAGE_PLAYBACK_NORMAL;
 
             if (FAILED(video_device_->CreateVideoProcessorEnumerator(
-                    &content, video_processor_enumerator_.GetAddressOf())) ||
+                    &content, video_processor_enumerator_.GetAddressOf())))
+                return false;
+
+            UINT input_support = 0;
+            UINT output_support = 0;
+            if (FAILED(video_processor_enumerator_->CheckVideoProcessorFormat(
+                    input_format, &input_support)) ||
+                !(input_support & D3D11_VIDEO_PROCESSOR_FORMAT_SUPPORT_INPUT) ||
+                FAILED(video_processor_enumerator_->CheckVideoProcessorFormat(
+                    DXGI_FORMAT_B8G8R8A8_UNORM, &output_support)) ||
+                !(output_support & D3D11_VIDEO_PROCESSOR_FORMAT_SUPPORT_OUTPUT) ||
                 FAILED(video_device_->CreateVideoProcessor(
                     video_processor_enumerator_.Get(), 0, video_processor_.GetAddressOf())))
                 return false;
