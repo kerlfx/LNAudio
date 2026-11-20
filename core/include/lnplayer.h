@@ -104,6 +104,22 @@ typedef void (*lnplayer_library_track_callback_t)(
     const lnplayer_library_track_t* track,
     void* user_data);
 
+typedef struct lnplayer_audio_track_info
+{
+    uint32_t struct_size;
+    int32_t stream_index;
+    int32_t channels;
+    int32_t sample_rate;
+    int32_t is_default;
+    const char* title_utf8;
+    const char* language_utf8;
+    const char* codec_utf8;
+} lnplayer_audio_track_info_t;
+
+typedef void (*lnplayer_audio_track_callback_t)(
+    const lnplayer_audio_track_info_t* track,
+    void* user_data);
+
 #define LNPLAYER_MEDIA_HAS_AUDIO 0x1u
 #define LNPLAYER_MEDIA_HAS_VIDEO 0x2u
 
@@ -191,6 +207,18 @@ LNPLAYER_API lnplayer_result_t lnplayer_set_volume(
 LNPLAYER_API lnplayer_result_t lnplayer_set_playback_rate(
     lnplayer_t* player,
     float rate);
+
+/* Enumerate audio streams in the currently opened media source. */
+LNPLAYER_API lnplayer_result_t lnplayer_enumerate_audio_tracks(
+    lnplayer_t* player,
+    lnplayer_audio_track_callback_t callback,
+    void* user_data);
+
+/* Switch to a stream_index returned by lnplayer_enumerate_audio_tracks.
+ * Playback must be paused or not yet started. */
+LNPLAYER_API lnplayer_result_t lnplayer_select_audio_track(
+    lnplayer_t* player,
+    int32_t stream_index);
 
 /* Returns the last error on the calling thread; required_size includes NUL. */
 LNPLAYER_API lnplayer_result_t lnplayer_get_last_error(
