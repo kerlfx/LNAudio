@@ -32,7 +32,7 @@ public:
     void set_video_filter(
         float brightness, float contrast, float saturation, float hue_degrees,
         float sharpness, float denoise, bool grayscale);
-    void set_hdr_metadata(int transfer, int color_primaries);
+    void set_hdr_metadata(int transfer, int color_primaries, float peak_luminance);
     void set_video_color_space(int ycbcr_matrix, int full_range);
     bool present_frame_threadsafe(const QImage& frame);
     bool present_hardware_frame(
