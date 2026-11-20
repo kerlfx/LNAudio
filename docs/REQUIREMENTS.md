@@ -363,5 +363,5 @@ UI 通过 Core 对外接口执行播放操作，不直接访问 FFmpeg 上下文
 - [x] Keep the software BGRA rendering path for software-decoded video.
 - [ ] Add capability-based fallback when a D3D11 Video Processor cannot consume a hardware frame.
 - [x] Capture the retained BGRA output texture for screenshots on the GPU hardware-frame path.
-- [ ] Composite subtitles on the GPU hardware-frame path.
+- [x] Composite external subtitle overlays on the GPU hardware-frame path.
 - [ ] Re-inject the renderer device after D3D11 device recreation and validate device-loss recovery.
