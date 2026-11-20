@@ -2469,12 +2469,15 @@ void MainWindow::openFiles(const QList<QUrl>& urls)
         return;
 
     savePlaybackPosition();
+    const uint64_t operation_generation = ++playlist_operation_generation_;
     status_label_->setText(QStringLiteral("正在扫描媒体文件..."));
-    postLibrary([this, urls]
+    postLibrary([this, urls, operation_generation]
     {
         const QStringList paths = expand_media_urls(urls);
-        QMetaObject::invokeMethod(this, [this, paths]
+        QMetaObject::invokeMethod(this, [this, paths, operation_generation]
         {
+            if (operation_generation != playlist_operation_generation_)
+                return;
             QList<QUrl> next_playlist;
             for (const QString& path : paths)
                 next_playlist.append(QUrl::fromLocalFile(path));
@@ -2502,11 +2505,14 @@ void MainWindow::appendPlaylistFiles(const QList<QUrl>& urls)
     if (urls.isEmpty())
         return;
 
-    postLibrary([this, urls]
+    const uint64_t operation_generation = playlist_operation_generation_;
+    postLibrary([this, urls, operation_generation]
     {
         const QStringList paths = expand_media_urls(urls);
-        QMetaObject::invokeMethod(this, [this, paths]
+        QMetaObject::invokeMethod(this, [this, paths, operation_generation]
         {
+            if (operation_generation != playlist_operation_generation_)
+                return;
             for (const QString& path : paths)
             {
                 playlist_.append(QUrl::fromLocalFile(path));
@@ -2724,6 +2730,7 @@ void MainWindow::saveVideoPlaylist() const
 
 void MainWindow::clearPlaylist()
 {
+    ++playlist_operation_generation_;
     savePlaybackPosition();
     for (const QString& queued_path : playlist_probe_queue_)
         playlist_probe_pending_.remove(queued_path);
