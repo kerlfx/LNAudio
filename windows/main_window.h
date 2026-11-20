@@ -3,7 +3,6 @@
 
 #include <QMainWindow>
 #include <QImage>
-#include <QElapsedTimer>
 #include <QString>
 #include <QList>
 #include <QUrl>
@@ -112,8 +111,6 @@ private:
     int64_t pending_video_pts_ms_ = 0;
     uint64_t pending_video_generation_ = 0;
     int64_t current_position_ms_ = 0;
-    int64_t video_clock_base_pts_ms_ = 0;
-    QElapsedTimer video_clock_;
     int muted_volume_ = 1000;
     float playback_rate_ = 1.0f;
     uint64_t media_generation_ = 0;
