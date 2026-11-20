@@ -4271,6 +4271,8 @@ void MainWindow::presentPendingVideoFrame()
                     QMetaObject::invokeMethod(this, [this]
                     {
                         video_frame_pending_ = false;
+                        if (is_playing_)
+                            requestVideoFrame();
                     }, Qt::QueuedConnection);
                     return;
                 }
@@ -4285,6 +4287,8 @@ void MainWindow::presentPendingVideoFrame()
                     QMetaObject::invokeMethod(this, [this]
                     {
                         video_frame_pending_ = false;
+                        if (is_playing_)
+                            requestVideoFrame();
                     }, Qt::QueuedConnection);
                     return;
                 }
@@ -4327,6 +4331,8 @@ void MainWindow::presentPendingVideoFrame()
                         video_frame_pending_ = false;
                         if (current_media_path_ == media_path)
                             last_video_frame_ = image;
+                        if (is_playing_)
+                            requestVideoFrame();
                     }, Qt::QueuedConnection);
                 }
                 else
@@ -4414,6 +4420,8 @@ void MainWindow::presentPendingVideoFrame()
                         QMetaObject::invokeMethod(this, [this]
                         {
                             video_frame_pending_ = false;
+                            if (is_playing_)
+                                requestVideoFrame();
                         }, Qt::QueuedConnection);
                         return;
                     }
@@ -4427,6 +4435,8 @@ void MainWindow::presentPendingVideoFrame()
                         if (!presented && current_media_path_ == media_path &&
                             video_surface_ && !video_surface_->has_renderer())
                             video_surface_->set_frame(frame);
+                        if (is_playing_)
+                            requestVideoFrame();
                     }, Qt::QueuedConnection);
                 });
             }
@@ -4434,6 +4444,8 @@ void MainWindow::presentPendingVideoFrame()
             {
                 video_surface_->set_frame(frame);
                 video_frame_pending_ = false;
+                if (is_playing_)
+                    requestVideoFrame();
             }
         }, Qt::QueuedConnection);
     });
