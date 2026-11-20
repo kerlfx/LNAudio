@@ -2010,7 +2010,7 @@ MainWindow::MainWindow(
 
         video_seek_pending_ = true;
         seek_slider_->setEnabled(false);
-        video_timer_->start();
+        video_timer_->start(0);
         const int64_t target = duration_ms_ * seek_slider_->value() / 1000;
         postCommand([this, target]
         {
@@ -4465,7 +4465,7 @@ void MainWindow::togglePlayback()
         video_end_of_stream_ = false;
         video_seek_pending_ = true;
         seek_slider_->setEnabled(false);
-        video_timer_->start();
+        video_timer_->start(0);
     }
 
     postCommand([this, should_pause, resume_from_history, resume_position]
@@ -4526,7 +4526,7 @@ void MainWindow::seekToPosition(int64_t position_ms, const QString& message)
     video_frame_history_index_ = -1;
     pending_video_frame_valid_ = false;
     video_end_of_stream_ = false;
-    video_timer_->start();
+    video_timer_->start(0);
     const int64_t target = duration_ms_ > 0
         ? std::clamp<int64_t>(position_ms, 0, duration_ms_)
         : std::max<int64_t>(0, position_ms);
@@ -5120,7 +5120,7 @@ void MainWindow::updatePlaybackState(
             if (!was_playing)
                 video_end_of_stream_ = false;
             if (!video_timer_->isActive())
-                video_timer_->start();
+                video_timer_->start(0);
         }
         else
         {
