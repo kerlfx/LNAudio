@@ -133,6 +133,15 @@ typedef struct lnplayer_subtitle_track_info
     const char* codec_utf8;
 } lnplayer_subtitle_track_info_t;
 
+typedef struct lnplayer_chapter_info
+{
+    uint32_t struct_size;
+    int32_t index;
+    int64_t start_ms;
+    int64_t end_ms;
+    const char* title_utf8;
+} lnplayer_chapter_info_t;
+
 #define LNPLAYER_VIDEO_INFO_TEXT_CAPACITY 128u
 
 typedef struct lnplayer_video_info
@@ -168,6 +177,11 @@ typedef struct lnplayer_video_info
 /* Subtitle track metadata strings are valid only during the callback. */
 typedef void (*lnplayer_subtitle_track_callback_t)(
     const lnplayer_subtitle_track_info_t* track,
+    void* user_data);
+
+/* Chapter title strings are valid only during the callback. */
+typedef void (*lnplayer_chapter_callback_t)(
+    const lnplayer_chapter_info_t* chapter,
     void* user_data);
 
 #define LNPLAYER_MEDIA_HAS_AUDIO 0x1u
@@ -289,6 +303,12 @@ LNPLAYER_API lnplayer_result_t lnplayer_enumerate_subtitle_tracks(
 
 /* Select a subtitle stream returned by enumeration. Pass -1 to disable subtitles.
  * Playback must be paused or not yet started. */
+/* Enumerate container chapters for the currently opened media. */
+LNPLAYER_API lnplayer_result_t lnplayer_enumerate_chapters(
+    lnplayer_t* player,
+    lnplayer_chapter_callback_t callback,
+    void* user_data);
+
 LNPLAYER_API lnplayer_result_t lnplayer_select_subtitle_track(
     lnplayer_t* player,
     int32_t stream_index);
