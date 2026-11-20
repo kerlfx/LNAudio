@@ -191,6 +191,13 @@ public:
         stretch_ = enabled;
     }
 
+    void set_aspect_ratio(float ratio)
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        aspect_ratio_ = ratio;
+        stretch_ = false;
+    }
+
     bool present(const uint8_t* pixels, int width, int height, int stride)
     {
         std::unique_lock<std::mutex> lock(mutex_);
@@ -247,15 +254,18 @@ public:
         if (target_width <= 0.0f || target_height <= 0.0f)
             return true;
 
-        const float scale = stretch_ ? 1.0f : std::min(
-            target_width / static_cast<float>(width),
-            target_height / static_cast<float>(height));
-        const float viewport_width = stretch_
-            ? target_width
-            : static_cast<float>(width) * scale;
-        const float viewport_height = stretch_
-            ? target_height
-            : static_cast<float>(height) * scale;
+        const float display_aspect = aspect_ratio_ > 0.0f
+            ? aspect_ratio_
+            : static_cast<float>(width) / static_cast<float>(height);
+        float viewport_width = target_width;
+        float viewport_height = target_height;
+        if (!stretch_)
+        {
+            if (target_width / target_height > display_aspect)
+                viewport_width = target_height * display_aspect;
+            else
+                viewport_height = target_width / display_aspect;
+        }
 
         D3D11_VIEWPORT viewport{};
         viewport.TopLeftX = (target_width - viewport_width) * 0.5f;
@@ -388,6 +398,7 @@ private:
     UINT texture_width_ = 0;
     UINT texture_height_ = 0;
     bool stretch_ = false;
+    float aspect_ratio_ = 0.0f;
     ComPtr<ID3D11Device> device_;
     ComPtr<ID3D11DeviceContext> context_;
     ComPtr<IDXGISwapChain> swap_chain_;
@@ -423,6 +434,11 @@ void D3D11VideoRenderer::resize(uint32_t width, uint32_t height)
 void D3D11VideoRenderer::set_stretch(bool enabled)
 {
     impl_->set_stretch(enabled);
+}
+
+void D3D11VideoRenderer::set_aspect_ratio(float ratio)
+{
+    impl_->set_aspect_ratio(ratio);
 }
 
 bool D3D11VideoRenderer::present(const uint8_t* bgra, int width, int height, int stride)
