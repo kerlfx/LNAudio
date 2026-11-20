@@ -428,9 +428,6 @@ public:
         context_->ClearRenderTargetView(render_target_.Get(), black);
         video_context_->VideoProcessorSetOutputTargetRect(
             video_processor_.Get(), TRUE, &target_rect);
-        video_context_->VideoProcessorSetStreamSourceRect(
-            video_processor_.Get(), 0, TRUE, nullptr);
-
         D3D11_VIDEO_PROCESSOR_STREAM stream{};
         stream.Enable = TRUE;
         stream.pInputSurface = input_view.Get();
