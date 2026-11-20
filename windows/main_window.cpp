@@ -1100,12 +1100,18 @@ MainWindow::MainWindow(
         const int64_t target = duration_ms_ * seek_slider_->value() / 1000;
         QMetaObject::invokeMethod(command_worker_, [this, target]
         {
-            if (player_)
+            uint64_t operation_id = 0;
+            const lnplayer_result_t result = player_
+                ? lnplayer_seek(player_, target, &operation_id)
+                : LNPLAYER_RESULT_INVALID_HANDLE;
+            if (result != LNPLAYER_RESULT_OK)
             {
-                uint64_t operation_id = 0;
-                lnplayer_seek(player_, target, &operation_id);
+                QMetaObject::invokeMethod(this, [this]
+                {
+                    video_seek_pending_ = false;
+                    requestVideoFrame();
+                }, Qt::QueuedConnection);
             }
-
         }, Qt::QueuedConnection);
     });
 
