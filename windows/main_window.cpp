@@ -133,6 +133,35 @@ MainWindow::MainWindow(
         ? QStringLiteral("LNPlayer - Video")
         : QStringLiteral("LNPlayer - Audio"));
 
+    setStyleSheet(QStringLiteral(
+        "QMainWindow, QDialog { background: #171a20; color: #e8eaf0; }"
+        "QWidget { color: #e8eaf0; }"
+        "QMenuBar { background: #20242c; border-bottom: 1px solid #343a46; }"
+        "QMenuBar::item { padding: 6px 10px; background: transparent; }"
+        "QMenuBar::item:selected { background: #343b48; }"
+        "QMenu { background: #252a33; border: 1px solid #424957; padding: 4px; }"
+        "QMenu::item { padding: 6px 28px 6px 12px; }"
+        "QMenu::item:selected { background: #3c4655; }"
+        "QPushButton { background: #2a303a; border: 1px solid #414957; "
+        "border-radius: 5px; padding: 6px 12px; }"
+        "QPushButton:hover { background: #384252; }"
+        "QPushButton:pressed { background: #202630; }"
+        "QPushButton:checked { background: #345b86; border-color: #4f8cc8; }"
+        "QPushButton:disabled { color: #777f8c; background: #22262d; }"
+        "QListWidget, QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox { "
+        "background: #20252d; border: 1px solid #3b4350; border-radius: 4px; "
+        "selection-background-color: #345b86; padding: 4px; }"
+        "QListWidget::item { padding: 5px; }"
+        "QListWidget::item:selected { background: #345b86; }"
+        "QSlider::groove:horizontal { height: 4px; background: #424a56; border-radius: 2px; }"
+        "QSlider::sub-page:horizontal { background: #4d91cf; border-radius: 2px; }"
+        "QSlider::handle:horizontal { width: 12px; margin: -5px 0; "
+        "background: #e4edf7; border: 1px solid #6c9bc5; border-radius: 6px; }"
+        "QTabWidget::pane { border: 1px solid #3b4350; }"
+        "QTabBar::tab { background: #252a33; padding: 7px 14px; }"
+        "QTabBar::tab:selected { background: #345b86; }"
+        "QStatusBar { background: #20242c; border-top: 1px solid #343a46; }"));
+
     auto* file_menu = menuBar()->addMenu(QStringLiteral("文件"));
     auto* open_action = file_menu->addAction(QStringLiteral("打开文件..."));
     connect(open_action, &QAction::triggered, this, [this]
