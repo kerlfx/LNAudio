@@ -89,6 +89,7 @@ SessionResult PlaybackSession::set_video_device(void* device)
     snapshot_.duration_ms = info.duration_ms;
     snapshot_.has_audio = info.has_audio;
     snapshot_.has_video = info.has_video;
+    video_info_ = info.video;
 
     if (previous_position > 0)
     {
@@ -150,6 +151,7 @@ SessionResult PlaybackSession::open(const std::string& source)
     snapshot_.duration_ms = -1;
     snapshot_.has_audio = false;
     snapshot_.has_video = false;
+    video_info_ = {};
 
     if (backend_)
     {
@@ -200,6 +202,7 @@ SessionResult PlaybackSession::open(const std::string& source)
     snapshot_.duration_ms = info.duration_ms;
     snapshot_.has_audio = info.has_audio;
     snapshot_.has_video = info.has_video;
+    video_info_ = info.video;
     return make_result(true);
 }
 
@@ -496,6 +499,13 @@ void PlaybackSession::reset_media_state()
     snapshot_.duration_ms = -1;
     snapshot_.has_audio = false;
     snapshot_.has_video = false;
+    video_info_ = {};
+}
+
+MediaVideoInfo PlaybackSession::video_info() const
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    return video_info_;
 }
 
 }
