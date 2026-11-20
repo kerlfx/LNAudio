@@ -111,6 +111,7 @@ typedef struct lnplayer_audio_track_info
     int32_t channels;
     int32_t sample_rate;
     int32_t is_default;
+    int32_t is_selected;
     const char* title_utf8;
     const char* language_utf8;
     const char* codec_utf8;
