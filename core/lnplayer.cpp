@@ -220,8 +220,8 @@ public:
         output->duration_ms = session_snapshot.duration_ms;
         output->volume = snapshot_.volume;
         output->reserved =
-            (session_snapshot.has_audio ? 0x1u : 0u) |
-            (session_snapshot.has_video ? 0x2u : 0u);
+            (session_snapshot.has_audio ? LNPLAYER_MEDIA_HAS_AUDIO : 0u) |
+            (session_snapshot.has_video ? LNPLAYER_MEDIA_HAS_VIDEO : 0u);
         output->generation = session_snapshot.generation;
     }
 
