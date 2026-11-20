@@ -54,6 +54,7 @@ public:
     SessionResult seek(int64_t position_ms);
     SessionResult stop();
     SessionResult close();
+    void set_volume(float volume);
 
     SessionSnapshot snapshot() const;
 
