@@ -956,7 +956,7 @@ private:
                 {
                     {
                         std::lock_guard<std::mutex> lock(playback_mutex_);
-                        drain_audio = decode_generation == playback_generation_;
+                        drain_audio = decode_generation == playback_generation_ && playback_active_;
                     }
                     if (drain_audio)
                         drain_success = output.drain();
@@ -965,7 +965,8 @@ private:
                 bool stale_result = false;
                 {
                     std::lock_guard<std::mutex> lock(playback_mutex_);
-                    stale_result = decode_generation != playback_generation_;
+                    stale_result = decode_generation != playback_generation_ ||
+                        (decode_result.success && end_of_stream && !playback_active_);
                     if (!stale_result)
                     {
                         playback_active_ = false;
