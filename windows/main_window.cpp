@@ -413,6 +413,7 @@ MainWindow::MainWindow(PlayerMode mode, const QString& initial_media, QWidget* p
         connect(shuffle_button, &QPushButton::toggled, this, [this, shuffle_button](bool enabled)
         {
             shuffle_enabled_ = enabled;
+            resetShuffleOrder();
             shuffle_button->setText(enabled ? QStringLiteral("随机：开") : QStringLiteral("随机：关"));
         });
         connect(repeat_button, &QPushButton::clicked, this, [this, repeat_button]
@@ -873,6 +874,7 @@ void MainWindow::appendPlaylistFiles(const QList<QUrl>& urls)
             continue;
         playlist_.append(QUrl::fromLocalFile(QFileInfo(path).absoluteFilePath()));
     }
+    resetShuffleOrder();
     rebuildPlaylistWidget();
     if (playlist_index_ < 0 && !playlist_.isEmpty())
         openPlaylistIndex(0);
@@ -899,6 +901,7 @@ void MainWindow::removeSelectedPlaylistItem()
 
     const bool removing_current = row == playlist_index_;
     playlist_.removeAt(row);
+    resetShuffleOrder();
     if (row < playlist_index_)
         --playlist_index_;
     rebuildPlaylistWidget();
@@ -935,6 +938,7 @@ void MainWindow::moveSelectedPlaylistItem(int offset)
         return;
 
     playlist_.swapItemsAt(from, to);
+    resetShuffleOrder();
     if (playlist_index_ == from)
         playlist_index_ = to;
     else if (playlist_index_ == to)
@@ -948,22 +952,52 @@ void MainWindow::cycleRepeatMode()
     repeat_mode_ = (repeat_mode_ + 1) % 3;
 }
 
+void MainWindow::resetShuffleOrder()
+{
+    shuffle_order_.clear();
+    if (!shuffle_enabled_)
+        return;
+
+    for (int index = 0; index < playlist_.size(); ++index)
+        shuffle_order_.append(index);
+
+    for (int index = shuffle_order_.size() - 1; index > 0; --index)
+    {
+        const int other = static_cast<int>(QRandomGenerator::global()->bounded(
+            static_cast<quint32>(index + 1)));
+        shuffle_order_.swapItemsAt(index, other);
+    }
+
+    if (playlist_index_ >= 0 && shuffle_order_.size() > 1)
+    {
+        const int current = shuffle_order_.indexOf(playlist_index_);
+        if (current > 0)
+            shuffle_order_.swapItemsAt(0, current);
+    }
+}
+
 int MainWindow::nextPlaylistIndex(bool manual) const
 {
+    Q_UNUSED(manual);
     if (playlist_.isEmpty() || playlist_index_ < 0)
         return -1;
-    if (shuffle_enabled_ && playlist_.size() > 1)
+
+    if (shuffle_enabled_)
     {
-        int next = playlist_index_;
-        while (next == playlist_index_)
-            next = static_cast<int>(QRandomGenerator::global()->bounded(
-                static_cast<quint32>(playlist_.size())));
-        return next;
+        const int current = shuffle_order_.indexOf(playlist_index_);
+        if (current < 0)
+            return -1;
+        if (current + 1 < shuffle_order_.size())
+            return shuffle_order_[current + 1];
+        return repeat_mode_ == 1 && !shuffle_order_.isEmpty()
+            ? shuffle_order_.front()
+            : -1;
     }
+
     const int next = playlist_index_ + 1;
     if (next < playlist_.size())
         return next;
-    return repeat_mode_ == 1 || (manual && repeat_mode_ == 1) ? 0 : -1;
+    return repeat_mode_ == 1 ? 0 : -1;
 }
 
 void MainWindow::openPlaylistIndex(int index)
