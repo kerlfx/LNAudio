@@ -3765,14 +3765,6 @@ void MainWindow::handleCoreEvent(
             if (playlist_index_ >= 0 && playlist_index_ < playlist_.size())
             {
                 QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
-                const int saved_audio_track = settings.value(
-                    mediaPreferenceKey(QStringLiteral("AudioTrack"), current_media_path_), -1).toInt();
-                if (saved_audio_track >= 0)
-                    selectAudioTrack(saved_audio_track);
-            }
-            if (playlist_index_ >= 0 && playlist_index_ < playlist_.size())
-            {
-                QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
                 const QString subtitle_track_key = mediaPreferenceKey(
                     QStringLiteral("SubtitleTrack"), current_media_path_);
                 if (settings.contains(subtitle_track_key))
@@ -3783,18 +3775,19 @@ void MainWindow::handleCoreEvent(
                 else if (auto_match_subtitle_)
                 {
                     const QFileInfo media_info(playlist_[playlist_index_].toLocalFile());
-                const QString base_name = media_info.completeBaseName();
-                const QStringList subtitle_extensions = {
-                    QStringLiteral(".srt"), QStringLiteral(".ass"), QStringLiteral(".ssa")
-                };
-                for (const QString& extension : subtitle_extensions)
-                {
-                    const QString candidate = QDir(media_info.absolutePath())
-                        .filePath(base_name + extension);
-                    if (QFileInfo::exists(candidate))
+                    const QString base_name = media_info.completeBaseName();
+                    const QStringList subtitle_extensions = {
+                        QStringLiteral(".srt"), QStringLiteral(".ass"), QStringLiteral(".ssa")
+                    };
+                    for (const QString& extension : subtitle_extensions)
                     {
-                        loadExternalSubtitlePath(candidate);
-                        break;
+                        const QString candidate = QDir(media_info.absolutePath())
+                            .filePath(base_name + extension);
+                        if (QFileInfo::exists(candidate))
+                        {
+                            loadExternalSubtitlePath(candidate);
+                            break;
+                        }
                     }
                 }
             }
