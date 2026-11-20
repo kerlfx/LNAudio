@@ -3,7 +3,6 @@
 
 #include "media_backend.h"
 
-#include <atomic>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -88,7 +87,6 @@ private:
     MediaBackendFactory backend_factory_;
     mutable std::mutex mutex_;
     std::shared_ptr<MediaBackend> backend_;
-    std::atomic<uint64_t> media_generation_{0};
     SessionSnapshot snapshot_;
     MediaVideoInfo video_info_;
     std::string source_;
