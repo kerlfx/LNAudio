@@ -119,6 +119,8 @@ private:
     QPushButton* repeat_button_ = nullptr;
     QObject* command_worker_;
     QThread* command_thread_;
+    QObject* frame_worker_;
+    QThread* frame_thread_;
     QObject* library_worker_;
     QThread* library_thread_;
     QTimer* snapshot_timer_;
