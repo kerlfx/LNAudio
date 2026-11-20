@@ -1556,6 +1556,25 @@ void MainWindow::presentPendingVideoFrame()
                 subtitle);
         }
 
+        VideoFrameHistoryEntry history_entry;
+        history_entry.hardware_owner = pending_hardware_frame_owner_;
+        history_entry.hardware_texture = pending_hardware_texture_;
+        history_entry.hardware_array_slice = pending_hardware_array_slice_;
+        history_entry.hardware_format = pending_hardware_format_;
+        history_entry.hardware_width = pending_hardware_width_;
+        history_entry.hardware_height = pending_hardware_height_;
+        history_entry.pts_ms = pending_video_pts_ms_;
+        history_entry.generation = pending_video_generation_;
+        if (video_frame_history_index_ + 1 < video_frame_history_.size())
+            video_frame_history_.erase(
+                video_frame_history_.begin() + video_frame_history_index_ + 1,
+                video_frame_history_.end());
+        video_frame_history_.append(std::move(history_entry));
+        constexpr int maximum_history_frames = 120;
+        if (video_frame_history_.size() > maximum_history_frames)
+            video_frame_history_.removeFirst();
+        video_frame_history_index_ = video_frame_history_.size() - 1;
+
         auto owner = std::move(pending_hardware_frame_owner_);
         void* texture = pending_hardware_texture_;
         const uint32_t array_slice = pending_hardware_array_slice_;
@@ -1660,11 +1679,15 @@ void MainWindow::presentPendingVideoFrame()
     }
 
     QImage frame = pending_video_frame_;
+    VideoFrameHistoryEntry history_entry;
+    history_entry.image = frame;
+    history_entry.pts_ms = pending_video_pts_ms_;
+    history_entry.generation = pending_video_generation_;
     if (video_frame_history_index_ + 1 < video_frame_history_.size())
         video_frame_history_.erase(
             video_frame_history_.begin() + video_frame_history_index_ + 1,
             video_frame_history_.end());
-    video_frame_history_.append(frame);
+    video_frame_history_.append(std::move(history_entry));
     constexpr int maximum_history_frames = 120;
     if (video_frame_history_.size() > maximum_history_frames)
         video_frame_history_.removeFirst();
@@ -1829,8 +1852,71 @@ void MainWindow::presentHistoricalVideoFrame()
         video_frame_history_index_ >= video_frame_history_.size())
         return;
 
-    QImage frame = video_frame_history_[video_frame_history_index_];
-    const QString subtitle = subtitleAt(current_position_ms_);
+    const VideoFrameHistoryEntry entry = video_frame_history_[video_frame_history_index_];
+    const QString subtitle = subtitleAt(entry.pts_ms);
+    if (entry.hardware_owner)
+    {
+        QImage overlay(video_surface_->size(), QImage::Format_ARGB32);
+        overlay.fill(Qt::transparent);
+        if (!subtitle.isEmpty())
+        {
+            QPainter painter(&overlay);
+            painter.setRenderHint(QPainter::TextAntialiasing, true);
+            QFont font(QStringLiteral("Segoe UI"));
+            font.setPixelSize(std::max(20, overlay.width() / 40));
+            font.setWeight(QFont::DemiBold);
+            painter.setFont(font);
+            const QRect text_rect(
+                overlay.width() / 20,
+                overlay.height() * 4 / 5,
+                overlay.width() * 9 / 10,
+                overlay.height() / 6);
+            const int offsets[][2] = {
+                {-2, -2}, {0, -2}, {2, -2}, {-2, 0},
+                {2, 0}, {-2, 2}, {0, 2}, {2, 2}
+            };
+            painter.setPen(Qt::black);
+            for (const auto& offset : offsets)
+                painter.drawText(
+                    text_rect.translated(offset[0], offset[1]),
+                    Qt::AlignHCenter | Qt::AlignVCenter | Qt::TextWordWrap,
+                    subtitle);
+            painter.setPen(Qt::white);
+            painter.drawText(
+                text_rect,
+                Qt::AlignHCenter | Qt::AlignVCenter | Qt::TextWordWrap,
+                subtitle);
+        }
+
+        QMetaObject::invokeMethod(command_worker_,
+            [this, entry, overlay = std::move(overlay)]() mutable
+        {
+            lnplayer_snapshot_t snapshot{};
+            snapshot.struct_size = sizeof(snapshot);
+            if (!player_ ||
+                lnplayer_get_snapshot(player_, &snapshot) != LNPLAYER_RESULT_OK ||
+                snapshot.generation != entry.generation)
+                return;
+
+            if (!video_surface_->present_hardware_frame(
+                    entry.hardware_texture,
+                    entry.hardware_array_slice,
+                    entry.hardware_format,
+                    entry.hardware_width,
+                    entry.hardware_height,
+                    entry.hardware_owner,
+                    overlay))
+            {
+                QMetaObject::invokeMethod(this, [this]
+                {
+                    status_label_->setText(QStringLiteral("无法重新呈现历史硬件视频帧"));
+                }, Qt::QueuedConnection);
+            }
+        }, Qt::QueuedConnection);
+        return;
+    }
+
+    QImage frame = entry.image;
     if (!subtitle.isEmpty())
     {
         QPainter painter(&frame);
