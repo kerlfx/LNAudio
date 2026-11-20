@@ -61,19 +61,29 @@ void VideoSurface::set_frame(const QImage& frame)
     {
         if (frame_.isNull())
             renderer_->clear();
-        else if (renderer_->present(
-            frame_.constBits(),
-            frame_.width(),
-            frame_.height(),
-            frame_.bytesPerLine()))
-            return;
         else
-        {
-            delete renderer_;
-            renderer_ = nullptr;
-        }
+            renderer_->present(
+                frame_.constBits(),
+                frame_.width(),
+                frame_.height(),
+                frame_.bytesPerLine());
+        return;
     }
     update();
+}
+
+bool VideoSurface::has_renderer() const
+{
+    return renderer_ != nullptr;
+}
+
+bool VideoSurface::present_frame_threadsafe(const QImage& frame)
+{
+    return renderer_ && !frame.isNull() && renderer_->present(
+        frame.constBits(),
+        frame.width(),
+        frame.height(),
+        frame.bytesPerLine());
 }
 
 void VideoSurface::paintEvent(QPaintEvent* event)
@@ -628,7 +638,25 @@ void MainWindow::presentPendingVideoFrame()
             return;
     }
 
-    video_surface_->set_frame(pending_video_frame_);
+    const QImage frame = pending_video_frame_;
+    if (video_surface_->has_renderer())
+    {
+        QMetaObject::invokeMethod(command_worker_, [this, frame]
+        {
+            if (video_surface_ && !video_surface_->present_frame_threadsafe(frame))
+            {
+                QMetaObject::invokeMethod(this, [this, frame]
+                {
+                    if (video_surface_ && !video_surface_->has_renderer())
+                        video_surface_->set_frame(frame);
+                }, Qt::QueuedConnection);
+            }
+        }, Qt::QueuedConnection);
+    }
+    else
+    {
+        video_surface_->set_frame(frame);
+    }
     pending_video_frame_ = {};
     pending_video_frame_valid_ = false;
 }
