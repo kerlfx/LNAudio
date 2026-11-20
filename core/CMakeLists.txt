@@ -67,6 +67,10 @@ target_link_libraries(lnplayer
         "${FFMPEG_SWRESAMPLE_LIBRARY}"
 )
 
+if(WIN32)
+    target_link_libraries(lnplayer PRIVATE ole32 uuid)
+endif()
+
 set_target_properties(lnplayer PROPERTIES
     OUTPUT_NAME "lnplayer"
     CXX_VISIBILITY_PRESET hidden
