@@ -3311,7 +3311,7 @@ void MainWindow::openVideoSettings()
     settings.setValue(QStringLiteral("Video/Subtitle/Color"), subtitle_color_);
     settings.setValue(QStringLiteral("Video/Subtitle/VerticalPosition"), subtitle_vertical_position_);
     settings.setValue(QStringLiteral("Video/Screenshot/Directory"), screenshot_directory_);
-    settings.setValue(QStringLiteral("Video/Screenshot/Format"), screenshot_format_);
+    settings.setValue(QStringLiteral("Video/Screenshot/Format"), output_format);
     settings.sync();
 
     setSubtitleOffset(subtitle_offset_ms_);
@@ -4489,13 +4489,14 @@ void MainWindow::takeScreenshot()
     else if (suffix == QStringLiteral("png"))
         screenshot_format_ = QStringLiteral("png");
 
-    const QByteArray image_format = screenshot_format_.toLatin1();
+    const QString output_format = screenshot_format_;
+    const QByteArray image_format = output_format.toLatin1();
     screenshot = screenshot.copy();
-    postBackground([this, screenshot = std::move(screenshot), output_path, image_format]() mutable
+    postBackground([this, screenshot = std::move(screenshot), output_path, output_format, image_format]() mutable
     {
         QDir().mkpath(QFileInfo(output_path).absolutePath());
         const bool saved = screenshot.save(output_path, image_format.constData());
-        QMetaObject::invokeMethod(this, [this, saved, output_path]
+        QMetaObject::invokeMethod(this, [this, saved, output_path, output_format]
         {
             if (!saved)
             {
