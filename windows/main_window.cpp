@@ -2528,7 +2528,6 @@ void MainWindow::rebuildPlaylistWidget()
         return;
     playlist_item_index_.clear();
     playlist_widget_->setUpdatesEnabled(false);
-    QSignalBlocker playlist_signals(playlist_widget_);
     playlist_widget_->clear();
     for (const QUrl& url : playlist_)
     {
