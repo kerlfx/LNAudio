@@ -1,6 +1,7 @@
 #include "runtime.h"
 
 #include <exception>
+#include <future>
 #include <string>
 
 namespace lnplayer
@@ -26,15 +27,40 @@ void Runtime::shutdown()
     if (!io_thread_.joinable())
         return;
 
-    // Worker tasks may post their completion handlers back to io_context.
-    // Keep the work guard alive until every worker has finished posting.
-    thread_pool_.join();
+    // Drain handlers already queued on io_context before joining the pool.
+    // Those handlers may be the producers of new worker tasks.
+    bool io_barrier_completed = false;
+    try
+    {
+        std::promise<void> barrier;
+        std::future<void> future = barrier.get_future();
+        asio::post(io_context_, [&barrier]
+        {
+            barrier.set_value();
+        });
+        future.wait();
+        io_barrier_completed = true;
+    }
+    catch (...)
+    {
+    }
 
-    // With no more producers, release the guard and let io_context drain
-    // all completion handlers before joining its event thread.
-    work_guard_.reset();
-    if (io_thread_.joinable())
+    if (!io_barrier_completed)
+    {
+        // If the barrier cannot be queued, stop the only worker that can
+        // submit additional pool work before joining the pool.
+        io_context_.stop();
         io_thread_.join();
+        thread_pool_.join();
+        work_guard_.reset();
+        return;
+    }
+
+    // No queued io handler can submit new work now. Let all workers finish
+    // posting their completions, then drain those completions on io_context.
+    thread_pool_.join();
+    work_guard_.reset();
+    io_thread_.join();
 }
 
 asio::io_context& Runtime::io_context()
