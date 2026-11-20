@@ -145,7 +145,7 @@ private:
         if (!tracker->try_begin())
             return;
 
-        asio::post(UiTaskRuntime::instance().io_context(),
+        asio::post(dispatch_executor_,
             [executor, tracker, task = std::forward<Handler>(handler)]() mutable
             {
                 asio::post(executor, [tracker, task = std::move(task)]() mutable
@@ -211,6 +211,7 @@ private:
     QPushButton* shuffle_button_ = nullptr;
     QPushButton* repeat_button_ = nullptr;
     std::shared_ptr<UiTaskTracker> task_tracker_;
+    asio::strand<asio::io_context::executor_type> dispatch_executor_;
     asio::thread_pool::executor_type background_executor_;
     asio::strand<asio::thread_pool::executor_type> command_executor_;
     asio::strand<asio::thread_pool::executor_type> frame_executor_;
