@@ -264,9 +264,12 @@ public:
         const bool snapshot_is_newer =
             snapshot_.generation > session_snapshot.generation;
         const bool state_changed_during_read = state_version_ != state_version;
+        const bool controller_transition =
+            snapshot_.state == LNPLAYER_STATE_OPENING ||
+            snapshot_.state == LNPLAYER_STATE_SEEKING ||
+            snapshot_.state == LNPLAYER_STATE_CLOSING;
 
-        output->state = state_changed_during_read ||
-            snapshot_.state == LNPLAYER_STATE_SEEKING
+        output->state = state_changed_during_read || controller_transition
             ? snapshot_.state
             : convert_state(session_snapshot.state);
         output->position_ms = snapshot_is_newer
