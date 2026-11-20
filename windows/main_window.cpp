@@ -171,10 +171,10 @@ MainWindow::MainWindow(
     if (mode_ == PlayerMode::Video)
     {
         auto* playlist_menu = menuBar()->addMenu(QStringLiteral("播放列表"));
-        auto* show_playlist_action = playlist_menu->addAction(QStringLiteral("显示播放列表"));
-        show_playlist_action->setCheckable(true);
-        show_playlist_action->setChecked(playlist_panel_visible_);
-        connect(show_playlist_action, &QAction::toggled, this, [this](bool visible)
+        playlist_visibility_action_ = playlist_menu->addAction(QStringLiteral("显示播放列表"));
+        playlist_visibility_action_->setCheckable(true);
+        playlist_visibility_action_->setChecked(playlist_panel_visible_);
+        connect(playlist_visibility_action_, &QAction::toggled, this, [this](bool visible)
         {
             playlist_panel_visible_ = visible;
             if (playlist_panel_)
@@ -830,7 +830,15 @@ MainWindow::MainWindow(
         {
             auto* shortcut = new QShortcut(QKeySequence(key), this);
             shortcut->setContext(Qt::WindowShortcut);
-            connect(shortcut, &QShortcut::activated, this, std::move(action));
+            connect(shortcut, &QShortcut::activated, this,
+                [action = std::move(action)]
+            {
+                QWidget* focus = QApplication::focusWidget();
+                if (qobject_cast<QLineEdit*>(focus) ||
+                    qobject_cast<QAbstractItemView*>(focus))
+                    return;
+                action();
+            });
         };
         bind_shortcut(Qt::Key_Space, [this] { togglePlayback(); });
         bind_shortcut(Qt::Key_F11, [this]
@@ -857,6 +865,26 @@ MainWindow::MainWindow(
         {
             volume_slider_->setValue(std::max(0, volume_slider_->value() - 50));
         });
+        bind_shortcut(Qt::Key_PageUp, [this] { playPrevious(); });
+        bind_shortcut(Qt::Key_PageDown, [this] { playNext(); });
+        bind_shortcut(Qt::CTRL | Qt::Key_Left, [this] { seekRelative(-30000); });
+        bind_shortcut(Qt::CTRL | Qt::Key_Right, [this] { seekRelative(30000); });
+        bind_shortcut(Qt::Key_F3, [this] { openFile(); });
+        bind_shortcut(Qt::Key_F6, [this]
+        {
+            if (playlist_visibility_action_)
+                playlist_visibility_action_->setChecked(!playlist_visibility_action_->isChecked());
+        });
+        bind_shortcut(Qt::Key_X, [this]
+        {
+            setPlaybackRate(std::max(0.25f, playback_rate_ - 0.25f));
+        });
+        bind_shortcut(Qt::Key_C, [this]
+        {
+            setPlaybackRate(std::min(4.0f, playback_rate_ + 0.25f));
+        });
+        bind_shortcut(Qt::Key_Z, [this] { setPlaybackRate(1.0f); });
+        bind_shortcut(Qt::Key_K, [this] { takeScreenshot(); });
         bind_shortcut(Qt::Key_M, [this]
         {
             if (volume_slider_->value() == 0)
