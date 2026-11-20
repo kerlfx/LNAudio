@@ -25,6 +25,8 @@ class QListWidget;
 class QListWidgetItem;
 class QObject;
 class QEvent;
+class QMoveEvent;
+class QResizeEvent;
 class QPushButton;
 class QSlider;
 class QShortcut;
@@ -49,6 +51,8 @@ protected:
     void dropEvent(QDropEvent* event) override;
     bool eventFilter(QObject* watched, QEvent* event) override;
     void changeEvent(QEvent* event) override;
+    void resizeEvent(QResizeEvent* event) override;
+    void moveEvent(QMoveEvent* event) override;
 
 private:
     struct VideoFrameHistoryEntry
@@ -162,6 +166,8 @@ private:
     int middle_click_action_ = 1;
     bool auto_match_subtitle_ = true;
     bool remember_position_ = true;
+    bool always_on_top_ = false;
+    QByteArray normal_geometry_;
     int64_t loop_a_ms_ = -1;
     int64_t loop_b_ms_ = -1;
     bool has_video_ = false;
