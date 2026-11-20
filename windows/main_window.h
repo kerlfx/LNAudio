@@ -165,6 +165,7 @@ private:
     bool fullscreen_controls_visible_ = true;
     bool playlist_panel_visible_ = true;
     int fullscreen_hide_delay_ms_ = 2000;
+    int osd_duration_ms_ = 1500;
     QString subtitle_font_family_ = QStringLiteral("Segoe UI");
     QString subtitle_color_ = QStringLiteral("#ffffff");
     int subtitle_font_size_ = 0;
