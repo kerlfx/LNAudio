@@ -74,6 +74,7 @@ private:
 
     void openFile();
     void loadExternalSubtitle();
+    void loadExternalSubtitlePath(const QString& path);
     QString subtitleAt(int64_t position_ms) const;
     void openFiles(const QList<QUrl>& urls);
     void appendPlaylistFiles(const QList<QUrl>& urls);
@@ -157,6 +158,7 @@ private:
     int subtitle_font_size_ = 0;
     int subtitle_vertical_position_ = 80;
     int middle_click_action_ = 1;
+    bool auto_match_subtitle_ = true;
     int64_t loop_a_ms_ = -1;
     int64_t loop_b_ms_ = -1;
     bool has_video_ = false;
