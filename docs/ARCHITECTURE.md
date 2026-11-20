@@ -536,7 +536,7 @@ Core 内部可以使用 FFmpeg AVFrame 和 AVBufferRef 管理帧生命周期，�
 
 - **Windows / Qt**：GUI 主线程只提交任务、处理输入和更新 QWidget。UI 调度器拥有一个单线程 `io_context` 作为提交/分发入口，以及一套三线程共享 `asio::thread_pool`。所有后台任务先通过 `asio::post(ui_io_context, ...)` 进入调度入口，再投递到线程池执行。
 - **Windows 命令执行器**：同步完成型 `play/pause/stop/close`、轨道切换、设备更新等 C ABI 调用通过绑定在线程池的 Player command strand 串行执行，避免 UI 阻塞并保持调用顺序。提交型 `open/seek` 也通过该入口提交；其 C ABI 返回只表示请求已入队，实际完成仍由 Core 事件回调通知。
-- **Windows 视频帧执行器**：同步视频帧 Pull 通过独立 frame strand 执行，避免帧读取等待占住命令 strand。UI 只允许一个帧读取任务在途；帧完成后使用 Qt queued connection 回到 GUI 线程更新状态。帧队列必须有界，不能持续向线程池堆积帧任务。
+- **Windows 视频帧执行器**：同步视频帧 Pull 通过独立 frame strand 执行，避免帧读取等待占住命令 strand。UI 只允许一个帧读取任务在途；CPU 字幕位图/文本叠加和软件帧图像处理在 UI 共享线程池执行，最终 QWidget 更新仍回到 GUI 线程；硬件帧交接遵守 D3D11 Renderer 的线程约束。帧完成后使用 Qt queued connection 回到 GUI 线程更新状态。帧队列必须有界，不能持续向线程池堆积帧任务。
 - **Windows 媒体/音乐库执行器**：目录扫描、媒体探测、音乐库扫描和查询通过 library strand 执行，避免共享音乐库访问并发冲突；外挂字幕基础文本回退解析也在后台执行。截图编码/写入等独立任务可以直接投递共享线程池。
 - **快速查询**：只有经确认不会等待媒体会话锁的纯缓存/原子快照才可在 GUI 线程直接调用。当前 `lnplayer_get_snapshot` 会读取 `PlaybackSession`，可能与持有 Session 锁的视频帧 Pull 竞争；Windows UI 因此将其放在 command strand，并限制同一时刻最多一个快照查询在途。后续应将 Core 快照改为独立缓存后再考虑直接查询。
 - **完成通知**：UI 层使用 Qt queued connection/回调更新界面，不在正常交互路径调用 `future.get()`、`wait()` 或同步等待线程池。窗口析构时允许执行一次关闭屏障：先停止接收新提交、排空已提交任务，再销毁 Player。Asio `use_future` 只适用于确实需要 Future 语义且不会阻塞 UI 的调用路径。
