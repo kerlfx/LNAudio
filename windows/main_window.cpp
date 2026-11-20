@@ -4520,30 +4520,25 @@ void MainWindow::takeScreenshot()
     if (!video_surface_)
         return;
 
-    VideoSurface* surface = video_surface_;
-    QImage fallback = last_video_frame_;
+    // VideoSurface owns QWidget/D3D11 presentation resources. Capture on the GUI
+    // thread; only image encoding and filesystem I/O are dispatched to workers.
+    QImage screenshot = video_surface_->capture_frame();
+    if (screenshot.isNull())
+        screenshot = last_video_frame_;
+    if (screenshot.isNull())
+    {
+        statusBar()->showMessage(QStringLiteral("当前没有可保存的视频画面"));
+        return;
+    }
+
     const QString initial_directory = screenshot_directory_.isEmpty()
         ? QDir(application_data_directory()).filePath(QStringLiteral("Screenshots"))
         : screenshot_directory_;
     const QString initial_format = screenshot_format_;
 
-    postBackground([this, surface, fallback = std::move(fallback),
-        initial_directory, initial_format]() mutable
-    {
-        QDir().mkpath(initial_directory);
-        QImage screenshot = surface->capture_frame();
-        if (screenshot.isNull())
-            screenshot = std::move(fallback);
-
-        QMetaObject::invokeMethod(this,
-            [this, screenshot = std::move(screenshot), initial_directory, initial_format]() mutable
+    QMetaObject::invokeMethod(this,
+        [this, screenshot = std::move(screenshot), initial_directory, initial_format]() mutable
         {
-            if (screenshot.isNull())
-            {
-                statusBar()->showMessage(QStringLiteral("当前没有可保存的视频画面"));
-                return;
-            }
-
             QString selected_filter = initial_format == QStringLiteral("jpg")
                 ? QStringLiteral("JPEG 图片 (*.jpg *.jpeg)")
                 : initial_format == QStringLiteral("bmp")
@@ -4608,7 +4603,6 @@ void MainWindow::takeScreenshot()
                 }, Qt::QueuedConnection);
             });
         }, Qt::QueuedConnection);
-    });
 }
 
 void MainWindow::setPlaybackRate(float rate)
