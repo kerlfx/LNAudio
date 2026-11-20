@@ -1985,6 +1985,8 @@ void MainWindow::clearPlaylist()
     video_first_frame_received_ = false;
     video_frame_history_.clear();
     video_frame_history_index_ = -1;
+    video_width_ = 0;
+    video_height_ = 0;
     pending_video_frame_valid_ = false;
     pending_hardware_frame_owner_.reset();
     pending_hardware_texture_ = nullptr;
