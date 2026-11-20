@@ -2527,6 +2527,8 @@ void MainWindow::rebuildPlaylistWidget()
     if (!playlist_widget_)
         return;
     playlist_item_index_.clear();
+    playlist_widget_->setUpdatesEnabled(false);
+    QSignalBlocker playlist_signals(playlist_widget_);
     playlist_widget_->clear();
     for (const QUrl& url : playlist_)
     {
@@ -2545,6 +2547,8 @@ void MainWindow::rebuildPlaylistWidget()
         playlist_widget_->setCurrentRow(playlist_index_);
         playing_playlist_item_ = playlist_widget_->item(playlist_index_);
     }
+    playlist_widget_->setUpdatesEnabled(true);
+    playlist_widget_->viewport()->update();
 }
 
 void MainWindow::schedulePlaylistMetadataProbe(const QString& path)
