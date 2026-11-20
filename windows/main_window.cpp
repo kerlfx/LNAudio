@@ -2085,6 +2085,8 @@ void MainWindow::presentPendingVideoFrame()
                         fallback_owner.get(),
                         generation,
                         pts_ms,
+                        ycbcr_matrix,
+                        ycbcr_full_range,
                         +[](const lnplayer_windows_video_frame_t* frame, void* user_data)
                         {
                             auto* output = static_cast<FallbackFrame*>(user_data);

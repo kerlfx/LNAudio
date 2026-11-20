@@ -2259,6 +2259,8 @@ bool convert_d3d11_frame_to_bgra(
     int& height,
     int& stride,
     float& display_aspect_ratio,
+    int ycbcr_matrix,
+    int ycbcr_full_range,
     std::string& error)
 {
 #ifdef _WIN32
@@ -2304,23 +2306,21 @@ bool convert_d3d11_frame_to_bgra(
         return false;
     }
 
-    int sws_color_space = SWS_CS_DEFAULT;
-    if (hardware_frame->colorspace == AVCOL_SPC_BT709)
-        sws_color_space = SWS_CS_ITU709;
-    else if (hardware_frame->colorspace == AVCOL_SPC_BT2020_NCL ||
-             hardware_frame->colorspace == AVCOL_SPC_BT2020_CL)
-        sws_color_space = SWS_CS_BT2020;
-    else if (hardware_frame->colorspace == AVCOL_SPC_SMPTE240M)
-        sws_color_space = SWS_CS_SMPTE240M;
-    else if (hardware_frame->colorspace == AVCOL_SPC_FCC)
-        sws_color_space = SWS_CS_FCC;
-    else if (hardware_frame->colorspace == AVCOL_SPC_BT470BG ||
-             hardware_frame->colorspace == AVCOL_SPC_SMPTE170M)
-        sws_color_space = SWS_CS_ITU601;
+    int sws_color_space = ycbcr_matrix == 1 ? SWS_CS_ITU709 : SWS_CS_ITU601;
+    if (ycbcr_matrix > 1)
+    {
+        if (hardware_frame->colorspace == AVCOL_SPC_BT2020_NCL ||
+            hardware_frame->colorspace == AVCOL_SPC_BT2020_CL)
+            sws_color_space = SWS_CS_BT2020;
+        else if (hardware_frame->colorspace == AVCOL_SPC_SMPTE240M)
+            sws_color_space = SWS_CS_SMPTE240M;
+        else if (hardware_frame->colorspace == AVCOL_SPC_FCC)
+            sws_color_space = SWS_CS_FCC;
+    }
     sws_setColorspaceDetails(
         scaler,
         sws_getCoefficients(sws_color_space),
-        hardware_frame->color_range == AVCOL_RANGE_JPEG ? 1 : 0,
+        ycbcr_full_range,
         sws_getCoefficients(SWS_CS_DEFAULT),
         1,
         0,

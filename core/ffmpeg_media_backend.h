@@ -20,6 +20,8 @@ bool convert_d3d11_frame_to_bgra(
     int& height,
     int& stride,
     float& display_aspect_ratio,
+    int ycbcr_matrix,
+    int ycbcr_full_range,
     std::string& error);
 
 }

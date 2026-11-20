@@ -71,6 +71,8 @@ LNPLAYER_API lnplayer_result_t lnplayer_windows_convert_video_frame(
     void* retained_owner,
     uint64_t generation,
     int64_t pts_ms,
+    int32_t ycbcr_matrix,
+    int32_t ycbcr_full_range,
     lnplayer_windows_video_frame_callback_t callback,
     void* user_data);
 

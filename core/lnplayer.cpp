@@ -838,6 +838,8 @@ lnplayer_result_t lnplayer_windows_convert_video_frame(
     void* retained_owner,
     uint64_t generation,
     int64_t pts_ms,
+    int32_t ycbcr_matrix,
+    int32_t ycbcr_full_range,
     lnplayer_windows_video_frame_callback_t callback,
     void* user_data)
 {
@@ -854,7 +856,8 @@ lnplayer_result_t lnplayer_windows_convert_video_frame(
         float display_aspect_ratio = 0.0f;
         std::string error;
         if (!lnplayer::convert_d3d11_frame_to_bgra(
-                owner, pixels, width, height, stride, display_aspect_ratio, error))
+                owner, pixels, width, height, stride, display_aspect_ratio,
+                ycbcr_matrix, ycbcr_full_range, error))
             return set_error(LNPLAYER_RESULT_INTERNAL_ERROR, error.c_str());
 
         lnplayer_windows_video_frame_t frame{};
@@ -866,6 +869,8 @@ lnplayer_result_t lnplayer_windows_convert_video_frame(
         frame.pts_ms = pts_ms;
         frame.generation = generation;
         frame.display_aspect_ratio = display_aspect_ratio;
+        frame.ycbcr_matrix = ycbcr_matrix;
+        frame.ycbcr_full_range = ycbcr_full_range;
         callback(&frame, user_data);
         g_last_error.clear();
         return LNPLAYER_RESULT_OK;
