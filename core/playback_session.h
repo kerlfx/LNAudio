@@ -55,6 +55,7 @@ public:
     SessionResult seek(int64_t position_ms);
     SessionResult stop();
     SessionResult close();
+    MediaBackendResult read_video_frame(VideoFrame& frame, bool& end_of_stream);
     void set_volume(float volume);
     void set_playback_end_callback(std::function<void()> callback);
     void set_playback_error_callback(std::function<void(std::string)> callback);
