@@ -199,6 +199,22 @@ bool WasapiAudioOutput::open()
         return false;
     }
 
+    result = audio_client_->GetService(
+        __uuidof(IAudioClock),
+        reinterpret_cast<void**>(&audio_clock_));
+    if (FAILED(result))
+    {
+        close();
+        return false;
+    }
+
+    result = audio_clock_->GetFrequency(&audio_clock_frequency_);
+    if (FAILED(result) || audio_clock_frequency_ == 0)
+    {
+        close();
+        return false;
+    }
+
     result = audio_client_->Start();
     if (FAILED(result))
     {
@@ -306,6 +322,22 @@ bool WasapiAudioOutput::current_padding(uint32_t& frames) const
     return true;
 }
 
+bool WasapiAudioOutput::clock_position(uint64_t& frames) const
+{
+    if (!started_ || !audio_clock_ || audio_clock_frequency_ == 0 || !mix_format_)
+        return false;
+
+    UINT64 position = 0;
+    if (FAILED(audio_clock_->GetPosition(&position, nullptr)))
+        return false;
+
+    const long double device_frames =
+        static_cast<long double>(position) * mix_format_->nSamplesPerSec /
+        static_cast<long double>(audio_clock_frequency_);
+    frames = static_cast<uint64_t>(device_frames);
+    return true;
+}
+
 bool WasapiAudioOutput::drain()
 {
     if (!started_ || !audio_client_ || !audio_event_)
@@ -330,6 +362,12 @@ void WasapiAudioOutput::close()
         audio_client_->Stop();
     started_ = false;
 
+    if (audio_clock_)
+    {
+        audio_clock_->Release();
+        audio_clock_ = nullptr;
+    }
+    audio_clock_frequency_ = 0;
     if (render_client_)
     {
         render_client_->Release();
