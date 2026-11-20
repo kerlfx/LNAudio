@@ -16,6 +16,8 @@
 #include <utility>
 #include <vector>
 
+#include <QAbstractItemModel>
+#include <QAbstractItemView>
 #include <QByteArray>
 #include <QFont>
 #include <QDragEnterEvent>
@@ -374,6 +376,8 @@ MainWindow::MainWindow(PlayerMode mode, const QString& initial_media, QWidget* p
         video_surface_ = new VideoSurface(content);
         playlist_widget_ = new QListWidget(content);
         playlist_widget_->setMaximumWidth(280);
+        playlist_widget_->setDragDropMode(QAbstractItemView::InternalMove);
+        playlist_widget_->setDefaultDropAction(Qt::MoveAction);
         auto* playlist_panel = new QWidget(content);
         auto* playlist_panel_layout = new QVBoxLayout(playlist_panel);
         playlist_panel_layout->setContentsMargins(0, 0, 0, 0);
@@ -423,6 +427,23 @@ MainWindow::MainWindow(PlayerMode mode, const QString& initial_media, QWidget* p
             repeat_button->setText(repeat_mode_ == 0 ? QStringLiteral("循环：关")
                 : repeat_mode_ == 1 ? QStringLiteral("循环：列表") : QStringLiteral("循环：单项"));
         });
+        connect(playlist_widget_->model(), &QAbstractItemModel::rowsMoved, this,
+            [this](const QModelIndex&, int, int, const QModelIndex&, int)
+            {
+                QList<QUrl> reordered;
+                for (int row = 0; row < playlist_widget_->count(); ++row)
+                {
+                    const QString path = playlist_widget_->item(row)->data(Qt::UserRole).toString();
+                    reordered.append(QUrl::fromLocalFile(path));
+                }
+                playlist_ = std::move(reordered);
+                playlist_index_ = playing_playlist_item_
+                    ? playlist_widget_->row(playing_playlist_item_)
+                    : -1;
+                if (playlist_index_ >= 0)
+                    playlist_widget_->setCurrentRow(playlist_index_);
+                resetShuffleOrder();
+            });
         connect(playlist_widget_, &QListWidget::itemDoubleClicked, this,
             [this](QListWidgetItem* item)
             {
@@ -883,12 +904,7 @@ void MainWindow::openFiles(const QList<QUrl>& urls)
     playlist_ = std::move(next_playlist);
     playlist_index_ = -1;
     resetShuffleOrder();
-    if (playlist_widget_)
-    {
-        playlist_widget_->clear();
-        for (const QUrl& url : playlist_)
-            playlist_widget_->addItem(QFileInfo(url.toLocalFile()).fileName());
-    }
+    rebuildPlaylistWidget();
     openPlaylistIndex(0);
 }
 
@@ -913,9 +929,16 @@ void MainWindow::rebuildPlaylistWidget()
         return;
     playlist_widget_->clear();
     for (const QUrl& url : playlist_)
-        playlist_widget_->addItem(QFileInfo(url.toLocalFile()).fileName());
+    {
+        auto* item = new QListWidgetItem(QFileInfo(url.toLocalFile()).fileName(), playlist_widget_);
+        item->setData(Qt::UserRole, url.toLocalFile());
+    }
+    playing_playlist_item_ = nullptr;
     if (playlist_index_ >= 0 && playlist_index_ < playlist_.size())
+    {
         playlist_widget_->setCurrentRow(playlist_index_);
+        playing_playlist_item_ = playlist_widget_->item(playlist_index_);
+    }
 }
 
 void MainWindow::removeSelectedPlaylistItem()
@@ -1034,7 +1057,10 @@ void MainWindow::openPlaylistIndex(int index)
 
     playlist_index_ = index;
     if (playlist_widget_)
+    {
         playlist_widget_->setCurrentRow(index);
+        playing_playlist_item_ = playlist_widget_->item(index);
+    }
 
     const QString source = playlist_[index].toLocalFile();
     if (source.isEmpty())
