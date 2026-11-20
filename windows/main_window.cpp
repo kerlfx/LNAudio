@@ -2351,12 +2351,18 @@ void MainWindow::seekRelative(int64_t offset_ms)
         current_position_ms_ + offset_ms, 0, duration_ms_);
     QMetaObject::invokeMethod(command_worker_, [this, target]
     {
-        if (player_)
+        uint64_t operation_id = 0;
+        const lnplayer_result_t result = player_
+            ? lnplayer_seek(player_, target, &operation_id)
+            : LNPLAYER_RESULT_INVALID_HANDLE;
+        if (result != LNPLAYER_RESULT_OK)
         {
-            uint64_t operation_id = 0;
-            lnplayer_seek(player_, target, &operation_id);
+            QMetaObject::invokeMethod(this, [this]
+            {
+                video_seek_pending_ = false;
+                requestVideoFrame();
+            }, Qt::QueuedConnection);
         }
-
     }, Qt::QueuedConnection);
 }
 
