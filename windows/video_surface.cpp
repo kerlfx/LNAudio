@@ -175,6 +175,9 @@ bool VideoSurface::present_hardware_frame(
 
 QImage VideoSurface::capture_frame() const
 {
+    // Safe on the worker pool: D3D11VideoRenderer serializes capture and present
+    // through its own mutex. MainWindow keeps this widget alive until tracked
+    // background tasks have completed.
     const auto fallback_frame = [this]
     {
         std::lock_guard<std::mutex> lock(frame_mutex_);
