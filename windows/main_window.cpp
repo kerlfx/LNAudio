@@ -17,6 +17,8 @@
 #include <QMetaObject>
 #include <QMimeData>
 #include <QPushButton>
+#include <QPainter>
+#include <QPaintEvent>
 #include <QSlider>
 #include <QStatusBar>
 #include <QThread>
@@ -24,6 +26,38 @@
 #include <QUrl>
 #include <QVBoxLayout>
 #include <QWidget>
+
+VideoSurface::VideoSurface(QWidget* parent)
+    : QWidget(parent)
+{
+    setMinimumSize(640, 360);
+    setAutoFillBackground(false);
+    setStyleSheet(QStringLiteral("background-color: #101010;"));
+}
+
+void VideoSurface::set_frame(const QImage& frame)
+{
+    frame_ = frame;
+    update();
+}
+
+void VideoSurface::paintEvent(QPaintEvent* event)
+{
+    Q_UNUSED(event);
+    QPainter painter(this);
+    painter.fillRect(rect(), Qt::black);
+    if (frame_.isNull())
+        return;
+
+    const QSize fitted = frame_.size().scaled(size(), Qt::KeepAspectRatio);
+    const QRect target(
+        (width() - fitted.width()) / 2,
+        (height() - fitted.height()) / 2,
+        fitted.width(),
+        fitted.height());
+    painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
+    painter.drawImage(target, frame_);
+}
 
 namespace
 {
@@ -58,6 +92,7 @@ MainWindow::MainWindow(PlayerMode mode, const QString& initial_media, QWidget* p
     , library_worker_(new QObject())
     , library_thread_(new QThread(this))
     , snapshot_timer_(new QTimer(this))
+    , video_timer_(new QTimer(this))
 {
     setAcceptDrops(true);
     resize(mode_ == PlayerMode::Video ? QSize(960, 600) : QSize(720, 480));
@@ -125,10 +160,8 @@ MainWindow::MainWindow(PlayerMode mode, const QString& initial_media, QWidget* p
 
     if (mode_ == PlayerMode::Video)
     {
-        auto* video_surface = new QWidget(content);
-        video_surface->setMinimumSize(640, 360);
-        video_surface->setStyleSheet(QStringLiteral("background-color: #101010;"));
-        layout->addWidget(video_surface, 1);
+        video_surface_ = new VideoSurface(content);
+        layout->addWidget(video_surface_, 1);
     }
     else
     {
@@ -303,6 +336,14 @@ MainWindow::MainWindow(PlayerMode mode, const QString& initial_media, QWidget* p
     snapshot_timer_->setInterval(250);
     connect(snapshot_timer_, &QTimer::timeout, this, &MainWindow::refreshSnapshot);
 
+    video_timer_->setInterval(5);
+    connect(video_timer_, &QTimer::timeout, this, [this]
+    {
+        presentPendingVideoFrame();
+        if (is_playing_ && has_video_ && !video_frame_pending_ && !pending_video_frame_valid_)
+            requestVideoFrame();
+    });
+
     if (!initial_media.isEmpty())
         openFiles({QUrl::fromLocalFile(initial_media)});
 }
@@ -310,6 +351,7 @@ MainWindow::MainWindow(PlayerMode mode, const QString& initial_media, QWidget* p
 MainWindow::~MainWindow()
 {
     snapshot_timer_->stop();
+    video_timer_->stop();
 
     if (library_thread_->isRunning())
     {
@@ -448,6 +490,91 @@ void MainWindow::refreshLibrary()
     }, Qt::QueuedConnection);
 }
 
+void MainWindow::requestVideoFrame()
+{
+    if (mode_ != PlayerMode::Video || !has_video_ || video_frame_pending_ || !player_)
+        return;
+
+    video_frame_pending_ = true;
+    QMetaObject::invokeMethod(command_worker_, [this]
+    {
+        struct FrameContext
+        {
+            QImage image;
+            int64_t pts_ms = 0;
+        } context;
+
+        int end_of_stream = 0;
+        const lnplayer_result_t result = lnplayer_read_video_frame(
+            player_,
+            +[](const lnplayer_video_frame_t* frame, void* user_data)
+            {
+                auto* context = static_cast<FrameContext*>(user_data);
+                context->image = QImage(
+                    frame->bgra,
+                    frame->width,
+                    frame->height,
+                    frame->stride,
+                    QImage::Format_ARGB32).copy();
+                context->pts_ms = frame->pts_ms;
+            },
+            &context,
+            &end_of_stream);
+
+        const QImage image = context.image;
+        const int64_t pts_ms = context.pts_ms;
+        QMetaObject::invokeMethod(this, [this, result, end_of_stream, image, pts_ms]
+        {
+            video_frame_pending_ = false;
+            if (result != LNPLAYER_RESULT_OK)
+            {
+                if (is_playing_)
+                    status_label_->setText(QStringLiteral("视频解码失败"));
+                return;
+            }
+
+            if (end_of_stream)
+            {
+                video_timer_->stop();
+                return;
+            }
+
+            if (!image.isNull())
+            {
+                pending_video_frame_ = image;
+                pending_video_pts_ms_ = pts_ms;
+                pending_video_frame_valid_ = true;
+                if (!video_clock_.isValid() && !has_audio_)
+                {
+                    video_clock_base_pts_ms_ = pts_ms;
+                    video_clock_.start();
+                }
+                presentPendingVideoFrame();
+            }
+        }, Qt::QueuedConnection);
+    }, Qt::QueuedConnection);
+}
+
+void MainWindow::presentPendingVideoFrame()
+{
+    if (!pending_video_frame_valid_ || !video_surface_)
+        return;
+
+    if (is_playing_)
+    {
+        int64_t clock_ms = current_position_ms_;
+        if (!has_audio_ && video_clock_.isValid())
+            clock_ms = video_clock_base_pts_ms_ + video_clock_.elapsed();
+
+        if (pending_video_pts_ms_ > clock_ms + 8)
+            return;
+    }
+
+    video_surface_->set_frame(pending_video_frame_);
+    pending_video_frame_ = {};
+    pending_video_frame_valid_ = false;
+}
+
 void MainWindow::handleCoreEvent(
     lnplayer_event_type_t type,
     lnplayer_result_t result,
@@ -509,10 +636,16 @@ void MainWindow::refreshSnapshot()
         const lnplayer_state_t state = snapshot.state;
         const int64_t position_ms = snapshot.position_ms;
         const int64_t duration_ms = snapshot.duration_ms;
+        const bool has_audio = (snapshot.reserved & 0x1u) != 0;
+        const bool has_video = (snapshot.reserved & 0x2u) != 0;
 
-        QMetaObject::invokeMethod(this, [this, state, position_ms, duration_ms]
+        QMetaObject::invokeMethod(this, [this, state, position_ms, duration_ms, has_audio, has_video]
         {
+            has_audio_ = has_audio;
+            has_video_ = has_video;
             updatePlaybackState(state, position_ms, duration_ms);
+            if (has_video_ && !pending_video_frame_valid_ && !video_frame_pending_)
+                requestVideoFrame();
         }, Qt::QueuedConnection);
     }, Qt::QueuedConnection);
 }
@@ -523,6 +656,29 @@ void MainWindow::updatePlaybackState(
     int64_t duration_ms)
 {
     duration_ms_ = duration_ms;
+    current_position_ms_ = position_ms;
+
+    const bool was_playing = is_playing_;
+    is_playing_ = state == LNPLAYER_STATE_PLAYING;
+    if (mode_ == PlayerMode::Video && has_video_)
+    {
+        if (is_playing_)
+        {
+            if (!was_playing && !has_audio_)
+            {
+                video_clock_base_pts_ms_ = position_ms;
+                video_clock_.restart();
+            }
+            if (!video_timer_->isActive())
+                video_timer_->start();
+        }
+        else
+        {
+            video_timer_->stop();
+            video_clock_.invalidate();
+            presentPendingVideoFrame();
+        }
+    }
 
     const QString duration_text = duration_ms < 0
         ? QStringLiteral("--:--")
