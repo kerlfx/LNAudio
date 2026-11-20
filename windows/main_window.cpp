@@ -196,6 +196,15 @@ MainWindow::MainWindow(
 
     if (mode_ == PlayerMode::Video)
     {
+        auto* video_menu = menuBar()->addMenu(QStringLiteral("视频"));
+        auto* playback_info_action = video_menu->addAction(QStringLiteral("播放信息..."));
+        connect(playback_info_action, &QAction::triggered, this, [this] { showPlaybackInfo(); });
+        auto* screenshot_action = video_menu->addAction(QStringLiteral("截图..."));
+        connect(screenshot_action, &QAction::triggered, this, [this] { takeScreenshot(); });
+    }
+
+    if (mode_ == PlayerMode::Video)
+    {
         auto* playlist_menu = menuBar()->addMenu(QStringLiteral("播放列表"));
         playlist_visibility_action_ = playlist_menu->addAction(QStringLiteral("显示播放列表"));
         playlist_visibility_action_->setCheckable(true);
@@ -958,6 +967,7 @@ MainWindow::MainWindow(
         bind_shortcut(QStringLiteral("seek_forward_large"), QStringLiteral("前进 30 秒"), Qt::CTRL | Qt::Key_Right, [this] { seekRelative(30000); });
         bind_shortcut(QStringLiteral("open_file"), QStringLiteral("打开文件"), Qt::Key_F3, [this] { openFile(); });
         bind_shortcut(QStringLiteral("open_settings"), QStringLiteral("打开设置"), Qt::Key_F5, [this] { openVideoSettings(); });
+        bind_shortcut(QStringLiteral("playback_info"), QStringLiteral("播放信息"), Qt::Key_F7, [this] { showPlaybackInfo(); });
         bind_shortcut(QStringLiteral("toggle_playlist"), QStringLiteral("显示/隐藏播放列表"), Qt::Key_F6, [this]
         {
             if (playlist_visibility_action_)
@@ -1273,6 +1283,46 @@ MainWindow::~MainWindow()
     }
 
     delete command_worker_;
+}
+
+void MainWindow::showPlaybackInfo()
+{
+    if (mode_ != PlayerMode::Video)
+        return;
+
+    const QString media_path = playlist_index_ >= 0 && playlist_index_ < playlist_.size()
+        ? playlist_[playlist_index_].toLocalFile()
+        : QString();
+    const QString duration = duration_ms_ >= 0
+        ? format_position(duration_ms_)
+        : QStringLiteral("--:--");
+    const QString position = format_position(current_position_ms_);
+    const QString video_state = has_video_
+        ? QStringLiteral("有视频流")
+        : QStringLiteral("无视频流");
+    const QString audio_state = has_audio_
+        ? QStringLiteral("有音轨")
+        : QStringLiteral("无音轨");
+    const QString renderer_state = video_surface_ && video_surface_->has_renderer()
+        ? QStringLiteral("D3D11 渲染器已初始化")
+        : QStringLiteral("D3D11 渲染器不可用");
+
+    const QString details = QStringLiteral(
+        "媒体：%1\n路径：%2\n状态：%3\n位置：%4 / %5\n"
+        "视频：%6\n音轨：%7\n播放速度：%8x\n音量：%9%\n"
+        "字幕偏移：%10 ms\n渲染：%11")
+        .arg(media_title_label_->text())
+        .arg(media_path.isEmpty() ? QStringLiteral("无") : media_path)
+        .arg(status_label_->text())
+        .arg(position)
+        .arg(duration)
+        .arg(video_state)
+        .arg(audio_state)
+        .arg(playback_rate_, 0, 'f', 2)
+        .arg(volume_slider_->value() / 10)
+        .arg(subtitle_offset_ms_)
+        .arg(renderer_state);
+    QMessageBox::information(this, QStringLiteral("播放信息"), details);
 }
 
 void MainWindow::showOsd(const QString& message)
