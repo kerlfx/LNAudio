@@ -10,11 +10,36 @@
 namespace lnplayer
 {
 
+struct MediaVideoInfo
+{
+    std::string container_format;
+    std::string container_long_name;
+    std::string codec_name;
+    std::string codec_long_name;
+    std::string decoder_name;
+    std::string profile;
+    std::string pixel_format;
+    int width = 0;
+    int height = 0;
+    int64_t bit_rate = 0;
+    int frame_rate_num = 0;
+    int frame_rate_den = 1;
+    int sample_aspect_ratio_num = 1;
+    int sample_aspect_ratio_den = 1;
+    int rotation_degrees = 0;
+    int color_range = 0;
+    int color_primaries = 0;
+    int color_transfer = 0;
+    int color_space = 0;
+    int bit_depth = 0;
+};
+
 struct MediaInfo
 {
     int64_t duration_ms = -1;
     bool has_audio = false;
     bool has_video = false;
+    MediaVideoInfo video;
 };
 
 struct MediaTrackInfo
@@ -101,6 +126,7 @@ public:
     virtual MediaBackendResult close() = 0;
     virtual MediaBackendResult read_audio_frame(AudioFrame& frame, bool& end_of_stream) = 0;
     virtual MediaBackendResult read_video_frame(VideoFrame& frame, bool& end_of_stream) = 0;
+    virtual MediaVideoInfo video_info() const { return {}; }
     virtual std::vector<MediaTrackInfo> audio_tracks() const { return {}; }
     virtual MediaBackendResult select_audio_track(int)
     {
