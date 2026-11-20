@@ -1009,6 +1009,7 @@ void MainWindow::requestVideoFrame()
                 pending_hardware_width_ = hardware_width;
                 pending_hardware_height_ = hardware_height;
                 pending_video_pts_ms_ = pts_ms;
+                pending_video_generation_ = generation;
                 pending_video_frame_valid_ = true;
                 if (!video_clock_.isValid() && !has_audio_)
                 {
@@ -1045,12 +1046,19 @@ void MainWindow::presentPendingVideoFrame()
         const uint32_t format = pending_hardware_format_;
         const int width = pending_hardware_width_;
         const int height = pending_hardware_height_;
+        const uint64_t generation = pending_video_generation_;
         pending_hardware_texture_ = nullptr;
         pending_video_frame_valid_ = false;
 
         QMetaObject::invokeMethod(command_worker_,
-            [this, owner = std::move(owner), texture, array_slice, format, width, height]
+            [this, owner = std::move(owner), texture, array_slice, format, width, height, generation]
         {
+            lnplayer_snapshot_t snapshot{};
+            snapshot.struct_size = sizeof(snapshot);
+            if (!player_ || lnplayer_get_snapshot(player_, &snapshot) != LNPLAYER_RESULT_OK ||
+                snapshot.generation != generation)
+                return;
+
             const bool presented = video_surface_ &&
                 video_surface_->present_hardware_frame(
                     texture, array_slice, format, width, height);
