@@ -1,4 +1,5 @@
 #include "ffmpeg_media_backend.h"
+#include "subtitle_filter.h"
 
 #ifdef _WIN32
 #include "wasapi_audio_output.h"
@@ -222,6 +223,8 @@ public:
             }
         }
 
+        source_path_ = source;
+
         if (info.has_video)
         {
             int first_subtitle_stream = -1;
@@ -245,7 +248,10 @@ public:
                 : first_subtitle_stream;
             if (preferred_stream >= 0 &&
                 create_subtitle_decoder(preferred_stream, &subtitle_decoder_))
+            {
                 subtitle_stream_index_ = preferred_stream;
+                configure_ass_subtitle_filter(preferred_stream);
+            }
 
             if (!subtitle_decoder_)
             {
@@ -258,6 +264,7 @@ public:
                     if (create_subtitle_decoder(static_cast<int>(index), &subtitle_decoder_))
                     {
                         subtitle_stream_index_ = static_cast<int>(index);
+                        configure_ass_subtitle_filter(static_cast<int>(index));
                         break;
                     }
                 }
@@ -554,6 +561,13 @@ public:
         av_packet_free(&audio_packet_);
         avcodec_free_context(&audio_decoder_);
         avcodec_free_context(&subtitle_decoder_);
+        subtitle_filter_.reset();
+        subtitle_filter_active_ = false;
+        subtitle_filter_path_.clear();
+        subtitle_filter_stream_ordinal_ = -1;
+        subtitle_filter_width_ = 0;
+        subtitle_filter_height_ = 0;
+        source_path_.clear();
         active_subtitle_cues_.clear();
         subtitle_stream_index_ = -1;
         clear_packet_queues_locked();
@@ -801,6 +815,14 @@ public:
             avcodec_free_context(&subtitle_decoder_);
             subtitle_decoder_ = replacement_decoder;
             subtitle_stream_index_ = stream_index;
+            subtitle_filter_.reset();
+            subtitle_filter_active_ = false;
+            subtitle_filter_path_.clear();
+            subtitle_filter_stream_ordinal_ = -1;
+            subtitle_filter_width_ = 0;
+            subtitle_filter_height_ = 0;
+            if (stream_index >= 0)
+                configure_ass_subtitle_filter(stream_index);
             active_subtitle_cues_.clear();
             for (AVPacket* packet : subtitle_packet_queue_)
                 av_packet_free(&packet);
@@ -1125,6 +1147,36 @@ private:
                 : static_cast<float>(target_width) / target_height;
     }
 
+    bool is_ass_subtitle_stream(int stream_index) const
+    {
+        if (!format_context_ || stream_index < 0 ||
+            static_cast<unsigned int>(stream_index) >= format_context_->nb_streams)
+            return false;
+        const AVCodecID codec_id =
+            format_context_->streams[stream_index]->codecpar->codec_id;
+        return codec_id == AV_CODEC_ID_ASS || codec_id == AV_CODEC_ID_SSA;
+    }
+
+    int subtitle_stream_ordinal(int stream_index) const
+    {
+        int ordinal = 0;
+        for (int index = 0; index < stream_index; ++index)
+        {
+            if (format_context_->streams[index]->codecpar->codec_type == AVMEDIA_TYPE_SUBTITLE)
+                ++ordinal;
+        }
+        return ordinal;
+    }
+
+    void configure_ass_subtitle_filter(int stream_index)
+    {
+        if (!is_ass_subtitle_stream(stream_index))
+            return;
+        subtitle_filter_active_ = true;
+        subtitle_filter_path_ = source_path_;
+        subtitle_filter_stream_ordinal_ = subtitle_stream_ordinal(stream_index);
+    }
+
     bool create_subtitle_decoder(int stream_index, AVCodecContext** output_decoder)
     {
         *output_decoder = nullptr;
@@ -1162,7 +1214,7 @@ private:
 
     void update_subtitle_for_position(int64_t position_ms, VideoFrame& output)
     {
-        std::lock_guard<std::mutex> demux_lock(demux_mutex_);
+        std::unique_lock<std::mutex> demux_lock(demux_mutex_);
         const int64_t subtitle_position_ms = position_ms - subtitle_offset_ms_;
         if (subtitle_decoder_ && subtitle_stream_index_ >= 0)
         {
@@ -1402,6 +1454,54 @@ private:
             output.subtitle_width = bitmap_frame.width;
             output.subtitle_height = bitmap_frame.height;
             output.subtitle_stride = bitmap_frame.stride;
+        }
+
+        const bool render_ass = subtitle_filter_active_;
+        const int64_t subtitle_offset_ms = subtitle_offset_ms_;
+        const std::string subtitle_path = subtitle_filter_path_;
+        const int subtitle_stream_ordinal = subtitle_filter_stream_ordinal_;
+        demux_lock.unlock();
+
+        if (render_ass)
+        {
+            if (!subtitle_filter_ ||
+                output.width != subtitle_filter_width_ ||
+                output.height != subtitle_filter_height_)
+            {
+                subtitle_filter_ = std::make_unique<SubtitleFilter>();
+                std::string error;
+                if (!subtitle_filter_->open(
+                    subtitle_path,
+                    subtitle_stream_ordinal,
+                    output.width,
+                    output.height,
+                    error))
+                {
+                    subtitle_filter_.reset();
+                    subtitle_filter_active_ = false;
+                    return;
+                }
+                subtitle_filter_width_ = output.width;
+                subtitle_filter_height_ = output.height;
+            }
+
+            std::vector<uint8_t> rendered;
+            int rendered_stride = 0;
+            std::string error;
+            if (subtitle_filter_->render(
+                position_ms, subtitle_offset_ms, rendered, rendered_stride, error))
+            {
+                output.subtitle_text.clear();
+                output.subtitle_bgra = std::move(rendered);
+                output.subtitle_width = output.width;
+                output.subtitle_height = output.height;
+                output.subtitle_stride = rendered_stride;
+            }
+            else
+            {
+                subtitle_filter_.reset();
+                subtitle_filter_active_ = false;
+            }
         }
     }
 
@@ -2209,6 +2309,13 @@ private:
     SwrContext* resampler_ = nullptr;
     AVCodecContext* video_decoder_ = nullptr;
     AVCodecContext* subtitle_decoder_ = nullptr;
+    std::unique_ptr<SubtitleFilter> subtitle_filter_;
+    std::string source_path_;
+    std::string subtitle_filter_path_;
+    int subtitle_filter_stream_ordinal_ = -1;
+    int subtitle_filter_width_ = 0;
+    int subtitle_filter_height_ = 0;
+    bool subtitle_filter_active_ = false;
     AVPacket* video_packet_ = nullptr;
     AVFrame* video_frame_ = nullptr;
     AVFrame* transfer_frame_ = nullptr;
