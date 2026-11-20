@@ -44,6 +44,7 @@ public:
         void* user_data)
         : runtime_(runtime)
         , worker_strand_(asio::make_strand(runtime.thread_pool()))
+        , video_frame_strand_(asio::make_strand(runtime.thread_pool()))
         , owner_(owner)
         , callback_(callback)
         , user_data_(user_data)
@@ -375,7 +376,7 @@ public:
             {
                 try
                 {
-                    asio::post(worker_strand_, [this, completion]
+                    asio::post(video_frame_strand_, [this, completion]
                     {
                         ReadResult read;
                         try
@@ -636,6 +637,7 @@ private:
 
     lnplayer::Runtime& runtime_;
     asio::strand<asio::thread_pool::executor_type> worker_strand_;
+    asio::strand<asio::thread_pool::executor_type> video_frame_strand_;
     lnplayer_t* owner_;
     lnplayer_event_callback_t callback_;
     void* user_data_;
