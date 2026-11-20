@@ -17,7 +17,7 @@ enum class PlayerMode
 class MainWindow final : public QMainWindow
 {
 public:
-    explicit MainWindow(PlayerMode mode, QWidget* parent = nullptr);
+    explicit MainWindow(PlayerMode mode, const QString& initial_media = QString(), QWidget* parent = nullptr);
 
 protected:
     void dragEnterEvent(QDragEnterEvent* event) override;
