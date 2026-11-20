@@ -76,8 +76,11 @@ public:
     virtual MediaBackendResult close() = 0;
     virtual MediaBackendResult read_audio_frame(AudioFrame& frame, bool& end_of_stream) = 0;
     virtual MediaBackendResult read_video_frame(VideoFrame& frame, bool& end_of_stream) = 0;
-    virtual std::vector<MediaTrackInfo> audio_tracks() const = 0;
-    virtual MediaBackendResult select_audio_track(int stream_index) = 0;
+    virtual std::vector<MediaTrackInfo> audio_tracks() const { return {}; }
+    virtual MediaBackendResult select_audio_track(int)
+    {
+        return MediaBackendResult{false, "Audio track selection is not supported by this backend."};
+    }
     virtual int64_t position_ms() const = 0;
     virtual bool playback_ended() const = 0;
     virtual void set_volume(float volume) = 0;
