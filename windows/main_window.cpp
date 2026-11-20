@@ -131,6 +131,8 @@ MainWindow::MainWindow(
             QStringLiteral("Video/Subtitle/AutoMatch"), true).toBool();
         remember_position_ = settings.value(
             QStringLiteral("Video/Playback/RememberPosition"), true).toBool();
+        subtitle_offset_ms_ = settings.value(
+            QStringLiteral("Video/Subtitle/OffsetMs"), 0).toLongLong();
     }
     setAcceptDrops(true);
     resize(mode_ == PlayerMode::Video ? QSize(960, 600) : QSize(720, 480));
@@ -805,6 +807,9 @@ MainWindow::MainWindow(
                 else
                     subtitle_offset_ms_ = 0;
                 const int64_t subtitle_offset_ms = subtitle_offset_ms_;
+                QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+                settings.setValue(QStringLiteral("Video/Subtitle/OffsetMs"), subtitle_offset_ms_);
+                settings.sync();
                 QMetaObject::invokeMethod(command_worker_, [this, subtitle_offset_ms]
                 {
                     if (player_)
@@ -919,6 +924,7 @@ MainWindow::MainWindow(
                 settings.setValue(QStringLiteral("Video/Filter/Contrast"), video_contrast_);
                 settings.setValue(QStringLiteral("Video/Filter/Saturation"), video_saturation_);
     settings.setValue(QStringLiteral("Video/Subtitle/AutoMatch"), auto_match_subtitle_);
+    settings.setValue(QStringLiteral("Video/Subtitle/OffsetMs"), subtitle_offset_ms_);
     settings.setValue(QStringLiteral("Video/Subtitle/FontFamily"), subtitle_font_family_);
     settings.setValue(QStringLiteral("Video/Subtitle/FontSize"), subtitle_font_size_);
     settings.setValue(QStringLiteral("Video/Subtitle/Color"), subtitle_color_);
@@ -1149,13 +1155,14 @@ MainWindow::MainWindow(
 
     const uint32_t initial_volume = static_cast<uint32_t>(volume_slider_->value());
     const float initial_playback_rate = playback_rate_;
+    const int64_t initial_subtitle_offset_ms = subtitle_offset_ms_;
     void* initial_video_device = mode_ == PlayerMode::Video && video_surface_
         ? video_surface_->native_device()
         : nullptr;
     video_device_identity_ = initial_video_device;
     QMetaObject::invokeMethod(
         command_worker_,
-        [this, initial_volume, initial_playback_rate, initial_video_device]
+        [this, initial_volume, initial_playback_rate, initial_subtitle_offset_ms, initial_video_device]
     {
         lnplayer_config_t config{};
         config.struct_size = sizeof(config);
@@ -1194,7 +1201,10 @@ MainWindow::MainWindow(
         {
             lnplayer_set_volume(player_, initial_volume);
             if (mode_ == PlayerMode::Video)
+            {
                 lnplayer_set_playback_rate(player_, initial_playback_rate);
+                lnplayer_set_subtitle_offset(player_, initial_subtitle_offset_ms);
+            }
         }
 
         if (initial_video_device)
@@ -1875,6 +1885,11 @@ void MainWindow::openVideoSettings()
     auto* auto_match_subtitle = new QCheckBox(
         QStringLiteral("自动加载同名外挂字幕"), subtitle_page);
     auto_match_subtitle->setChecked(auto_match_subtitle_);
+    auto* subtitle_offset = new QSpinBox(subtitle_page);
+    subtitle_offset->setRange(-60000, 60000);
+    subtitle_offset->setSingleStep(100);
+    subtitle_offset->setSuffix(QStringLiteral(" ms"));
+    subtitle_offset->setValue(static_cast<int>(subtitle_offset_ms_));
     auto* subtitle_font = new QFontComboBox(subtitle_page);
     subtitle_font->setCurrentFont(QFont(subtitle_font_family_));
     auto* subtitle_size = new QSpinBox(subtitle_page);
@@ -1894,6 +1909,7 @@ void MainWindow::openVideoSettings()
     subtitle_position->setSuffix(QStringLiteral(" %"));
     subtitle_position->setValue(subtitle_vertical_position_);
     subtitle_form->addRow(auto_match_subtitle);
+    subtitle_form->addRow(QStringLiteral("默认时间偏移"), subtitle_offset);
     subtitle_form->addRow(QStringLiteral("字体"), subtitle_font);
     subtitle_form->addRow(QStringLiteral("字号"), subtitle_size);
     subtitle_form->addRow(QStringLiteral("颜色"), subtitle_color);
@@ -1935,6 +1951,7 @@ void MainWindow::openVideoSettings()
         contrast->setValue(1.0);
         saturation->setValue(1.0);
         auto_match_subtitle->setChecked(true);
+        subtitle_offset->setValue(0);
         subtitle_font->setCurrentFont(QFont(QStringLiteral("Segoe UI")));
         subtitle_size->setValue(0);
         subtitle_color->setCurrentIndex(0);
@@ -1991,6 +2008,7 @@ void MainWindow::openVideoSettings()
     video_contrast_ = static_cast<float>(contrast->value());
     video_saturation_ = static_cast<float>(saturation->value());
     auto_match_subtitle_ = auto_match_subtitle->isChecked();
+    subtitle_offset_ms_ = subtitle_offset->value();
     subtitle_font_family_ = subtitle_font->currentFont().family();
     subtitle_font_size_ = subtitle_size->value();
     subtitle_color_ = subtitle_color->currentData().toString();
@@ -2021,6 +2039,11 @@ void MainWindow::openVideoSettings()
     settings.setValue(QStringLiteral("Video/Filter/Saturation"), video_saturation_);
     settings.sync();
 
+    QMetaObject::invokeMethod(command_worker_, [this, offset = subtitle_offset_ms_]
+    {
+        if (player_)
+            lnplayer_set_subtitle_offset(player_, offset);
+    }, Qt::QueuedConnection);
     if (isFullScreen())
     {
         showFullscreenControls();
