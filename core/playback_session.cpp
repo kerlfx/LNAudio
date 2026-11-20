@@ -339,6 +339,29 @@ SessionResult PlaybackSession::select_audio_track(int stream_index)
     return make_result(true);
 }
 
+std::vector<MediaSubtitleTrackInfo> PlaybackSession::subtitle_tracks() const
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    return backend_ ? backend_->subtitle_tracks() : std::vector<MediaSubtitleTrackInfo>{};
+}
+
+SessionResult PlaybackSession::select_subtitle_track(int stream_index)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (!backend_ ||
+        (snapshot_.state != SessionState::Ready &&
+         snapshot_.state != SessionState::Paused))
+        return make_result(false, "Subtitle tracks can only be switched while playback is paused.");
+
+    const MediaBackendResult result = backend_->select_subtitle_track(stream_index);
+    if (!result.success)
+        return make_result(false, result.message);
+
+    snapshot_.position_ms = backend_->position_ms();
+    ++snapshot_.generation;
+    return make_result(true);
+}
+
 void PlaybackSession::set_volume(float volume)
 {
     std::lock_guard<std::mutex> lock(mutex_);

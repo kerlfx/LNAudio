@@ -23,6 +23,7 @@ typedef struct lnplayer_windows_video_frame
     uint32_t d3d11_array_slice;
     uint32_t dxgi_format;
     const void* frame_owner;
+    const char* subtitle_utf8;
 } lnplayer_windows_video_frame_t;
 
 typedef void (*lnplayer_windows_video_frame_callback_t)(

@@ -62,6 +62,8 @@ public:
     MediaBackendResult read_video_frame(VideoFrame& frame, bool& end_of_stream);
     std::vector<MediaTrackInfo> audio_tracks() const;
     SessionResult select_audio_track(int stream_index);
+    std::vector<MediaSubtitleTrackInfo> subtitle_tracks() const;
+    SessionResult select_subtitle_track(int stream_index);
     void set_volume(float volume);
     void set_playback_rate(float rate);
     void set_playback_end_callback(std::function<void()> callback);

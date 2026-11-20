@@ -122,6 +122,22 @@ typedef void (*lnplayer_audio_track_callback_t)(
     const lnplayer_audio_track_info_t* track,
     void* user_data);
 
+typedef struct lnplayer_subtitle_track_info
+{
+    uint32_t struct_size;
+    int32_t stream_index;
+    int32_t is_default;
+    int32_t is_selected;
+    const char* title_utf8;
+    const char* language_utf8;
+    const char* codec_utf8;
+} lnplayer_subtitle_track_info_t;
+
+/* Subtitle track metadata strings are valid only during the callback. */
+typedef void (*lnplayer_subtitle_track_callback_t)(
+    const lnplayer_subtitle_track_info_t* track,
+    void* user_data);
+
 #define LNPLAYER_MEDIA_HAS_AUDIO 0x1u
 #define LNPLAYER_MEDIA_HAS_VIDEO 0x2u
 
@@ -219,6 +235,18 @@ LNPLAYER_API lnplayer_result_t lnplayer_enumerate_audio_tracks(
 /* Switch to a stream_index returned by lnplayer_enumerate_audio_tracks.
  * Playback must be paused or not yet started. */
 LNPLAYER_API lnplayer_result_t lnplayer_select_audio_track(
+    lnplayer_t* player,
+    int32_t stream_index);
+
+/* Enumerate embedded subtitle streams in the currently opened media source. */
+LNPLAYER_API lnplayer_result_t lnplayer_enumerate_subtitle_tracks(
+    lnplayer_t* player,
+    lnplayer_subtitle_track_callback_t callback,
+    void* user_data);
+
+/* Select a subtitle stream returned by enumeration. Pass -1 to disable subtitles.
+ * Playback must be paused or not yet started. */
+LNPLAYER_API lnplayer_result_t lnplayer_select_subtitle_track(
     lnplayer_t* player,
     int32_t stream_index);
 

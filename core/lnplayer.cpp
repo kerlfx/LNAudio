@@ -199,6 +199,19 @@ public:
         return session_.audio_tracks();
     }
 
+    lnplayer_result_t select_subtitle_track(int stream_index)
+    {
+        return invoke_sync([this, stream_index]
+        {
+            return session_.select_subtitle_track(stream_index);
+        });
+    }
+
+    std::vector<lnplayer::MediaSubtitleTrackInfo> subtitle_tracks() const
+    {
+        return session_.subtitle_tracks();
+    }
+
     lnplayer_result_t shutdown()
     {
         const lnplayer_result_t result =
@@ -319,7 +332,8 @@ public:
                 read.frame.dxgi_format,
                 read.frame.hardware_frame_owner
                     ? static_cast<const void*>(&read.frame.hardware_frame_owner)
-                    : nullptr
+                    : nullptr,
+                read.frame.subtitle_text.c_str()
             };
             callback(&frame, user_data);
         }
@@ -962,6 +976,49 @@ lnplayer_result_t lnplayer_select_audio_track(lnplayer_t* player, int32_t stream
     if (stream_index < 0)
         return set_error(LNPLAYER_RESULT_INVALID_ARGUMENT, "Audio stream index is invalid.");
     return finish_result(player->controller->select_audio_track(stream_index));
+}
+
+lnplayer_result_t lnplayer_enumerate_subtitle_tracks(
+    lnplayer_t* player,
+    lnplayer_subtitle_track_callback_t callback,
+    void* user_data)
+{
+    if (!is_current_player(player))
+        return set_error(LNPLAYER_RESULT_INVALID_HANDLE, "Invalid Player handle.");
+    if (!callback)
+        return set_error(LNPLAYER_RESULT_INVALID_ARGUMENT, "Subtitle track callback is null.");
+
+    try
+    {
+        const auto tracks = player->controller->subtitle_tracks();
+        for (const auto& track : tracks)
+        {
+            const lnplayer_subtitle_track_info_t item{
+                sizeof(lnplayer_subtitle_track_info_t),
+                track.stream_index,
+                track.is_default ? 1 : 0,
+                track.is_selected ? 1 : 0,
+                track.title.c_str(),
+                track.language.c_str(),
+                track.codec.c_str()
+            };
+            callback(&item, user_data);
+        }
+        return finish_result(LNPLAYER_RESULT_OK);
+    }
+    catch (...)
+    {
+        return set_error(LNPLAYER_RESULT_INTERNAL_ERROR, "Unable to enumerate embedded subtitle tracks.");
+    }
+}
+
+lnplayer_result_t lnplayer_select_subtitle_track(lnplayer_t* player, int32_t stream_index)
+{
+    if (!is_current_player(player))
+        return set_error(LNPLAYER_RESULT_INVALID_HANDLE, "Invalid Player handle.");
+    if (stream_index < -1)
+        return set_error(LNPLAYER_RESULT_INVALID_ARGUMENT, "Subtitle stream index must be -1 or a valid stream index.");
+    return finish_result(player->controller->select_subtitle_track(stream_index));
 }
 
 lnplayer_result_t lnplayer_get_last_error(
