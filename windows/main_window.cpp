@@ -2525,7 +2525,7 @@ void MainWindow::presentPendingVideoFrame()
     {
         QPainter painter(&frame);
         painter.setRenderHint(QPainter::TextAntialiasing, true);
-        QFont font(QStringLiteral("Segoe UI"));
+        QFont font(subtitle_font_family_);
         font.setPixelSize(subtitle_font_size_ > 0 ? subtitle_font_size_ : std::max(20, frame.width() / 40));
         font.setWeight(QFont::DemiBold);
         painter.setFont(font);
@@ -2544,7 +2544,7 @@ void MainWindow::presentPendingVideoFrame()
                 text_rect.translated(offset[0], offset[1]),
                 Qt::AlignHCenter | Qt::AlignVCenter | Qt::TextWordWrap,
                 subtitle);
-        painter.setPen(Qt::white);
+        painter.setPen(QColor(subtitle_color_));
         painter.drawText(
             text_rect,
             Qt::AlignHCenter | Qt::AlignVCenter | Qt::TextWordWrap,
@@ -2835,7 +2835,7 @@ void MainWindow::presentHistoricalVideoFrame()
         {
             QPainter painter(&overlay);
             painter.setRenderHint(QPainter::TextAntialiasing, true);
-            QFont font(QStringLiteral("Segoe UI"));
+            QFont font(subtitle_font_family_);
             font.setPixelSize(subtitle_font_size_ > 0 ? subtitle_font_size_ : std::max(20, overlay.width() / 40));
             font.setWeight(QFont::DemiBold);
             painter.setFont(font);
@@ -2854,7 +2854,7 @@ void MainWindow::presentHistoricalVideoFrame()
                     text_rect.translated(offset[0], offset[1]),
                     Qt::AlignHCenter | Qt::AlignVCenter | Qt::TextWordWrap,
                     subtitle);
-            painter.setPen(Qt::white);
+            painter.setPen(QColor(subtitle_color_));
             painter.drawText(
                 text_rect,
                 Qt::AlignHCenter | Qt::AlignVCenter | Qt::TextWordWrap,
@@ -2893,13 +2893,13 @@ void MainWindow::presentHistoricalVideoFrame()
     {
         QPainter painter(&frame);
         painter.setRenderHint(QPainter::TextAntialiasing, true);
-        QFont font(QStringLiteral("Segoe UI"));
-        font.setPixelSize(std::max(20, frame.width() / 40));
+        QFont font(subtitle_font_family_);
+        font.setPixelSize(subtitle_font_size_ > 0 ? subtitle_font_size_ : std::max(20, frame.width() / 40));
         font.setWeight(QFont::DemiBold);
         painter.setFont(font);
         const QRect text_rect(
             frame.width() / 20,
-            frame.height() * 4 / 5,
+            frame.height() * subtitle_vertical_position_ / 100,
             frame.width() * 9 / 10,
             frame.height() / 6);
         const int offsets[][2] = {
@@ -2912,7 +2912,7 @@ void MainWindow::presentHistoricalVideoFrame()
                 text_rect.translated(offset[0], offset[1]),
                 Qt::AlignHCenter | Qt::AlignVCenter | Qt::TextWordWrap,
                 subtitle);
-        painter.setPen(Qt::white);
+        painter.setPen(QColor(subtitle_color_));
         painter.drawText(
             text_rect,
             Qt::AlignHCenter | Qt::AlignVCenter | Qt::TextWordWrap,
