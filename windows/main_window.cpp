@@ -1848,7 +1848,7 @@ void MainWindow::presentPendingVideoFrame()
         pending_hardware_texture_ = nullptr;
         pending_video_frame_valid_ = false;
 
-        QMetaObject::invokeMethod(command_worker_,
+        QMetaObject::invokeMethod(frame_worker_,
             [this, owner = std::move(owner), texture, array_slice, format,
              width, height, generation, pts_ms, subtitle,
              embedded_subtitle_bitmap, render_subtitles,
