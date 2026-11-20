@@ -44,6 +44,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QListView>
 #include <QListWidgetItem>
 #include <QMenuBar>
 #include <QMenu>
@@ -531,6 +532,11 @@ MainWindow::MainWindow(
         {
             clearPlaylist();
         });
+        playlist_menu->addSeparator();
+        auto* detached_playlist_action =
+            playlist_menu->addAction(QStringLiteral("在独立窗口中打开播放列表..."));
+        connect(detached_playlist_action, &QAction::triggered,
+            this, [this] { showPlaylistWindow(); });
     }
 
     if (mode_ == PlayerMode::Video)
@@ -2072,6 +2078,81 @@ void MainWindow::clearPlaylist()
             lnplayer_close(player_);
     }, Qt::QueuedConnection);
     saveVideoPlaylist();
+}
+
+void MainWindow::showPlaylistWindow()
+{
+    if (mode_ != PlayerMode::Video || !playlist_widget_)
+        return;
+
+    if (playlist_dialog_)
+    {
+        playlist_dialog_->show();
+        playlist_dialog_->raise();
+        playlist_dialog_->activateWindow();
+        return;
+    }
+
+    auto* dialog = new QDialog(this);
+    playlist_dialog_ = dialog;
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    dialog->setWindowTitle(QStringLiteral("LNPlayer 播放列表"));
+    dialog->resize(460, 560);
+
+    auto* root = new QVBoxLayout(dialog);
+    auto* view = new QListView(dialog);
+    view->setModel(playlist_widget_->model());
+    view->setSelectionMode(QAbstractItemView::ExtendedSelection);
+    view->setDragDropMode(QAbstractItemView::InternalMove);
+    view->setDefaultDropAction(Qt::MoveAction);
+    view->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    root->addWidget(view, 1);
+
+    auto* actions = new QHBoxLayout();
+    auto* add = new QPushButton(QStringLiteral("添加文件"), dialog);
+    auto* remove = new QPushButton(QStringLiteral("移除选中项"), dialog);
+    auto* clear = new QPushButton(QStringLiteral("清空队列"), dialog);
+    actions->addWidget(add);
+    actions->addWidget(remove);
+    actions->addWidget(clear);
+    root->addLayout(actions);
+
+    connect(view, &QAbstractItemView::doubleClicked, this,
+        [this](const QModelIndex& index)
+        {
+            if (index.isValid())
+                openPlaylistIndex(index.row());
+        });
+    connect(add, &QPushButton::clicked, dialog, [this]
+    {
+        const QStringList files = QFileDialog::getOpenFileNames(
+            this, QStringLiteral("添加到播放队列"), QString(),
+            QStringLiteral("视频文件 (*.mp4 *.mkv *.mov *.avi *.webm *.wmv *.flv *.mpeg *.mpg *.m4v *.ts *.mts *.m2ts *.3gp *.3g2 *.vob *.ogv *.mxf *.asf *.f4v *.divx *.mpe *.mpv);;所有文件 (*)"));
+        QList<QUrl> urls;
+        for (const QString& file : files)
+            urls.append(QUrl::fromLocalFile(file));
+        appendPlaylistFiles(urls);
+    });
+    connect(remove, &QPushButton::clicked, dialog, [this, view]
+    {
+        playlist_widget_->clearSelection();
+        for (const QModelIndex& index : view->selectionModel()->selectedRows())
+        {
+            if (QListWidgetItem* item = playlist_widget_->item(index.row()))
+                item->setSelected(true);
+        }
+        removeSelectedPlaylistItem();
+    });
+    connect(clear, &QPushButton::clicked, dialog, [this]
+    {
+        clearPlaylist();
+    });
+    connect(dialog, &QObject::destroyed, this, [this]
+    {
+        playlist_dialog_ = nullptr;
+    });
+
+    dialog->show();
 }
 
 void MainWindow::openVideoSettings()
