@@ -381,6 +381,8 @@ public:
         video_draining_ = false;
         demux_eof_ = false;
         clear_packet_queues_locked();
+        audio_consumer_active_ = audio_decoder_ != nullptr;
+        video_consumer_active_ = video_decoder_ != nullptr && video_consumer_seen_;
         audio_stream_ended_ = false;
         video_stream_ended_ = false;
         resampler_drained_ = false;
