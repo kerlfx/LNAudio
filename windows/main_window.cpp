@@ -496,19 +496,20 @@ MainWindow::MainWindow(
             QAction* add_action = bookmarks_menu->addAction(QStringLiteral("添加当前书签..."));
             connect(add_action, &QAction::triggered, this, [this, key, bookmarks]
             {
+                const int64_t bookmark_position = current_position_ms_;
                 bool accepted = false;
                 const QString default_name = QStringLiteral("书签 %1").arg(bookmarks.size() + 1);
                 const QString name = QInputDialog::getText(
                     this, QStringLiteral("添加书签"), QStringLiteral("名称"),
                     QLineEdit::Normal,
-                    QStringLiteral("%1 · %2").arg(default_name, format_position(current_position_ms_)),
+                    QStringLiteral("%1 · %2").arg(default_name, format_position(bookmark_position)),
                     &accepted).trimmed();
                 if (!accepted || name.isEmpty())
                     return;
 
                 QVariantList updated = bookmarks;
                 QVariantMap entry;
-                entry.insert(QStringLiteral("position"), current_position_ms_);
+                entry.insert(QStringLiteral("position"), bookmark_position);
                 entry.insert(QStringLiteral("name"), name);
                 updated.append(entry);
                 QSettings store(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
