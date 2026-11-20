@@ -224,6 +224,8 @@ public:
         clear_packet_queues();
         audio_consumer_active_ = audio_decoder_ != nullptr;
         video_consumer_active_ = false;
+        audio_stream_ended_ = false;
+        video_stream_ended_ = false;
         return success();
     }
 
@@ -378,6 +380,8 @@ public:
         video_draining_ = false;
         demux_eof_ = false;
         clear_packet_queues_locked();
+        audio_stream_ended_ = false;
+        video_stream_ended_ = false;
         resampler_drained_ = false;
         if (resampler_)
         {
@@ -488,6 +492,8 @@ public:
         resampler_drained_ = false;
         audio_consumer_active_ = false;
         video_consumer_active_ = false;
+        audio_stream_ended_ = false;
+        video_stream_ended_ = false;
         return success();
     }
 
@@ -658,17 +664,8 @@ public:
             if (result == AVERROR_EOF)
             {
                 end_of_stream = true;
-                {
-                    std::lock_guard<std::mutex> demux_lock(demux_mutex_);
-                    video_consumer_active_ = false;
-                }
-                if (!audio_decoder_)
-                {
-                    playback_ended_.store(true, std::memory_order_relaxed);
-                    playing_ = false;
-                    if (playback_end_callback_)
-                        playback_end_callback_();
-                }
+                if (mark_stream_ended(false) && playback_end_callback_)
+                    playback_end_callback_();
                 return success();
             }
 
@@ -681,6 +678,8 @@ public:
                 if (result == AVERROR_EOF)
                 {
                     end_of_stream = true;
+                    if (mark_stream_ended(false) && playback_end_callback_)
+                        playback_end_callback_();
                     return success();
                 }
                 if (result < 0 && result != AVERROR(EAGAIN))
@@ -718,6 +717,33 @@ public:
     }
 
 private:
+    bool mark_stream_ended(bool audio_stream)
+    {
+        std::lock_guard<std::mutex> demux_lock(demux_mutex_);
+        if (audio_stream)
+        {
+            audio_stream_ended_ = true;
+            audio_consumer_active_ = false;
+        }
+        else
+        {
+            video_stream_ended_ = true;
+            video_consumer_active_ = false;
+        }
+
+        const bool all_audio_ended = !audio_decoder_ || audio_stream_ended_;
+        const bool all_video_ended = !video_decoder_ || video_stream_ended_;
+        if (!all_audio_ended || !all_video_ended)
+            return false;
+
+        bool expected = false;
+        if (!playback_ended_.compare_exchange_strong(expected, true, std::memory_order_relaxed))
+            return false;
+
+        playing_ = false;
+        return true;
+    }
+
     int next_packet_for_stream(int stream_index, AVPacket* output_packet)
     {
         std::lock_guard<std::mutex> demux_lock(demux_mutex_);
@@ -1018,18 +1044,22 @@ private:
                     if (!stale_result)
                     {
                         playback_active_ = false;
-                        playing_ = false;
-                        if (decode_result.success && end_of_stream && drain_success)
-                            playback_ended_.store(true, std::memory_order_relaxed);
-                        else if (!decode_result.success || !drain_success)
+                        if (!decode_result.success || !drain_success)
+                        {
+                            playing_ = false;
                             playback_failed_.store(true, std::memory_order_relaxed);
+                        }
                     }
                     playback_condition_.notify_all();
                 }
 
                 if (stale_result)
                     continue;
-                if (decode_result.success && end_of_stream && drain_success && playback_end_callback_)
+                const bool overall_ended =
+                    decode_result.success && end_of_stream && drain_success
+                        ? mark_stream_ended(true)
+                        : false;
+                if (overall_ended && playback_end_callback_)
                     playback_end_callback_();
                 else if ((!decode_result.success || !drain_success) && playback_error_callback_)
                     playback_error_callback_(
@@ -1266,6 +1296,8 @@ private:
     bool demux_eof_ = false;
     bool audio_consumer_active_ = false;
     bool video_consumer_active_ = false;
+    bool audio_stream_ended_ = false;
+    bool video_stream_ended_ = false;
 };
 
 }
