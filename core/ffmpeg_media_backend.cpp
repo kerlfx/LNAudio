@@ -400,6 +400,9 @@ public:
         }
 
         position_ms_.store(position_ms, std::memory_order_relaxed);
+#ifdef _WIN32
+        audio_clock_valid_.store(false, std::memory_order_relaxed);
+#endif
         playback_ended_.store(false, std::memory_order_relaxed);
         playback_failed_.store(false, std::memory_order_relaxed);
 #ifdef _WIN32
@@ -1014,6 +1017,7 @@ private:
                     playback_flush_requested_ = false;
                     lock.unlock();
                     const bool flush_success = output.flush();
+                    audio_clock_valid_.store(false, std::memory_order_relaxed);
                     {
                         std::lock_guard<std::mutex> state_lock(playback_mutex_);
                         playback_flush_success_ = flush_success;
@@ -1130,24 +1134,35 @@ private:
                 const int64_t media_duration_ms = static_cast<int64_t>(
                     frame.samples.size() / frame.channels * 1000.0 / frame.sample_rate);
                 uint64_t clock_frames = 0;
-                if (output.clock_position(clock_frames) &&
-                    output.current_padding(queued_frames) &&
-                    output_sample_rate_ > 0)
+                const bool has_clock = output.clock_position(clock_frames);
+                const bool has_padding = output.current_padding(queued_frames);
+                if (has_clock && output_sample_rate_ > 0)
                 {
-                    const uint64_t queued_end_frame = clock_frames + queued_frames;
+                    if (!audio_clock_valid_.load(std::memory_order_relaxed))
+                    {
+                        if (!has_padding)
+                            continue;
+                        audio_clock_anchor_frames_.store(
+                            clock_frames + queued_frames, std::memory_order_relaxed);
+                        audio_clock_anchor_media_ms_.store(
+                            frame.pts_ms + media_duration_ms, std::memory_order_relaxed);
+                        audio_clock_valid_.store(true, std::memory_order_relaxed);
+                    }
+
                     const int64_t clock_delta_frames =
                         static_cast<int64_t>(clock_frames) -
-                        static_cast<int64_t>(queued_end_frame);
-                    const int64_t media_end_ms = frame.pts_ms + media_duration_ms;
+                        static_cast<int64_t>(
+                            audio_clock_anchor_frames_.load(std::memory_order_relaxed));
                     const double media_delta_ms =
                         clock_delta_frames * 1000.0 *
                         playback_rate_.load(std::memory_order_relaxed) /
                         output_sample_rate_;
                     position_ms_.store(
-                        media_end_ms + static_cast<int64_t>(media_delta_ms),
+                        audio_clock_anchor_media_ms_.load(std::memory_order_relaxed) +
+                            static_cast<int64_t>(media_delta_ms),
                         std::memory_order_relaxed);
                 }
-                else if (output.current_padding(queued_frames) && output_sample_rate_ > 0)
+                else if (has_padding && output_sample_rate_ > 0)
                 {
                     const int64_t queued_media_ms = static_cast<int64_t>(
                         queued_frames * 1000.0 * playback_rate_.load(
@@ -1155,6 +1170,7 @@ private:
                     position_ms_.store(
                         frame.pts_ms + media_duration_ms - queued_media_ms,
                         std::memory_order_relaxed);
+                    audio_clock_valid_.store(false, std::memory_order_relaxed);
                 }
             }
         }
@@ -1294,6 +1310,11 @@ private:
 #endif
     int output_sample_rate_ = kOutputSampleRate;
     std::atomic<int64_t> position_ms_{0};
+#ifdef _WIN32
+    std::atomic<uint64_t> audio_clock_anchor_frames_{0};
+    std::atomic<int64_t> audio_clock_anchor_media_ms_{0};
+    std::atomic<bool> audio_clock_valid_{false};
+#endif
     std::atomic<bool> playback_ended_{false};
     std::atomic<bool> playback_failed_{false};
     std::atomic<float> volume_{1.0f};
