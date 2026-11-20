@@ -11,6 +11,7 @@ extern "C"
 #include <libavutil/channel_layout.h>
 #include <libavutil/error.h>
 #include <libavutil/hwcontext.h>
+#include <libavutil/hwcontext_d3d11va.h>
 #include <libavutil/mathematics.h>
 #include <libswresample/swresample.h>
 #include <libswscale/swscale.h>
@@ -27,6 +28,10 @@ extern "C"
 #include <string>
 #include <thread>
 #include <utility>
+
+#ifdef _WIN32
+#include <d3d11.h>
+#endif
 
 namespace lnplayer
 {
@@ -166,8 +171,7 @@ public:
             }
 
 #ifdef _WIN32
-            if (av_hwdevice_ctx_create(
-                &hw_device_context_, AV_HWDEVICE_TYPE_D3D11VA, nullptr, nullptr, 0) >= 0)
+            if (create_video_hardware_device())
             {
                 video_decoder_->hw_device_ctx = av_buffer_ref(hw_device_context_);
                 video_decoder_->get_format = select_video_pixel_format;
@@ -1271,6 +1275,34 @@ private:
     }
 
 #ifdef _WIN32
+    void set_video_device(void* device) override
+    {
+        std::lock_guard<std::mutex> lock(video_decode_mutex_);
+        video_device_ = static_cast<ID3D11Device*>(device);
+    }
+
+    bool create_video_hardware_device()
+    {
+        if (video_device_)
+        {
+            hw_device_context_ = av_hwdevice_ctx_alloc(AV_HWDEVICE_TYPE_D3D11VA);
+            if (hw_device_context_)
+            {
+                auto* device_context = static_cast<AVD3D11VADeviceContext*>(
+                    reinterpret_cast<AVHWDeviceContext*>(hw_device_context_->data)->hwctx);
+                device_context->device = video_device_;
+                device_context->device->AddRef();
+                device_context->device->GetImmediateContext(&device_context->device_context);
+                if (av_hwdevice_ctx_init(hw_device_context_) >= 0)
+                    return true;
+                av_buffer_unref(&hw_device_context_);
+            }
+        }
+
+        return av_hwdevice_ctx_create(
+            &hw_device_context_, AV_HWDEVICE_TYPE_D3D11VA, nullptr, nullptr, 0) >= 0;
+    }
+
     static AVPixelFormat select_video_pixel_format(
         AVCodecContext*,
         const AVPixelFormat* formats)
@@ -1323,6 +1355,9 @@ private:
 #endif
     std::atomic<bool> playback_ended_{false};
     std::atomic<bool> playback_failed_{false};
+#ifdef _WIN32
+    ID3D11Device* video_device_ = nullptr;
+#endif
     std::atomic<float> volume_{1.0f};
     std::atomic<float> playback_rate_{1.0f};
     std::function<void()> playback_end_callback_;
