@@ -65,6 +65,7 @@ public:
     std::vector<MediaTrackInfo> audio_tracks() const;
     SessionResult select_audio_track(int stream_index);
     std::vector<MediaSubtitleTrackInfo> subtitle_tracks() const;
+    std::vector<MediaChapterInfo> chapters() const;
     SessionResult select_subtitle_track(int stream_index);
     SessionResult set_external_subtitle(const std::string& path);
     void set_subtitles_enabled(bool enabled);
