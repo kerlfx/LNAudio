@@ -1,13 +1,11 @@
 #include "runtime.h"
 
-#include <algorithm>
-
 namespace lnplayer
 {
 
 Runtime::Runtime()
     : work_guard_(asio::make_work_guard(io_context_))
-    , thread_pool_(std::max(2u, std::thread::hardware_concurrency()))
+    , thread_pool_(2)
     , io_thread_([this]
       {
           io_context_.run();
