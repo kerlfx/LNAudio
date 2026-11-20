@@ -11,6 +11,7 @@
 #include <array>
 #include <atomic>
 #include <cstring>
+#include <cstdio>
 #include <cmath>
 #include <condition_variable>
 #include <future>
@@ -241,6 +242,11 @@ public:
         {
             return session_.select_audio_track(stream_index);
         });
+    }
+
+    lnplayer::MediaVideoInfo video_info() const
+    {
+        return session_.video_info();
     }
 
     std::vector<lnplayer::MediaTrackInfo> audio_tracks() const
@@ -1176,6 +1182,56 @@ lnplayer_result_t lnplayer_get_snapshot(
     player->controller->get_snapshot(snapshot);
     g_last_error[0] = '\0';
     return LNPLAYER_RESULT_OK;
+}
+
+lnplayer_result_t lnplayer_get_video_info(
+    lnplayer_t* player,
+    lnplayer_video_info_t* info)
+{
+    PlayerAccess access(player);
+    if (!access)
+        return set_error(LNPLAYER_RESULT_INVALID_HANDLE, "Invalid Player handle.");
+    if (!info || info->struct_size < sizeof(lnplayer_video_info_t))
+        return set_error(LNPLAYER_RESULT_INVALID_ARGUMENT, "Video info structure is null or too small.");
+
+    try
+    {
+        const lnplayer::MediaVideoInfo source = player->controller->video_info();
+        const uint32_t structure_size = info->struct_size;
+        *info = {};
+        info->struct_size = structure_size;
+        info->width = source.width;
+        info->height = source.height;
+        info->bit_rate = source.bit_rate;
+        info->frame_rate_num = source.frame_rate_num;
+        info->frame_rate_den = source.frame_rate_den;
+        info->sample_aspect_ratio_num = source.sample_aspect_ratio_num;
+        info->sample_aspect_ratio_den = source.sample_aspect_ratio_den;
+        info->rotation_degrees = source.rotation_degrees;
+        info->color_range = source.color_range;
+        info->color_primaries = source.color_primaries;
+        info->color_transfer = source.color_transfer;
+        info->color_space = source.color_space;
+        info->bit_depth = source.bit_depth;
+        const auto copy_text = [](char* destination, size_t capacity, const std::string& value)
+        {
+            if (capacity == 0)
+                return;
+            std::snprintf(destination, capacity, "%s", value.c_str());
+        };
+        copy_text(info->container_format, sizeof(info->container_format), source.container_format);
+        copy_text(info->container_long_name, sizeof(info->container_long_name), source.container_long_name);
+        copy_text(info->codec_name, sizeof(info->codec_name), source.codec_name);
+        copy_text(info->codec_long_name, sizeof(info->codec_long_name), source.codec_long_name);
+        copy_text(info->decoder_name, sizeof(info->decoder_name), source.decoder_name);
+        copy_text(info->profile, sizeof(info->profile), source.profile);
+        copy_text(info->pixel_format, sizeof(info->pixel_format), source.pixel_format);
+        return finish_result(LNPLAYER_RESULT_OK);
+    }
+    catch (...)
+    {
+        return set_error(LNPLAYER_RESULT_INTERNAL_ERROR, "Unable to retrieve video metadata.");
+    }
 }
 
 lnplayer_result_t lnplayer_set_volume(lnplayer_t* player, uint32_t volume)
