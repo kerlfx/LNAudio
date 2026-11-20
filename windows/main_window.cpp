@@ -1947,6 +1947,15 @@ QString MainWindow::playbackPositionSettingKey(const QString& path) const
     return QStringLiteral("Video/PlaybackPositions/") + QString::fromLatin1(digest);
 }
 
+QString MainWindow::mediaPreferenceKey(const QString& category, const QString& path) const
+{
+    const QByteArray normalized_path = QFileInfo(path).absoluteFilePath().toCaseFolded().toUtf8();
+    const QByteArray digest = QCryptographicHash::hash(
+        normalized_path, QCryptographicHash::Sha1).toHex();
+    return QStringLiteral("Video/MediaPreferences/") + category +
+        QStringLiteral("/") + QString::fromLatin1(digest);
+}
+
 void MainWindow::savePlaybackPosition() const
 {
     if (!remember_position_ || mode_ != PlayerMode::Video || current_media_path_.isEmpty())
@@ -2716,7 +2725,8 @@ void MainWindow::selectSubtitleTrack(int stream_index)
 
 void MainWindow::selectAudioTrack(int stream_index)
 {
-    QMetaObject::invokeMethod(command_worker_, [this, stream_index]
+    const QString media_path = current_media_path_;
+    QMetaObject::invokeMethod(command_worker_, [this, stream_index, media_path]
     {
         if (!player_)
             return;
@@ -2735,11 +2745,17 @@ void MainWindow::selectAudioTrack(int stream_index)
             ? lnplayer_play(player_)
             : LNPLAYER_RESULT_OK;
 
-        QMetaObject::invokeMethod(this, [this, result, resume_playback, resume_result]
+        QMetaObject::invokeMethod(this, [this, result, resume_playback, resume_result, stream_index, media_path]
         {
             is_playing_ = resume_playback && resume_result == LNPLAYER_RESULT_OK;
             if (result == LNPLAYER_RESULT_OK)
             {
+                if (!media_path.isEmpty())
+                {
+                    QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+                    settings.setValue(mediaPreferenceKey(QStringLiteral("AudioTrack"), media_path), stream_index);
+                    settings.sync();
+                }
                 video_frame_history_.clear();
                 video_frame_history_index_ = -1;
                 pending_video_frame_valid_ = false;
@@ -3738,6 +3754,14 @@ void MainWindow::handleCoreEvent(
                         }
                     }, Qt::QueuedConnection);
                 }
+            }
+            if (playlist_index_ >= 0 && playlist_index_ < playlist_.size())
+            {
+                QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+                const int saved_audio_track = settings.value(
+                    mediaPreferenceKey(QStringLiteral("AudioTrack"), current_media_path_), -1).toInt();
+                if (saved_audio_track >= 0)
+                    selectAudioTrack(saved_audio_track);
             }
             if (auto_match_subtitle_ && playlist_index_ >= 0 &&
                 playlist_index_ < playlist_.size())
