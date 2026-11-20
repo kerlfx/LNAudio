@@ -59,6 +59,7 @@
 #include <QKeySequence>
 #include <QKeySequenceEdit>
 #include <QMessageBox>
+#include <QInputDialog>
 #include <QMetaObject>
 #include <QMimeData>
 #include <QMouseEvent>
@@ -475,6 +476,88 @@ MainWindow::MainWindow(
         auto* next_action = playback_menu->addAction(QStringLiteral("下一项"));
         connect(previous_action, &QAction::triggered, this, [this] { playPrevious(); });
         connect(next_action, &QAction::triggered, this, [this] { playNext(); });
+
+        auto* bookmarks_menu = playback_menu->addMenu(QStringLiteral("书签"));
+        connect(bookmarks_menu, &QMenu::aboutToShow, this, [this, bookmarks_menu]
+        {
+            bookmarks_menu->clear();
+            if (current_media_path_.isEmpty())
+            {
+                QAction* unavailable = bookmarks_menu->addAction(QStringLiteral("请先打开视频"));
+                unavailable->setEnabled(false);
+                return;
+            }
+
+            QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+            const QString key = mediaPreferenceKey("Bookmarks", current_media_path_);
+            const QVariantList bookmarks = settings.value(key).toList();
+            QAction* add_action = bookmarks_menu->addAction(QStringLiteral("添加当前书签..."));
+            connect(add_action, &QAction::triggered, this, [this, key, bookmarks]
+            {
+                bool accepted = false;
+                const QString default_name = QStringLiteral("书签 %1").arg(bookmarks.size() + 1);
+                const QString name = QInputDialog::getText(
+                    this, QStringLiteral("添加书签"), QStringLiteral("名称"),
+                    QLineEdit::Normal,
+                    QStringLiteral("%1 · %2").arg(default_name, format_position(current_position_ms_)),
+                    &accepted).trimmed();
+                if (!accepted || name.isEmpty())
+                    return;
+
+                QVariantList updated = bookmarks;
+                QVariantMap entry;
+                entry.insert(QStringLiteral("position"), current_position_ms_);
+                entry.insert(QStringLiteral("name"), name);
+                updated.append(entry);
+                QSettings store(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+                store.setValue(key, updated);
+                store.sync();
+                statusBar()->showMessage(QStringLiteral("书签已添加：%1").arg(name));
+            });
+
+            bookmarks_menu->addSeparator();
+            for (int index = 0; index < bookmarks.size(); ++index)
+            {
+                const QVariantMap entry = bookmarks[index].toMap();
+                const int64_t position = entry.value(QStringLiteral("position")).toLongLong();
+                const QString name = entry.value(QStringLiteral("name")).toString();
+                auto* bookmark_menu = bookmarks_menu->addMenu(
+                    QStringLiteral("%1  %2").arg(name, format_position(position)));
+                auto* jump_action = bookmark_menu->addAction(QStringLiteral("跳转"));
+                connect(jump_action, &QAction::triggered, this, [this, position, name]
+                {
+                    seekToPosition(position, QStringLiteral("跳转书签：%1").arg(name));
+                });
+                auto* remove_action = bookmark_menu->addAction(QStringLiteral("删除"));
+                connect(remove_action, &QAction::triggered, this, [this, key, index]
+                {
+                    QSettings store(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+                    QVariantList updated = store.value(key).toList();
+                    if (index >= 0 && index < updated.size())
+                    {
+                        updated.removeAt(index);
+                        store.setValue(key, updated);
+                        store.sync();
+                    }
+                });
+            }
+            if (bookmarks.isEmpty())
+            {
+                QAction* empty = bookmarks_menu->addAction(QStringLiteral("暂无书签"));
+                empty->setEnabled(false);
+            }
+            else
+            {
+                bookmarks_menu->addSeparator();
+                auto* clear_action = bookmarks_menu->addAction(QStringLiteral("清空本视频书签"));
+                connect(clear_action, &QAction::triggered, this, [this, key]
+                {
+                    QSettings store(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+                    store.remove(key);
+                    store.sync();
+                });
+            }
+        });
 
         auto* chapter_menu = playback_menu->addMenu(QStringLiteral("章节"));
         connect(chapter_menu, &QMenu::aboutToShow, this, [this, chapter_menu]
