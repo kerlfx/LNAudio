@@ -32,7 +32,7 @@ flowchart TD
         JNI["Android JNI Bridge"]
     end
     subgraph Core["共享 Player Core（C++20）"]
-        PM["Player Manager"]
+        PM["Runtime（唯一 Player）"]
         PC["Playback Controller"]
         PS["Playback Session"]
         PL["Playlist"]
