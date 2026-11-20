@@ -47,6 +47,7 @@ public:
         {
             asio::post(runtime_.io_context(), [this, id, source_copy]
             {
+                (void)source_copy;
                 update_state(LNPLAYER_STATE_OPENING);
                 {
                     std::lock_guard<std::mutex> lock(snapshot_mutex_);
