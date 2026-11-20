@@ -381,6 +381,12 @@ std::vector<MediaSubtitleTrackInfo> PlaybackSession::subtitle_tracks() const
     return backend_ ? backend_->subtitle_tracks() : std::vector<MediaSubtitleTrackInfo>{};
 }
 
+std::vector<MediaChapterInfo> PlaybackSession::chapters() const
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    return backend_ ? backend_->chapters() : std::vector<MediaChapterInfo>{};
+}
+
 SessionResult PlaybackSession::select_subtitle_track(int stream_index)
 {
     std::lock_guard<std::mutex> lock(mutex_);
