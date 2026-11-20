@@ -5,6 +5,7 @@ extern "C"
 #include <libavfilter/avfilter.h>
 #include <libavfilter/buffersink.h>
 #include <libavfilter/buffersrc.h>
+#include <libavformat/avio.h>
 #include <libavutil/dict.h>
 #include <libavutil/error.h>
 #include <libavutil/frame.h>
@@ -18,6 +19,33 @@ extern "C"
 
 namespace lnplayer
 {
+namespace
+{
+
+std::string detect_subtitle_encoding(const std::string& path)
+{
+    AVIOContext* io = nullptr;
+    if (avio_open2(&io, path.c_str(), AVIO_FLAG_READ, nullptr, nullptr) < 0)
+        return {};
+
+    uint8_t bom[4]{};
+    const int bytes_read = avio_read(io, bom, sizeof(bom));
+    avio_closep(&io);
+
+    if (bytes_read >= 4 &&
+        bom[0] == 0xFF && bom[1] == 0xFE && bom[2] == 0x00 && bom[3] == 0x00)
+        return "UTF-32LE";
+    if (bytes_read >= 4 &&
+        bom[0] == 0x00 && bom[1] == 0x00 && bom[2] == 0xFE && bom[3] == 0xFF)
+        return "UTF-32BE";
+    if (bytes_read >= 2 && bom[0] == 0xFF && bom[1] == 0xFE)
+        return "UTF-16LE";
+    if (bytes_read >= 2 && bom[0] == 0xFE && bom[1] == 0xFF)
+        return "UTF-16BE";
+    return {};
+}
+
+}
 
 SubtitleFilter::~SubtitleFilter()
 {
@@ -80,6 +108,12 @@ bool SubtitleFilter::open(
     av_dict_set_int(&options, "alpha", 1, 0);
     if (subtitle_stream_ordinal >= 0)
         av_dict_set_int(&options, "si", subtitle_stream_ordinal, 0);
+    else
+    {
+        const std::string encoding = detect_subtitle_encoding(subtitle_path);
+        if (!encoding.empty())
+            av_dict_set(&options, "charenc", encoding.c_str(), 0);
+    }
 
     AVFilterContext* subtitles = nullptr;
     result = avfilter_graph_create_filter(
