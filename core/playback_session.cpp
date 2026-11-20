@@ -407,6 +407,7 @@ SessionResult PlaybackSession::set_external_subtitle(const std::string& path)
 void PlaybackSession::set_subtitles_enabled(bool enabled)
 {
     std::lock_guard<std::mutex> lock(mutex_);
+    advance_generation();
     subtitles_enabled_ = enabled;
     if (backend_)
         backend_->set_subtitles_enabled(enabled);
@@ -415,6 +416,7 @@ void PlaybackSession::set_subtitles_enabled(bool enabled)
 void PlaybackSession::set_subtitle_offset_ms(int64_t offset_ms)
 {
     std::lock_guard<std::mutex> lock(mutex_);
+    advance_generation();
     if (backend_)
         backend_->set_subtitle_offset_ms(offset_ms);
 }
