@@ -389,6 +389,8 @@ MainWindow::MainWindow(PlayerMode mode, const QString& initial_media, QWidget* p
         auto* move_down = new QPushButton(QStringLiteral("下移"), playlist_panel);
         auto* shuffle_button = new QPushButton(QStringLiteral("随机：关"), playlist_panel);
         auto* repeat_button = new QPushButton(QStringLiteral("循环：关"), playlist_panel);
+        shuffle_button_ = shuffle_button;
+        repeat_button_ = repeat_button;
         shuffle_button->setCheckable(true);
         playlist_actions->addWidget(add_to_queue);
         playlist_actions->addWidget(remove_from_queue);
@@ -1156,6 +1158,16 @@ void MainWindow::loadVideoPlaylist()
     shuffle_enabled_ = settings.value(QStringLiteral("VideoPlaylist/Shuffle"), false).toBool();
     repeat_mode_ = std::clamp(
         settings.value(QStringLiteral("VideoPlaylist/RepeatMode"), 0).toInt(), 0, 2);
+    if (shuffle_button_)
+    {
+        shuffle_button_->setChecked(shuffle_enabled_);
+        shuffle_button_->setText(shuffle_enabled_
+            ? QStringLiteral("随机：开")
+            : QStringLiteral("随机：关"));
+    }
+    if (repeat_button_)
+        repeat_button_->setText(repeat_mode_ == 0 ? QStringLiteral("循环：关")
+            : repeat_mode_ == 1 ? QStringLiteral("循环：列表") : QStringLiteral("循环：单项"));
     resetShuffleOrder();
     rebuildPlaylistWidget();
     if (playlist_index_ >= 0)

@@ -113,6 +113,8 @@ private:
     QPushButton* play_button_;
     QPushButton* pause_button_;
     QPushButton* stop_button_;
+    QPushButton* shuffle_button_ = nullptr;
+    QPushButton* repeat_button_ = nullptr;
     QObject* command_worker_;
     QThread* command_thread_;
     QObject* library_worker_;
