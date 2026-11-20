@@ -221,7 +221,7 @@ public:
         video_packet_pending_ = false;
         demux_eof_ = false;
         resampler_drained_ = false;
-        clear_packet_queues();
+        clear_packet_queues_locked();
         audio_consumer_active_ = audio_decoder_ != nullptr;
         video_consumer_active_ = false;
         return success();
@@ -326,7 +326,8 @@ public:
         playback_lock.unlock();
 #endif
 
-        std::lock_guard<std::mutex> decode_lock(decode_mutex_);
+        std::scoped_lock decode_lock(audio_decode_mutex_, video_decode_mutex_);
+        std::lock_guard<std::mutex> demux_lock(demux_mutex_);
 #ifdef _WIN32
         bool seek_succeeded = false;
         const auto restore_playback = [this, resume_playback, &playback_lock, &seek_succeeded]
@@ -453,7 +454,8 @@ public:
             playback_flush_requested_ = false;
         }
 #endif
-        std::lock_guard<std::mutex> decode_lock(decode_mutex_);
+        std::scoped_lock decode_lock(audio_decode_mutex_, video_decode_mutex_);
+        std::lock_guard<std::mutex> demux_lock(demux_mutex_);
         swr_free(&resampler_);
         sws_freeContext(video_scaler_);
         video_scaler_ = nullptr;
@@ -506,7 +508,7 @@ public:
 
     void set_playback_rate(float rate) override
     {
-        std::lock_guard<std::mutex> lock(decode_mutex_);
+        std::lock_guard<std::mutex> lock(audio_decode_mutex_);
         playback_rate_.store(rate, std::memory_order_relaxed);
         swr_free(&resampler_);
         resampler_drained_ = false;
@@ -529,7 +531,7 @@ public:
 
     MediaBackendResult read_audio_frame(AudioFrame& output, bool& end_of_stream) override
     {
-        std::lock_guard<std::mutex> decode_lock(decode_mutex_);
+        std::lock_guard<std::mutex> decode_lock(audio_decode_mutex_);
         end_of_stream = false;
         output.samples.clear();
 
@@ -637,7 +639,7 @@ public:
 
     MediaBackendResult read_video_frame(VideoFrame& output, bool& end_of_stream) override
     {
-        std::lock_guard<std::mutex> decode_lock(decode_mutex_);
+        std::lock_guard<std::mutex> decode_lock(video_decode_mutex_);
         end_of_stream = false;
         output.bgra.clear();
 
@@ -712,6 +714,7 @@ public:
 private:
     int next_packet_for_stream(int stream_index, AVPacket* output_packet)
     {
+        std::lock_guard<std::mutex> demux_lock(demux_mutex_);
         std::deque<AVPacket*>& queue =
             stream_index == audio_stream_index_ ? audio_packet_queue_ : video_packet_queue_;
 
@@ -819,6 +822,12 @@ private:
     }
 
     void clear_packet_queues()
+    {
+        std::lock_guard<std::mutex> demux_lock(demux_mutex_);
+        clear_packet_queues_locked();
+    }
+
+    void clear_packet_queues_locked()
     {
         for (AVPacket* packet : audio_packet_queue_)
             av_packet_free(&packet);
@@ -1197,7 +1206,9 @@ private:
     }
 
     AVFormatContext* format_context_ = nullptr;
-    std::mutex decode_mutex_;
+    std::mutex audio_decode_mutex_;
+    std::mutex video_decode_mutex_;
+    std::mutex demux_mutex_;
 #ifdef _WIN32
     std::mutex playback_mutex_;
     std::condition_variable playback_condition_;
