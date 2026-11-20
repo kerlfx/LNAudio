@@ -169,7 +169,10 @@ public:
     void* native_device()
     {
         std::lock_guard<std::mutex> lock(mutex_);
-        return device_.Get();
+        ID3D11Device* device = device_.Get();
+        if (device)
+            device->AddRef();
+        return device;
     }
 
     void resize(uint32_t width, uint32_t height)
