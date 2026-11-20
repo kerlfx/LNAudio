@@ -28,3 +28,20 @@ foreach(ffmpeg_dll IN LISTS LNPLAYER_TEST_FFMPEG_DLLS)
         VERBATIM
     )
 endforeach()
+
+add_executable(LNPlayerSubtitleTests
+    subtitle_tests.cpp
+    "${PROJECT_SOURCE_DIR}/windows/subtitle_manager.cpp"
+)
+
+target_include_directories(LNPlayerSubtitleTests
+    PRIVATE
+        "${PROJECT_SOURCE_DIR}/windows"
+)
+
+target_link_libraries(LNPlayerSubtitleTests
+    PRIVATE
+        Qt6::Core
+)
+
+add_test(NAME LNPlayer.Subtitles COMMAND LNPlayerSubtitleTests)
