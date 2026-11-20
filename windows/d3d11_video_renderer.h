@@ -9,6 +9,7 @@
 #include <Windows.h>
 #include <cstdint>
 #include <memory>
+#include <vector>
 
 namespace lnplayer::windows
 {
@@ -31,6 +32,7 @@ public:
     bool present_hardware(
         void* texture, uint32_t array_slice, uint32_t format,
         int width, int height, std::shared_ptr<void> frame_owner);
+    bool capture_bgra(std::vector<uint8_t>& pixels, int& width, int& height);
     void clear();
     void shutdown();
 
