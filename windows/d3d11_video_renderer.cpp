@@ -106,13 +106,14 @@ public:
             static_cast<UINT>(std::size(levels)),
             D3D11_SDK_VERSION,
             &swap_chain_desc,
-            &swap_chain_,
-            &device_,
+            swap_chain_.GetAddressOf(),
+            device_.GetAddressOf(),
             &selected_level,
-            &context_);
+            context_.GetAddressOf());
 
         if (result == E_INVALIDARG)
         {
+            release_resources();
             const D3D_FEATURE_LEVEL compatible_levels[] = {
                 D3D_FEATURE_LEVEL_11_0,
                 D3D_FEATURE_LEVEL_10_1
@@ -126,14 +127,15 @@ public:
                 static_cast<UINT>(std::size(compatible_levels)),
                 D3D11_SDK_VERSION,
                 &swap_chain_desc,
-                &swap_chain_,
-                &device_,
+                swap_chain_.GetAddressOf(),
+                device_.GetAddressOf(),
                 &selected_level,
-                &context_);
+                context_.GetAddressOf());
         }
 
         if (FAILED(result))
         {
+            release_resources();
             result = D3D11CreateDeviceAndSwapChain(
                 nullptr,
                 D3D_DRIVER_TYPE_WARP,
@@ -143,10 +145,10 @@ public:
                 0,
                 D3D11_SDK_VERSION,
                 &swap_chain_desc,
-                &swap_chain_,
-                &device_,
+                swap_chain_.GetAddressOf(),
+                device_.GetAddressOf(),
                 &selected_level,
-                &context_);
+                context_.GetAddressOf());
         }
 
         if (FAILED(result))
@@ -206,8 +208,8 @@ public:
             texture_desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
             texture_desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
 
-            if (FAILED(device_->CreateTexture2D(&texture_desc, nullptr, &video_texture_)) ||
-                FAILED(device_->CreateShaderResourceView(video_texture_.Get(), nullptr, &video_view_)))
+            if (FAILED(device_->CreateTexture2D(&texture_desc, nullptr, video_texture_.GetAddressOf())) ||
+                FAILED(device_->CreateShaderResourceView(video_texture_.Get(), nullptr, video_view_.GetAddressOf())))
                 return false;
 
             texture_width_ = width;
@@ -296,7 +298,7 @@ private:
             0, IID_PPV_ARGS(back_buffer.GetAddressOf()))))
             return false;
         return SUCCEEDED(device_->CreateRenderTargetView(
-            back_buffer.Get(), nullptr, &render_target_));
+            back_buffer.Get(), nullptr, render_target_.GetAddressOf()));
     }
 
     bool create_pipeline()
@@ -307,30 +309,30 @@ private:
         if (FAILED(D3DCompile(
             kVertexShader, sizeof(kVertexShader) - 1, nullptr, nullptr, nullptr,
             "main", "vs_4_0", D3DCOMPILE_ENABLE_STRICTNESS, 0,
-            &vertex_code, &errors)) ||
+            vertex_code.GetAddressOf(), errors.GetAddressOf())) ||
             FAILED(D3DCompile(
             kPixelShader, sizeof(kPixelShader) - 1, nullptr, nullptr, nullptr,
             "main", "ps_4_0", D3DCOMPILE_ENABLE_STRICTNESS, 0,
-            &pixel_code, &errors)))
+            pixel_code.GetAddressOf(), errors.GetAddressOf())))
             return false;
 
         if (FAILED(device_->CreateVertexShader(
                 vertex_code->GetBufferPointer(),
                 vertex_code->GetBufferSize(),
                 nullptr,
-                &vertex_shader_)) ||
+                vertex_shader_.GetAddressOf())) ||
             FAILED(device_->CreatePixelShader(
                 pixel_code->GetBufferPointer(),
                 pixel_code->GetBufferSize(),
                 nullptr,
-                &pixel_shader_)))
+                pixel_shader_.GetAddressOf())))
             return false;
 
         D3D11_RASTERIZER_DESC rasterizer_desc{};
         rasterizer_desc.FillMode = D3D11_FILL_SOLID;
         rasterizer_desc.CullMode = D3D11_CULL_NONE;
         rasterizer_desc.DepthClipEnable = TRUE;
-        if (FAILED(device_->CreateRasterizerState(&rasterizer_desc, &rasterizer_)))
+        if (FAILED(device_->CreateRasterizerState(&rasterizer_desc, rasterizer_.GetAddressOf())))
             return false;
 
         D3D11_SAMPLER_DESC sampler_desc{};
@@ -339,7 +341,7 @@ private:
         sampler_desc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
         sampler_desc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
         sampler_desc.MaxLOD = D3D11_FLOAT32_MAX;
-        return SUCCEEDED(device_->CreateSamplerState(&sampler_desc, &sampler_));
+        return SUCCEEDED(device_->CreateSamplerState(&sampler_desc, sampler_.GetAddressOf()));
     }
 
     void release_resources()
