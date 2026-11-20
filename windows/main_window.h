@@ -53,6 +53,7 @@ private:
         lnplayer_state_t state,
         int64_t position_ms,
         int64_t duration_ms,
+        uint64_t generation,
         const QString& message);
     void refreshSnapshot();
     void updatePlaybackState(lnplayer_state_t state, int64_t position_ms, int64_t duration_ms);
@@ -92,6 +93,7 @@ private:
     int64_t video_clock_base_pts_ms_ = 0;
     QElapsedTimer video_clock_;
     int muted_volume_ = 1000;
+    uint64_t media_generation_ = 0;
 };
 
 #endif
