@@ -174,6 +174,7 @@ private:
     int subtitle_vertical_position_ = 80;
     int middle_click_action_ = 1;
     bool auto_match_subtitle_ = true;
+    bool mouse_gestures_enabled_ = false;
     bool remember_position_ = true;
     bool always_on_top_ = false;
     QByteArray normal_geometry_;
