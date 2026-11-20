@@ -151,6 +151,7 @@ typedef struct lnplayer_video_info
     int32_t color_transfer;
     int32_t color_space;
     int32_t bit_depth;
+    int32_t hardware_decoding;
     char container_format[LNPLAYER_VIDEO_INFO_TEXT_CAPACITY];
     char container_long_name[LNPLAYER_VIDEO_INFO_TEXT_CAPACITY];
     char codec_name[LNPLAYER_VIDEO_INFO_TEXT_CAPACITY];
