@@ -60,6 +60,7 @@ private:
         int hardware_height = 0;
         int hdr_transfer = 0;
         int color_primaries = 0;
+        float display_aspect_ratio = 0.0f;
         int ycbcr_matrix = 0;
         int ycbcr_full_range = 0;
         QString embedded_subtitle;
@@ -138,6 +139,7 @@ private:
     bool video_end_of_stream_ = false;
     bool viewing_historical_frame_ = false;
     QImage pending_video_frame_;
+    float pending_video_display_aspect_ratio_ = 0.0f;
     QString pending_embedded_subtitle_;
     QImage pending_embedded_subtitle_bitmap_;
     std::shared_ptr<void> pending_hardware_frame_owner_;

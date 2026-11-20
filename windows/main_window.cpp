@@ -732,6 +732,7 @@ MainWindow::MainWindow(PlayerMode mode, const QString& initial_media, QWidget* p
                         if (result == LNPLAYER_RESULT_OK)
                         {
                             pending_embedded_subtitle_.clear();
+                            pending_embedded_subtitle_bitmap_ = {};
                             video_frame_history_.clear();
                             video_frame_history_index_ = -1;
                             pending_video_frame_valid_ = false;
@@ -1427,6 +1428,7 @@ void MainWindow::openPlaylistIndex(int index)
     viewing_historical_frame_ = false;
     pending_embedded_subtitle_.clear();
     pending_embedded_subtitle_bitmap_ = {};
+    pending_video_display_aspect_ratio_ = 0.0f;
     video_frame_history_.clear();
     video_frame_history_index_ = -1;
     pending_video_frame_valid_ = false;
@@ -1910,6 +1912,7 @@ void MainWindow::requestVideoFrame()
                 pending_video_generation_ = generation;
                 pending_embedded_subtitle_ = embedded_subtitle;
                 pending_embedded_subtitle_bitmap_ = embedded_subtitle_bitmap;
+                pending_video_display_aspect_ratio_ = display_aspect_ratio;
                 pending_video_frame_valid_ = true;
                 presentPendingVideoFrame();
             }
@@ -1943,8 +1946,10 @@ void MainWindow::presentPendingVideoFrame()
         overlay.fill(Qt::transparent);
         if (subtitles_enabled_ && !pending_embedded_subtitle_bitmap_.isNull())
         {
-            const float aspect = static_cast<float>(pending_embedded_subtitle_bitmap_.width()) /
-                pending_embedded_subtitle_bitmap_.height();
+            const float aspect = pending_video_display_aspect_ratio_ > 0.0f
+                ? pending_video_display_aspect_ratio_
+                : static_cast<float>(pending_embedded_subtitle_bitmap_.width()) /
+                    pending_embedded_subtitle_bitmap_.height();
             int target_width = overlay.width();
             int target_height = static_cast<int>(target_width / aspect);
             if (target_height > overlay.height())
@@ -1999,6 +2004,7 @@ void MainWindow::presentPendingVideoFrame()
         history_entry.hardware_height = pending_hardware_height_;
         history_entry.hdr_transfer = hdr_transfer;
         history_entry.color_primaries = color_primaries;
+        history_entry.display_aspect_ratio = display_aspect_ratio;
         history_entry.ycbcr_matrix = ycbcr_matrix;
         history_entry.ycbcr_full_range = ycbcr_full_range;
         history_entry.embedded_subtitle = pending_embedded_subtitle_;
@@ -2128,6 +2134,7 @@ void MainWindow::presentPendingVideoFrame()
     history_entry.image = frame;
     history_entry.hdr_transfer = hdr_transfer;
     history_entry.color_primaries = color_primaries;
+    history_entry.display_aspect_ratio = display_aspect_ratio;
     history_entry.ycbcr_matrix = ycbcr_matrix;
     history_entry.ycbcr_full_range = ycbcr_full_range;
     history_entry.embedded_subtitle = pending_embedded_subtitle_;
@@ -2353,8 +2360,10 @@ void MainWindow::presentHistoricalVideoFrame()
         overlay.fill(Qt::transparent);
         if (subtitles_enabled_ && !entry.embedded_subtitle_bitmap.isNull())
         {
-            const float aspect = static_cast<float>(entry.embedded_subtitle_bitmap.width()) /
-                entry.embedded_subtitle_bitmap.height();
+            const float aspect = entry.display_aspect_ratio > 0.0f
+                ? entry.display_aspect_ratio
+                : static_cast<float>(entry.embedded_subtitle_bitmap.width()) /
+                    entry.embedded_subtitle_bitmap.height();
             int target_width = overlay.width();
             int target_height = static_cast<int>(target_width / aspect);
             if (target_height > overlay.height())
