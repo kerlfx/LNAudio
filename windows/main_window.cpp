@@ -87,6 +87,60 @@ QString format_position(int64_t position_ms)
         .arg(seconds, 2, 10, QLatin1Char('0'));
 }
 
+QStringList expand_media_urls(const QList<QUrl>& urls)
+{
+    const QStringList video_filters = {
+        QStringLiteral("*.mp4"), QStringLiteral("*.mkv"), QStringLiteral("*.mov"),
+        QStringLiteral("*.avi"), QStringLiteral("*.webm"), QStringLiteral("*.wmv"),
+        QStringLiteral("*.flv"), QStringLiteral("*.mpeg"), QStringLiteral("*.mpg"),
+        QStringLiteral("*.m4v"), QStringLiteral("*.ts"), QStringLiteral("*.mts"),
+        QStringLiteral("*.m2ts"), QStringLiteral("*.3gp"), QStringLiteral("*.3g2"),
+        QStringLiteral("*.vob"), QStringLiteral("*.ogv"), QStringLiteral("*.mxf"),
+        QStringLiteral("*.asf"), QStringLiteral("*.f4v"), QStringLiteral("*.divx"),
+        QStringLiteral("*.mpe"), QStringLiteral("*.mpv")
+    };
+    QStringList paths;
+    QSet<QString> unique_paths;
+    for (const QUrl& url : urls)
+    {
+        const QString path = url.toLocalFile();
+        if (path.isEmpty())
+            continue;
+        const QFileInfo file_info(path);
+        if (file_info.isDir())
+        {
+            QDirIterator iterator(
+                file_info.absoluteFilePath(), video_filters,
+                QDir::Files | QDir::Readable, QDirIterator::Subdirectories);
+            while (iterator.hasNext())
+            {
+                const QString candidate = QFileInfo(iterator.next()).absoluteFilePath();
+                const QString key = candidate.toCaseFolded();
+                if (!unique_paths.contains(key))
+                {
+                    unique_paths.insert(key);
+                    paths.append(candidate);
+                }
+            }
+        }
+        else if (file_info.isFile())
+        {
+            const QString candidate = file_info.absoluteFilePath();
+            const QString key = candidate.toCaseFolded();
+            if (!unique_paths.contains(key))
+            {
+                unique_paths.insert(key);
+                paths.append(candidate);
+            }
+        }
+    }
+    std::sort(paths.begin(), paths.end(), [](const QString& left, const QString& right)
+    {
+        return left.compare(right, Qt::CaseInsensitive) < 0;
+    });
+    return paths;
+}
+
 }
 
 MainWindow::MainWindow(
@@ -1935,12 +1989,10 @@ void MainWindow::openFile()
 void MainWindow::openFiles(const QList<QUrl>& urls)
 {
     savePlaybackPosition();
+    const QStringList paths = expand_media_urls(urls);
     QList<QUrl> next_playlist;
-    for (const QUrl& url : urls)
-    {
-        if (!url.toLocalFile().isEmpty())
-            next_playlist.append(url);
-    }
+    for (const QString& path : paths)
+        next_playlist.append(QUrl::fromLocalFile(path));
     if (next_playlist.isEmpty())
         return;
 
@@ -1954,14 +2006,11 @@ void MainWindow::openFiles(const QList<QUrl>& urls)
 
 void MainWindow::appendPlaylistFiles(const QList<QUrl>& urls)
 {
-    for (const QUrl& url : urls)
+    const QStringList paths = expand_media_urls(urls);
+    for (const QString& path : paths)
     {
-        const QString path = url.toLocalFile();
-        if (path.isEmpty())
-            continue;
-        const QString absolute_path = QFileInfo(path).absoluteFilePath();
-        playlist_.append(QUrl::fromLocalFile(absolute_path));
-        schedulePlaylistMetadataProbe(absolute_path);
+        playlist_.append(QUrl::fromLocalFile(path));
+        schedulePlaylistMetadataProbe(path);
     }
     resetShuffleOrder();
     rebuildPlaylistWidget();
