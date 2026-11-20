@@ -304,7 +304,7 @@ Player 销毁是生命周期屏障，不是普通的异步播放命令。销毁�
 
 首期错误码固定为：`OK`、`INVALID_ARGUMENT`、`INVALID_HANDLE`、`ALREADY_EXISTS`、`INVALID_STATE`、`NOT_IMPLEMENTED`、`OUT_OF_MEMORY`、`INTERNAL_ERROR`、`BUFFER_TOO_SMALL`、`WOULD_DEADLOCK`。枚举值在 ABI v1 内不得重排或复用。
 
-当前实现状态：ABI v1 头文件、ABI 版本查询、唯一实例创建/销毁、快照查询、音量设置和线程局部错误读取已建立；Playback Controller 尚未实现，因此 open/play/pause/stop/seek/close 当前返回 `NOT_IMPLEMENTED`。事件回调契约已定义，事件产生与派发将在 Controller/Event Manager 实现阶段接入。
+当前实现状态：ABI v1 头文件、唯一实例生命周期、Playback Controller 命令入口、异步 open/seek 完成事件、同步完成型接口等待、线程安全一致快照、音量设置和线程局部错误读取已建立。Controller 通过独立 `io_context` 线程协调命令；同步接口检测并拒绝在事件线程自等待。当前尚未接入 FFmpeg/音频输出后端：open/seek 会被接受并以 `NOT_IMPLEMENTED` 完成事件结束；play/pause 在无有效播放状态时返回 `INVALID_STATE`，需要媒体后端的操作不会伪报成功。stop/close 可清理空闲或打开失败后的逻辑状态。当前 Controller 的媒体工作仍是后端接入前的控制面骨架，尚未向共享 `thread_pool` 分发实际解码或 I/O 任务。
 
 ## 5. Windows 运行模型
 
