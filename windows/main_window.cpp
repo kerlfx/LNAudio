@@ -1117,14 +1117,14 @@ void MainWindow::loadExternalSubtitle()
     else if (subtitle_data.startsWith("\\xFF\\xFE"))
     {
         QStringDecoder decoder("UTF-16LE");
-        subtitle_text = decoder(QByteArrayView(subtitle_data).sliced(2));
+        subtitle_text = decoder(subtitle_data.mid(2));
         if (decoder.hasError())
             subtitle_text = QString::fromLocal8Bit(subtitle_data);
     }
     else if (subtitle_data.startsWith("\\xFE\\xFF"))
     {
         QStringDecoder decoder("UTF-16BE");
-        subtitle_text = decoder(QByteArrayView(subtitle_data).sliced(2));
+        subtitle_text = decoder(subtitle_data.mid(2));
         if (decoder.hasError())
             subtitle_text = QString::fromLocal8Bit(subtitle_data);
     }
@@ -1442,7 +1442,6 @@ void MainWindow::presentPendingVideoFrame()
         const int height = pending_hardware_height_;
         const uint64_t generation = pending_video_generation_;
         const int64_t pts_ms = pending_video_pts_ms_;
-        const QString subtitle = subtitleAt(pts_ms);
         pending_hardware_texture_ = nullptr;
         pending_video_frame_valid_ = false;
 
