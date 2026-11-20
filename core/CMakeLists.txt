@@ -46,13 +46,13 @@ if(NOT EXISTS "${LNPLAYER_FFMPEG_ROOT}/include/libavformat/avformat.h")
 
     set(_ffmpeg_archive_name
         "ffmpeg-${LNPLAYER_FFMPEG_VERSION}_x64-windows-shared-${LNPLAYER_FFMPEG_LICENSE}.zip")
-    set(_ffmpeg_archive
-        "${CMAKE_BINARY_DIR}/_downloads/${_ffmpeg_archive_name}")
+    set(_ffmpeg_download_dir "${PROJECT_SOURCE_DIR}/3rd_cache/downloads")
+    set(_ffmpeg_archive "${_ffmpeg_download_dir}/${_ffmpeg_archive_name}")
     set(_ffmpeg_url
         "https://github.com/System233/ffmpeg-msvc-prebuilt/releases/download/ffmpeg-${LNPLAYER_FFMPEG_VERSION}/${_ffmpeg_archive_name}")
 
-    file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/_downloads")
-    message(STATUS "Downloading FFmpeg SDK: ${_ffmpeg_url}")
+    file(MAKE_DIRECTORY "${_ffmpeg_download_dir}")
+    message(STATUS "Downloading FFmpeg SDK to repository cache: ${_ffmpeg_archive}")
     file(DOWNLOAD
         "${_ffmpeg_url}"
         "${_ffmpeg_archive}"
