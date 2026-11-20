@@ -172,6 +172,60 @@ MainWindow::MainWindow(
     });
     if (mode_ == PlayerMode::Video)
     {
+        auto* open_folder_action = file_menu->addAction(QStringLiteral("打开文件夹..."));
+        connect(open_folder_action, &QAction::triggered, this, [this]
+        {
+            const QString directory = QFileDialog::getExistingDirectory(
+                this, QStringLiteral("打开视频文件夹"));
+            if (directory.isEmpty())
+                return;
+            const QStringList filters = {
+                QStringLiteral("*.mp4"), QStringLiteral("*.mkv"), QStringLiteral("*.mov"),
+                QStringLiteral("*.avi"), QStringLiteral("*.webm"), QStringLiteral("*.wmv"),
+                QStringLiteral("*.flv"), QStringLiteral("*.mpeg"), QStringLiteral("*.mpg"),
+                QStringLiteral("*.m4v"), QStringLiteral("*.ts"), QStringLiteral("*.mts"),
+                QStringLiteral("*.m2ts"), QStringLiteral("*.3gp"), QStringLiteral("*.3g2"),
+                QStringLiteral("*.vob"), QStringLiteral("*.ogv"), QStringLiteral("*.mxf"),
+                QStringLiteral("*.asf"), QStringLiteral("*.f4v"), QStringLiteral("*.divx")
+            };
+            const QFileInfoList entries = QDir(directory).entryInfoList(
+                filters, QDir::Files | QDir::Readable, QDir::Name);
+            QList<QUrl> urls;
+            for (const QFileInfo& entry : entries)
+                urls.append(QUrl::fromLocalFile(entry.absoluteFilePath()));
+            if (!urls.isEmpty())
+                openFiles(urls);
+            else
+                statusBar()->showMessage(QStringLiteral("文件夹中没有支持的视频文件"));
+        });
+
+        auto* recent_menu = file_menu->addMenu(QStringLiteral("最近播放"));
+        connect(recent_menu, &QMenu::aboutToShow, this, [this, recent_menu]
+        {
+            recent_menu->clear();
+            QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+            const QStringList recent_files = settings.value(
+                QStringLiteral("Video/RecentFiles")).toStringList();
+            for (const QString& path : recent_files)
+            {
+                if (!QFileInfo::exists(path))
+                    continue;
+                QAction* action = recent_menu->addAction(QFileInfo(path).fileName());
+                action->setToolTip(path);
+                connect(action, &QAction::triggered, this, [this, path]
+                {
+                    openFiles({QUrl::fromLocalFile(path)});
+                });
+            }
+            if (recent_menu->actions().isEmpty())
+            {
+                QAction* empty = recent_menu->addAction(QStringLiteral("暂无记录"));
+                empty->setEnabled(false);
+            }
+        });
+    }
+    if (mode_ == PlayerMode::Video)
+    {
         auto* subtitle_action = file_menu->addAction(QStringLiteral("加载外挂字幕..."));
         connect(subtitle_action, &QAction::triggered, this, [this]
         {
@@ -2075,6 +2129,19 @@ void MainWindow::openPlaylistIndex(int index)
         return;
 
     playlist_index_ = index;
+    if (mode_ == PlayerMode::Video)
+    {
+        QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+        QStringList recent_files = settings.value(
+            QStringLiteral("Video/RecentFiles")).toStringList();
+        const QString recent_path = QFileInfo(playlist_[index].toLocalFile()).absoluteFilePath();
+        recent_files.removeAll(recent_path);
+        recent_files.prepend(recent_path);
+        while (recent_files.size() > 12)
+            recent_files.removeLast();
+        settings.setValue(QStringLiteral("Video/RecentFiles"), recent_files);
+        settings.sync();
+    }
     saveVideoPlaylist();
     if (playlist_widget_)
     {
