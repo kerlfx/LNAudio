@@ -2690,7 +2690,7 @@ void MainWindow::openVideoSettings()
         QStringLiteral("打开 Windows 默认应用设置"), general_page);
     connect(open_default_apps, &QPushButton::clicked, &dialog, []
     {
-        QDesktopServices::openUrl(QUrl(QStringLiteral("ms-settings:defaultapps")));
+        QDesktopServices::openUrl(QUrl(QStringLiteral("ms-settings:defaultapps?registeredAppUser=LNPlayer")));
     });
     general_form->addRow(QStringLiteral("视频文件关联"), association_info);
     general_form->addRow(open_default_apps);
