@@ -1720,6 +1720,10 @@ void MainWindow::requestVideoFrame()
                 pending_video_frame_valid_ = true;
                 presentPendingVideoFrame();
             }
+            else if (!video_seek_pending_ && generation != requested_generation)
+            {
+                requestVideoFrame();
+            }
         }, Qt::QueuedConnection);
     }, Qt::QueuedConnection);
 }
