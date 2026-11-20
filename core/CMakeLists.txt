@@ -33,6 +33,12 @@ find_library(FFMPEG_AVUTIL_LIBRARY
     REQUIRED
 )
 
+find_library(FFMPEG_SWRESAMPLE_LIBRARY
+    NAMES swresample swresample-6 swresample-5 swresample-4
+    HINTS "${LNPLAYER_FFMPEG_ROOT}/lib"
+    REQUIRED
+)
+
 aux_source_directory("${CMAKE_CURRENT_SOURCE_DIR}" LNPLAYER_CORE_SOURCES)
 
 add_library(lnplayer SHARED
@@ -58,6 +64,7 @@ target_link_libraries(lnplayer
         "${FFMPEG_AVFORMAT_LIBRARY}"
         "${FFMPEG_AVCODEC_LIBRARY}"
         "${FFMPEG_AVUTIL_LIBRARY}"
+        "${FFMPEG_SWRESAMPLE_LIBRARY}"
 )
 
 set_target_properties(lnplayer PROPERTIES
