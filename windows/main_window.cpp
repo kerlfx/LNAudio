@@ -2606,9 +2606,24 @@ void MainWindow::openVideoSettings()
 
     QDialog dialog(this);
     dialog.setWindowTitle(QStringLiteral("LNPlayer 视频设置"));
-    dialog.setMinimumSize(560, 420);
+    dialog.setMinimumSize(680, 520);
     auto* root = new QVBoxLayout(&dialog);
     auto* tabs = new QTabWidget(&dialog);
+
+    auto* general_page = new QWidget(tabs);
+    auto* general_form = new QFormLayout(general_page);
+    auto* settings_path = new QLineEdit(settings_file_path(), general_page);
+    settings_path->setReadOnly(true);
+    auto* open_settings_directory = new QPushButton(
+        QStringLiteral("打开配置目录"), general_page);
+    connect(open_settings_directory, &QPushButton::clicked, &dialog, []
+    {
+        QDesktopServices::openUrl(QUrl::fromLocalFile(
+            QFileInfo(settings_file_path()).absolutePath()));
+    });
+    general_form->addRow(QStringLiteral("INI 配置文件"), settings_path);
+    general_form->addRow(open_settings_directory);
+    tabs->addTab(general_page, QStringLiteral("常规"));
 
     auto* playback_page = new QWidget(tabs);
     auto* playback_form = new QFormLayout(playback_page);
@@ -2753,6 +2768,37 @@ void MainWindow::openVideoSettings()
     shortcut_layout->addWidget(shortcut_scroll);
     tabs->addTab(shortcut_page, QStringLiteral("快捷键"));
 
+    auto* screenshot_page = new QWidget(tabs);
+    auto* screenshot_form = new QFormLayout(screenshot_page);
+    auto* screenshot_directory = new QLineEdit(screenshot_directory_, screenshot_page);
+    auto* browse_screenshot_directory = new QPushButton(
+        QStringLiteral("浏览..."), screenshot_page);
+    auto* screenshot_directory_row = new QWidget(screenshot_page);
+    auto* screenshot_directory_layout = new QHBoxLayout(screenshot_directory_row);
+    screenshot_directory_layout->setContentsMargins(0, 0, 0, 0);
+    screenshot_directory_layout->addWidget(screenshot_directory, 1);
+    screenshot_directory_layout->addWidget(browse_screenshot_directory);
+    connect(browse_screenshot_directory, &QPushButton::clicked, &dialog,
+        [&, screenshot_directory]
+    {
+        const QString directory = QFileDialog::getExistingDirectory(
+            &dialog, QStringLiteral("选择截图保存目录"),
+            screenshot_directory->text().isEmpty()
+                ? QDir::homePath() : screenshot_directory->text());
+        if (!directory.isEmpty())
+            screenshot_directory->setText(directory);
+    });
+    auto* screenshot_format = new QComboBox(screenshot_page);
+    screenshot_format->addItem(QStringLiteral("PNG（无损）"), QStringLiteral("png"));
+    screenshot_format->addItem(QStringLiteral("JPEG（压缩）"), QStringLiteral("jpg"));
+    screenshot_format->addItem(QStringLiteral("BMP（无压缩）"), QStringLiteral("bmp"));
+    const int screenshot_format_index = screenshot_format->findData(screenshot_format_);
+    screenshot_format->setCurrentIndex(screenshot_format_index >= 0
+        ? screenshot_format_index : 0);
+    screenshot_form->addRow(QStringLiteral("默认保存目录"), screenshot_directory_row);
+    screenshot_form->addRow(QStringLiteral("默认图片格式"), screenshot_format);
+    tabs->addTab(screenshot_page, QStringLiteral("截图"));
+
     auto* performance_page = new QWidget(tabs);
     auto* performance_form = new QFormLayout(performance_page);
     const QString renderer_description = video_surface_ && video_surface_->has_renderer()
@@ -2797,6 +2843,8 @@ void MainWindow::openVideoSettings()
         subtitle_size->setValue(0);
         subtitle_color->setCurrentIndex(0);
         subtitle_position->setValue(80);
+        screenshot_directory->setText(QDir::homePath());
+        screenshot_format->setCurrentIndex(0);
         for (auto it = shortcuts_.cbegin(); it != shortcuts_.cend(); ++it)
         {
             const QKeySequence default_sequence = QKeySequence::fromString(
@@ -2879,6 +2927,9 @@ void MainWindow::openVideoSettings()
     subtitle_font_size_ = subtitle_size->value();
     subtitle_color_ = subtitle_color->currentData().toString();
     subtitle_vertical_position_ = subtitle_position->value();
+    screenshot_directory_ = screenshot_directory->text().trimmed().isEmpty()
+        ? QDir::homePath() : screenshot_directory->text().trimmed();
+    screenshot_format_ = screenshot_format->currentData().toString();
     video_surface_->set_aspect_ratio(video_aspect_ratio_override_);
     video_surface_->set_stretch(video_stretch_);
     video_surface_->set_video_filter(
@@ -2907,12 +2958,18 @@ void MainWindow::openVideoSettings()
     settings.setValue(QStringLiteral("Video/Filter/Brightness"), video_brightness_);
     settings.setValue(QStringLiteral("Video/Filter/Contrast"), video_contrast_);
     settings.setValue(QStringLiteral("Video/Filter/Saturation"), video_saturation_);
+    settings.setValue(QStringLiteral("Video/Filter/HueDegrees"), video_hue_degrees_);
+    settings.setValue(QStringLiteral("Video/Filter/Sharpness"), video_sharpness_);
+    settings.setValue(QStringLiteral("Video/Filter/Denoise"), video_denoise_);
+    settings.setValue(QStringLiteral("Video/Filter/Grayscale"), video_grayscale_);
     settings.setValue(QStringLiteral("Video/Subtitle/AutoMatch"), auto_match_subtitle_);
     settings.setValue(QStringLiteral("Video/Subtitle/OffsetMs"), subtitle_offset_ms_);
     settings.setValue(QStringLiteral("Video/Subtitle/FontFamily"), subtitle_font_family_);
     settings.setValue(QStringLiteral("Video/Subtitle/FontSize"), subtitle_font_size_);
     settings.setValue(QStringLiteral("Video/Subtitle/Color"), subtitle_color_);
     settings.setValue(QStringLiteral("Video/Subtitle/VerticalPosition"), subtitle_vertical_position_);
+    settings.setValue(QStringLiteral("Video/Screenshot/Directory"), screenshot_directory_);
+    settings.setValue(QStringLiteral("Video/Screenshot/Format"), screenshot_format_);
     settings.sync();
 
     setSubtitleOffset(subtitle_offset_ms_);
@@ -4060,9 +4117,8 @@ void MainWindow::takeScreenshot()
         QDir(screenshot_directory_).filePath(
             QStringLiteral("screenshot.%1").arg(screenshot_format_)),
         QStringLiteral("PNG 图片 (*.png);;JPEG 图片 (*.jpg *.jpeg);;BMP 图片 (*.bmp)"),
-        nullptr,
-        QFileDialog::Options(),
-        nullptr);
+        &selected_filter,
+        QFileDialog::Options());
     if (path.isEmpty())
         return;
 
