@@ -285,8 +285,16 @@ public:
             return failure("The media source is not playing.");
         playback_active_ = false;
         playing_ = false;
+        playback_flush_completed_ = false;
+        playback_flush_success_ = false;
+        playback_flush_requested_ = true;
         playback_condition_.notify_all();
-        playback_condition_.wait(lock, [this] { return !playback_writing_; });
+        playback_condition_.wait(lock, [this]
+        {
+            return !playback_writing_ && playback_flush_completed_;
+        });
+        if (!playback_flush_success_)
+            return failure("Unable to pause the Windows audio output device.");
 #else
         if (!playing_)
             return failure("The media source is not playing.");
@@ -317,7 +325,11 @@ public:
         {
             playback_lock.lock();
             if (seek_succeeded)
+            {
+                playback_flush_completed_ = false;
+                playback_flush_success_ = false;
                 playback_flush_requested_ = true;
+            }
             if (resume_playback)
                 playback_active_ = true;
             playback_condition_.notify_all();
@@ -1182,6 +1194,8 @@ private:
     bool playback_active_ = false;
     bool playback_writing_ = false;
     bool playback_flush_requested_ = false;
+    bool playback_flush_completed_ = false;
+    bool playback_flush_success_ = false;
     uint64_t playback_generation_ = 0;
     bool playback_start_finished_ = false;
     bool playback_start_success_ = false;
