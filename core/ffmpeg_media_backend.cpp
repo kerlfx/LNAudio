@@ -1022,11 +1022,9 @@ private:
                 if (output.current_padding(queued_frames) && output_sample_rate_ > 0)
                 {
                     const int64_t media_duration_ms = static_cast<int64_t>(
-                        frame.samples.size() / frame.channels * 1000.0 *
-                        playback_rate_.load(std::memory_order_relaxed) / output_sample_rate_);
+                        frame.samples.size() / frame.channels * 1000.0 / frame.sample_rate);
                     const int64_t queued_media_ms = static_cast<int64_t>(
-                        queued_frames * 1000.0 *
-                        playback_rate_.load(std::memory_order_relaxed) / output_sample_rate_);
+                        queued_frames * 1000.0 / frame.sample_rate);
                     position_ms_.store(
                         frame.pts_ms + media_duration_ms - queued_media_ms,
                         std::memory_order_relaxed);
