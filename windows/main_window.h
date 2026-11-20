@@ -8,6 +8,8 @@
 #include <QList>
 #include <QUrl>
 
+#include <vector>
+
 #include "lnplayer.h"
 
 class QLabel;
@@ -38,7 +40,16 @@ protected:
     void dropEvent(QDropEvent* event) override;
 
 private:
+    struct SubtitleCue
+    {
+        int64_t start_ms = 0;
+        int64_t end_ms = 0;
+        QString text;
+    };
+
     void openFile();
+    void loadExternalSubtitle();
+    QString subtitleAt(int64_t position_ms) const;
     void openFiles(const QList<QUrl>& urls);
     void refreshLibrary();
     void requestVideoFrame();
@@ -96,6 +107,7 @@ private:
     int muted_volume_ = 1000;
     float playback_rate_ = 1.0f;
     uint64_t media_generation_ = 0;
+    std::vector<SubtitleCue> subtitle_cues_;
 };
 
 #endif
