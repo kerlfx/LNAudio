@@ -1010,3 +1010,17 @@ Windows UI 的正式完成条件统一由 [`docs/WINDOWS_UI_ACCEPTANCE.md`](WIND
 - [ ] 设置取消、恢复默认后取消、恢复默认后确认的完整交互仍需 Windows 实机验证。
 
 提交：`9f5c8a73626894a912716fa20aa9d2ae2efe9d18`。
+
+
+### 2026-11-21 — Windows 视频性能审查
+
+- [x] 软件帧最终呈现从 command Strand 移至 frame Strand，避免 D3D11 Present 的垂直同步等待阻塞播放控制任务。
+- [x] 硬件解码路径仅在字幕实际存在且启用时分配/上传全尺寸透明字幕 overlay；无字幕帧跳过该开销。
+- [ ] 软件帧历史固定保留 120 帧，4K BGRA 理论内存约 3.71 GiB；需要改为内存预算并限制硬件帧引用数量。
+- [ ] 25ms 快照轮询在 command Strand 执行，且 Core Session snapshot 与完整视频帧读取共用 mutex；需要拆分快照状态锁并重新设计 A-B 边界调度。
+- [ ] D3D11 每帧 Flush/对象创建、Renderer 资源释放忙轮询、播放列表 GUI 大队列重建、FFmpeg 自动 decoder 线程预算待实测。
+- [ ] 本轮只完成静态源码审查和两项代码修正，尚未进行 Windows 性能基准或运行验证。
+
+审查文档：`docs/PERFORMANCE_AUDIT.md`
+
+实现提交：`3f8a21be8c7cc86e8ec170c2a4c36471b6df23ab`。
