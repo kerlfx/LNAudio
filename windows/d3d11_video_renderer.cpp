@@ -107,6 +107,15 @@ float4 main(float4 position : SV_POSITION, float2 uv : TEXCOORD0) : SV_TARGET
         }
         rgb = pow(saturate(linear_rgb / (1.0 + linear_rgb)), 1.0 / 2.2);
     }
+    else if (color_primaries > 0.5)
+    {
+        float3 linear_rgb = pow(saturate(rgb), 2.2);
+        linear_rgb = float3(
+            1.6605 * linear_rgb.r - 0.5876 * linear_rgb.g - 0.0728 * linear_rgb.b,
+            -0.1246 * linear_rgb.r + 1.1329 * linear_rgb.g - 0.0083 * linear_rgb.b,
+            -0.0182 * linear_rgb.r - 0.1006 * linear_rgb.g + 1.1187 * linear_rgb.b);
+        rgb = pow(saturate(linear_rgb), 1.0 / 2.2);
+    }
 
     if (sharpness > 0.0 || denoise > 0.0)
     {

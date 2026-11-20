@@ -1551,15 +1551,15 @@ private:
         AVFrame* source_frame = video_frame_;
         const int frame_rotation = get_frame_rotation_degrees(video_frame_);
         output.rotation_degrees = frame_rotation;
-        const AVStream* stream = format_context_->streams[video_stream_index_];
+        const AVStream* video_stream = format_context_->streams[video_stream_index_];
         const AVColorTransferCharacteristic transfer =
             video_frame_->color_trc != AVCOL_TRC_UNSPECIFIED
                 ? video_frame_->color_trc
-                : stream->codecpar->color_trc;
+                : video_stream->codecpar->color_trc;
         const AVColorPrimaries primaries =
             video_frame_->color_primaries != AVCOL_PRI_UNSPECIFIED
                 ? video_frame_->color_primaries
-                : stream->codecpar->color_primaries;
+                : video_stream->codecpar->color_primaries;
         output.hdr_transfer = transfer == AVCOL_TRC_SMPTE2084
             ? 1
             : transfer == AVCOL_TRC_ARIB_STD_B67 ? 2 : 0;
