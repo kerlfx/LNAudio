@@ -19,6 +19,7 @@ extern "C"
 #include <algorithm>
 #include <atomic>
 #include <cerrno>
+#include <cmath>
 #include <condition_variable>
 #include <deque>
 #include <limits>
@@ -475,6 +476,14 @@ public:
         volume_.store(volume, std::memory_order_relaxed);
     }
 
+    void set_playback_rate(float rate) override
+    {
+        std::lock_guard<std::mutex> lock(decode_mutex_);
+        playback_rate_.store(rate, std::memory_order_relaxed);
+        swr_free(&resampler_);
+        resampler_drained_ = false;
+    }
+
     void set_playback_end_callback(std::function<void()> callback) override
     {
         playback_end_callback_ = std::move(callback);
@@ -510,8 +519,10 @@ public:
             {
                 if (resampler_ && !resampler_drained_)
                 {
+                    const int target_sample_rate = static_cast<int>(std::lround(
+                        output_sample_rate_ * playback_rate_.load(std::memory_order_relaxed)));
                     const int capacity = static_cast<int>(
-                        swr_get_delay(resampler_, output_sample_rate_));
+                        swr_get_delay(resampler_, target_sample_rate));
                     if (capacity > 0)
                     {
                         output.samples.resize(
@@ -531,7 +542,7 @@ public:
                             static_cast<size_t>(converted) * kOutputChannels);
                         if (converted > 0)
                         {
-                            output.sample_rate = output_sample_rate_;
+                            output.sample_rate = target_sample_rate;
                             output.channels = kOutputChannels;
                             output.pts_ms = position_ms_.load(std::memory_order_relaxed);
                             return success();
@@ -1012,6 +1023,9 @@ private:
 
     MediaBackendResult convert_audio_frame(AudioFrame& output)
     {
+        const int target_sample_rate = static_cast<int>(std::lround(
+            output_sample_rate_ * playback_rate_.load(std::memory_order_relaxed)));
+
         AVChannelLayout input_layout{};
         if (audio_frame_->ch_layout.nb_channels > 0)
             av_channel_layout_copy(&input_layout, &audio_frame_->ch_layout);
@@ -1027,7 +1041,7 @@ private:
                 &resampler_,
                 &output_layout,
                 AV_SAMPLE_FMT_FLT,
-                output_sample_rate_,
+                target_sample_rate,
                 &input_layout,
                 static_cast<AVSampleFormat>(audio_frame_->format),
                 audio_frame_->sample_rate,
@@ -1054,7 +1068,7 @@ private:
 
         const int capacity = static_cast<int>(av_rescale_rnd(
             swr_get_delay(resampler_, audio_frame_->sample_rate) + audio_frame_->nb_samples,
-            output_sample_rate_,
+            target_sample_rate,
             audio_frame_->sample_rate,
             AV_ROUND_UP));
 
@@ -1136,6 +1150,7 @@ private:
     std::atomic<bool> playback_ended_{false};
     std::atomic<bool> playback_failed_{false};
     std::atomic<float> volume_{1.0f};
+    std::atomic<float> playback_rate_{1.0f};
     std::function<void()> playback_end_callback_;
     std::function<void(std::string)> playback_error_callback_;
     AVCodecContext* audio_decoder_ = nullptr;
