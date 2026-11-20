@@ -1,10 +1,13 @@
 #include "lnplayer.h"
 
 #include "runtime.h"
+#include "ffmpeg_media_backend.h"
+#include "playback_session.h"
 
 #include <atomic>
 #include <cstring>
 #include <future>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <new>
@@ -32,9 +35,11 @@ public:
         lnplayer_event_callback_t callback,
         void* user_data)
         : runtime_(runtime)
+        , worker_strand_(asio::make_strand(runtime.thread_pool()))
         , owner_(owner)
         , callback_(callback)
         , user_data_(user_data)
+        , session_(lnplayer::create_ffmpeg_media_backend)
     {
     }
 
@@ -47,23 +52,29 @@ public:
         {
             asio::post(runtime_.io_context(), [this, id, source_copy]
             {
-                (void)source_copy;
                 update_state(LNPLAYER_STATE_OPENING);
+                asio::post(worker_strand_, [this, id, source_copy]
                 {
-                    std::lock_guard<std::mutex> lock(snapshot_mutex_);
-                    ++snapshot_.generation;
-                    snapshot_.position_ms = 0;
-                    snapshot_.duration_ms = -1;
-                }
+                    lnplayer::SessionResult result;
+                    try
+                    {
+                        result = session_.open(source_copy);
+                    }
+                    catch (...)
+                    {
+                        result = {false, "Unexpected error while opening media.", session_.snapshot()};
+                    }
 
-                // The command lifecycle is active; media probing is supplied by the
-                // FFmpeg backend, which is not part of this implementation step.
-                update_state(LNPLAYER_STATE_ERROR);
-                emit(
-                    LNPLAYER_EVENT_OPEN_COMPLETED,
-                    LNPLAYER_RESULT_NOT_IMPLEMENTED,
-                    id,
-                    "Media backend is not connected.");
+                    asio::post(runtime_.io_context(), [this, id, result = std::move(result)]() mutable
+                    {
+                        publish_snapshot(result.snapshot);
+                        emit(
+                            LNPLAYER_EVENT_OPEN_COMPLETED,
+                            result.success ? LNPLAYER_RESULT_OK : LNPLAYER_RESULT_INTERNAL_ERROR,
+                            id,
+                            result.message.empty() ? nullptr : result.message.c_str());
+                    });
+                });
             });
         }
         catch (...)
@@ -83,20 +94,28 @@ public:
         {
             asio::post(runtime_.io_context(), [this, id, position_ms]
             {
-                (void)position_ms;
-                const lnplayer_state_t current = state();
-                const bool seekable =
-                    current == LNPLAYER_STATE_READY ||
-                    current == LNPLAYER_STATE_PLAYING ||
-                    current == LNPLAYER_STATE_PAUSED;
+                asio::post(worker_strand_, [this, id, position_ms]
+                {
+                    lnplayer::SessionResult result;
+                    try
+                    {
+                        result = session_.seek(position_ms);
+                    }
+                    catch (...)
+                    {
+                        result = {false, "Unexpected error while seeking media.", session_.snapshot()};
+                    }
 
-                emit(
-                    LNPLAYER_EVENT_SEEK_COMPLETED,
-                    seekable ? LNPLAYER_RESULT_NOT_IMPLEMENTED : LNPLAYER_RESULT_INVALID_STATE,
-                    id,
-                    seekable
-                        ? "Media backend is not connected."
-                        : "Seek requires an opened media session.");
+                    asio::post(runtime_.io_context(), [this, id, result = std::move(result)]() mutable
+                    {
+                        publish_snapshot(result.snapshot);
+                        emit(
+                            LNPLAYER_EVENT_SEEK_COMPLETED,
+                            result.success ? LNPLAYER_RESULT_OK : LNPLAYER_RESULT_INVALID_STATE,
+                            id,
+                            result.message.empty() ? nullptr : result.message.c_str());
+                    });
+                });
             });
         }
         catch (...)
@@ -110,66 +129,27 @@ public:
 
     lnplayer_result_t play()
     {
-        return invoke_sync([this]
-        {
-            const auto current = state();
-            if (current != LNPLAYER_STATE_READY &&
-                current != LNPLAYER_STATE_PAUSED &&
-                current != LNPLAYER_STATE_ENDED)
-                return LNPLAYER_RESULT_INVALID_STATE;
-            return LNPLAYER_RESULT_NOT_IMPLEMENTED;
-        });
+        return invoke_sync([this] { return session_.play(); });
     }
 
     lnplayer_result_t pause()
     {
-        return invoke_sync([this]
-        {
-            if (state() != LNPLAYER_STATE_PLAYING)
-                return LNPLAYER_RESULT_INVALID_STATE;
-            return LNPLAYER_RESULT_NOT_IMPLEMENTED;
-        });
+        return invoke_sync([this] { return session_.pause(); });
     }
 
     lnplayer_result_t stop()
     {
-        return invoke_sync([this]
-        {
-            const auto current = state();
-            if (current == LNPLAYER_STATE_IDLE || current == LNPLAYER_STATE_ERROR)
-            {
-                update_state(LNPLAYER_STATE_IDLE);
-                reset_media_snapshot();
-                return LNPLAYER_RESULT_OK;
-            }
-            return LNPLAYER_RESULT_NOT_IMPLEMENTED;
-        });
+        return invoke_sync([this] { return session_.stop(); });
     }
 
     lnplayer_result_t close()
     {
-        return invoke_sync([this]
-        {
-            const auto current = state();
-            if (current == LNPLAYER_STATE_IDLE)
-                return LNPLAYER_RESULT_OK;
-            if (current == LNPLAYER_STATE_ERROR)
-            {
-                update_state(LNPLAYER_STATE_IDLE);
-                reset_media_snapshot();
-                return LNPLAYER_RESULT_OK;
-            }
-            return LNPLAYER_RESULT_NOT_IMPLEMENTED;
-        });
+        return invoke_sync([this] { return session_.close(); });
     }
 
     lnplayer_result_t shutdown()
     {
-        return invoke_sync([this]
-        {
-            update_state(LNPLAYER_STATE_CLOSING);
-            return LNPLAYER_RESULT_OK;
-        });
+        return invoke_sync([this] { return session_.close(); }, true);
     }
 
     void get_snapshot(lnplayer_snapshot_t* output) const
@@ -190,8 +170,41 @@ public:
     }
 
 private:
+    static lnplayer_state_t convert_state(lnplayer::SessionState state)
+    {
+        switch (state)
+        {
+        case lnplayer::SessionState::Opening: return LNPLAYER_STATE_OPENING;
+        case lnplayer::SessionState::Ready: return LNPLAYER_STATE_READY;
+        case lnplayer::SessionState::Playing: return LNPLAYER_STATE_PLAYING;
+        case lnplayer::SessionState::Paused: return LNPLAYER_STATE_PAUSED;
+        case lnplayer::SessionState::Ended: return LNPLAYER_STATE_ENDED;
+        case lnplayer::SessionState::Error: return LNPLAYER_STATE_ERROR;
+        case lnplayer::SessionState::Closing: return LNPLAYER_STATE_CLOSING;
+        case lnplayer::SessionState::Empty:
+        default: return LNPLAYER_STATE_IDLE;
+        }
+    }
+
+    void publish_snapshot(const lnplayer::SessionSnapshot& session_snapshot)
+    {
+        bool changed = false;
+        {
+            std::lock_guard<std::mutex> lock(snapshot_mutex_);
+            const lnplayer_state_t next = convert_state(session_snapshot.state);
+            changed = snapshot_.state != next;
+            snapshot_.state = next;
+            snapshot_.position_ms = session_snapshot.position_ms;
+            snapshot_.duration_ms = session_snapshot.duration_ms;
+            snapshot_.generation = session_snapshot.generation;
+        }
+
+        if (changed)
+            emit(LNPLAYER_EVENT_STATE_CHANGED, LNPLAYER_RESULT_OK, 0, nullptr);
+    }
+
     template<typename Operation>
-    lnplayer_result_t invoke_sync(Operation operation)
+    lnplayer_result_t invoke_sync(Operation operation, bool closing = false)
     {
         if (runtime_.running_in_io_thread())
             return LNPLAYER_RESULT_WOULD_DEADLOCK;
@@ -201,15 +214,50 @@ private:
 
         try
         {
-            asio::post(runtime_.io_context(), [result, operation = std::move(operation)]() mutable
+            asio::post(runtime_.io_context(), [this, result, operation = std::move(operation), closing]() mutable
             {
                 try
                 {
-                    result->set_value(operation());
+                    asio::post(worker_strand_, [this, result, operation = std::move(operation), closing]() mutable
+                    {
+                        lnplayer::SessionResult session_result;
+                        try
+                        {
+                            session_result = operation();
+                        }
+                        catch (...)
+                        {
+                            session_result = {
+                                false,
+                                "Unexpected error while executing media operation.",
+                                session_.snapshot()};
+                        }
+
+                        asio::post(runtime_.io_context(),
+                            [this, result, session_result = std::move(session_result), closing]() mutable
+                            {
+                                publish_snapshot(session_result.snapshot);
+                                if (closing)
+                                    update_state(LNPLAYER_STATE_CLOSING);
+
+                                const lnplayer_result_t operation_result = session_result.success
+                                    ? LNPLAYER_RESULT_OK
+                                    : LNPLAYER_RESULT_INVALID_STATE;
+                                if (!session_result.success)
+                                    emit(
+                                        LNPLAYER_EVENT_ERROR,
+                                        operation_result,
+                                        0,
+                                        session_result.message.empty()
+                                            ? "Media operation failed."
+                                            : session_result.message.c_str());
+                                result->set_value(operation_result);
+                            });
+                    });
                 }
                 catch (...)
                 {
-                    result->set_value(LNPLAYER_RESULT_INTERNAL_ERROR);
+                    result->set_value(LNPLAYER_RESULT_OUT_OF_MEMORY);
                 }
             });
         }
@@ -219,19 +267,6 @@ private:
         }
 
         return future.get();
-    }
-
-    lnplayer_state_t state() const
-    {
-        std::lock_guard<std::mutex> lock(snapshot_mutex_);
-        return snapshot_.state;
-    }
-
-    void reset_media_snapshot()
-    {
-        std::lock_guard<std::mutex> lock(snapshot_mutex_);
-        snapshot_.position_ms = 0;
-        snapshot_.duration_ms = -1;
     }
 
     void update_state(lnplayer_state_t next)
@@ -274,9 +309,11 @@ private:
     }
 
     lnplayer::Runtime& runtime_;
+    asio::strand<asio::thread_pool::executor_type> worker_strand_;
     lnplayer_t* owner_;
     lnplayer_event_callback_t callback_;
     void* user_data_;
+    lnplayer::PlaybackSession session_;
     mutable std::mutex snapshot_mutex_;
     PlayerSnapshot snapshot_;
     std::atomic<uint64_t> next_operation_id_{1};
