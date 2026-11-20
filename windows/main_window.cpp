@@ -1320,17 +1320,39 @@ void MainWindow::loadExternalSubtitle()
     if (path.isEmpty())
         return;
 
-    QString error;
-    if (!subtitle_manager_.load_file(path, error))
+    const QByteArray path_utf8 = path.toUtf8();
+    QMetaObject::invokeMethod(command_worker_, [this, path, path_utf8]
     {
-        status_label_->setText(error);
-        return;
-    }
+        const lnplayer_result_t result = player_
+            ? lnplayer_set_external_subtitle(player_, path_utf8.constData())
+            : LNPLAYER_RESULT_INVALID_HANDLE;
+        QMetaObject::invokeMethod(this, [this, path, result]
+        {
+            if (result == LNPLAYER_RESULT_OK)
+            {
+                subtitle_manager_.clear();
+                status_label_->setText(
+                    QStringLiteral("已加载外挂字幕：%1").arg(QFileInfo(path).fileName()));
+            }
+            else
+            {
+                QString error;
+                if (!subtitle_manager_.load_file(path, error))
+                {
+                    status_label_->setText(error);
+                    return;
+                }
+                if (player_)
+                    lnplayer_set_external_subtitle(player_, "");
+                status_label_->setText(
+                    QStringLiteral("已加载外挂字幕（基础文本回退）：%1")
+                        .arg(QFileInfo(path).fileName()));
+            }
 
-    status_label_->setText(
-        QStringLiteral("已加载 %1 条字幕").arg(subtitle_manager_.cue_count()));
-    pending_video_frame_valid_ = false;
-    requestVideoFrame();
+            pending_video_frame_valid_ = false;
+            requestVideoFrame();
+        }, Qt::QueuedConnection);
+    }, Qt::QueuedConnection);
 }
 
 QString MainWindow::subtitleAt(int64_t position_ms) const
