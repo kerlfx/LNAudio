@@ -4,6 +4,7 @@
 #include <chrono>
 #include <cstdio>
 #include <thread>
+#include <string>
 #include <vector>
 
 namespace
@@ -146,6 +147,28 @@ bool test_async_open_is_drained_before_destroy()
                "open completion callback is drained before Controller destruction");
 }
 
+
+bool test_last_error_buffer()
+{
+    const lnplayer_result_t invalid_create = lnplayer_create(nullptr, nullptr);
+    size_t required_size = 0;
+    const lnplayer_result_t size_result =
+        lnplayer_get_last_error(nullptr, 0, &required_size);
+    if (!expect(invalid_create == LNPLAYER_RESULT_INVALID_ARGUMENT,
+            "invalid create arguments return INVALID_ARGUMENT") ||
+        !expect(size_result == LNPLAYER_RESULT_BUFFER_TOO_SMALL && required_size > 1,
+            "last-error query reports the required buffer size"))
+        return false;
+
+    std::vector<char> buffer(required_size);
+    const lnplayer_result_t read_result =
+        lnplayer_get_last_error(buffer.data(), buffer.size(), nullptr);
+    return expect(read_result == LNPLAYER_RESULT_OK,
+               "last-error text can be copied into the reported buffer") &&
+        expect(std::string(buffer.data()).find("player output is null") != std::string::npos,
+               "last-error text preserves the original diagnostic");
+}
+
 bool test_create_after_destroy()
 {
     lnplayer_t* player = nullptr;
@@ -167,6 +190,8 @@ int main()
     if (!test_async_open_is_drained_before_destroy())
         return 1;
     if (!test_create_after_destroy())
+        return 1;
+    if (!test_last_error_buffer())
         return 1;
 
     std::puts("LNPlayer lifecycle tests passed.");
