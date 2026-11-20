@@ -61,6 +61,7 @@ public:
     SessionResult stop();
     SessionResult close();
     MediaBackendResult read_video_frame(VideoFrame& frame, bool& end_of_stream);
+    MediaVideoInfo video_info() const;
     std::vector<MediaTrackInfo> audio_tracks() const;
     SessionResult select_audio_track(int stream_index);
     std::vector<MediaSubtitleTrackInfo> subtitle_tracks() const;
@@ -88,6 +89,7 @@ private:
     std::shared_ptr<MediaBackend> backend_;
     std::atomic<uint64_t> media_generation_{0};
     SessionSnapshot snapshot_;
+    MediaVideoInfo video_info_;
     std::string source_;
     float volume_ = 1.0f;
     float playback_rate_ = 1.0f;
