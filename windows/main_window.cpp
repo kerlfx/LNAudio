@@ -136,23 +136,16 @@ protected:
     }
 
 private:
-    QRect sliderHandleRect() const
+    void setValueFromPosition(int x)
     {
         QStyleOptionSlider option;
         initStyleOption(&option);
-        return style()->subControlRect(
+        const QRect handle = style()->subControlRect(
             QStyle::CC_Slider, &option, QStyle::SC_SliderHandle, this);
-    }
-
-    void setValueFromPosition(int x)
-    {
-        const int handle_width = sliderHandleRect().width();
-        const int span = std::max(1, width() - handle_width);
-        const int position = std::clamp(x - handle_width / 2, 0, span);
+        const int span = std::max(1, width() - handle.width());
+        const int position = std::clamp(x - handle.width() / 2, 0, span);
         setValue(QStyle::sliderValueFromPosition(
-            minimum(), maximum(), position, span, orientation() == Qt::Horizontal
-                ? (layoutDirection() == Qt::RightToLeft)
-                : false));
+            minimum(), maximum(), position, span, option.upsideDown));
     }
 
     bool groove_dragging_ = false;
