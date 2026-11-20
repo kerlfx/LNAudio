@@ -872,7 +872,7 @@ private:
             return false;
 
         D3D11_BUFFER_DESC filter_buffer_desc{};
-        filter_buffer_desc.ByteWidth = sizeof(FilterConstants);
+        filter_buffer_desc.ByteWidth = static_cast<UINT>(sizeof(FilterConstants));
         filter_buffer_desc.Usage = D3D11_USAGE_DEFAULT;
         filter_buffer_desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
         if (FAILED(device_->CreateBuffer(
