@@ -57,6 +57,7 @@ public:
     SessionResult close();
     MediaBackendResult read_video_frame(VideoFrame& frame, bool& end_of_stream);
     void set_volume(float volume);
+    void set_playback_rate(float rate);
     void set_playback_end_callback(std::function<void()> callback);
     void set_playback_error_callback(std::function<void(std::string)> callback);
 
@@ -71,6 +72,7 @@ private:
     std::unique_ptr<MediaBackend> backend_;
     SessionSnapshot snapshot_;
     float volume_ = 1.0f;
+    float playback_rate_ = 1.0f;
     std::function<void()> playback_end_callback_;
     std::function<void(std::string)> playback_error_callback_;
 };
