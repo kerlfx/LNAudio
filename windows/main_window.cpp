@@ -1555,6 +1555,10 @@ void MainWindow::requestVideoFrame()
                 pending_embedded_subtitle_ = embedded_subtitle;
                 pending_embedded_subtitle_bitmap_ = embedded_subtitle_bitmap;
                 pending_video_display_aspect_ratio_ = display_aspect_ratio;
+                pending_hdr_transfer_ = hdr_transfer;
+                pending_color_primaries_ = color_primaries;
+                pending_video_ycbcr_matrix_ = ycbcr_matrix;
+                pending_video_ycbcr_full_range_ = ycbcr_full_range;
                 pending_video_frame_valid_ = true;
                 presentPendingVideoFrame();
             }
@@ -1644,11 +1648,11 @@ void MainWindow::presentPendingVideoFrame()
         history_entry.hardware_format = pending_hardware_format_;
         history_entry.hardware_width = pending_hardware_width_;
         history_entry.hardware_height = pending_hardware_height_;
-        history_entry.hdr_transfer = hdr_transfer;
-        history_entry.color_primaries = color_primaries;
-        history_entry.display_aspect_ratio = display_aspect_ratio;
-        history_entry.ycbcr_matrix = ycbcr_matrix;
-        history_entry.ycbcr_full_range = ycbcr_full_range;
+        history_entry.hdr_transfer = pending_hdr_transfer_;
+        history_entry.color_primaries = pending_color_primaries_;
+        history_entry.display_aspect_ratio = pending_video_display_aspect_ratio_;
+        history_entry.ycbcr_matrix = pending_video_ycbcr_matrix_;
+        history_entry.ycbcr_full_range = pending_video_ycbcr_full_range_;
         history_entry.embedded_subtitle = pending_embedded_subtitle_;
         history_entry.embedded_subtitle_bitmap = pending_embedded_subtitle_bitmap_;
         history_entry.pts_ms = pending_video_pts_ms_;
@@ -1673,13 +1677,16 @@ void MainWindow::presentPendingVideoFrame()
         const int64_t pts_ms = pending_video_pts_ms_;
         const QImage embedded_subtitle_bitmap = pending_embedded_subtitle_bitmap_;
         const bool render_subtitles = subtitles_enabled_;
+        const int ycbcr_matrix = pending_video_ycbcr_matrix_;
+        const int ycbcr_full_range = pending_video_ycbcr_full_range_;
         pending_hardware_texture_ = nullptr;
         pending_video_frame_valid_ = false;
 
         QMetaObject::invokeMethod(command_worker_,
             [this, owner = std::move(owner), texture, array_slice, format,
              width, height, generation, pts_ms, subtitle,
-             embedded_subtitle_bitmap, render_subtitles, overlay = std::move(overlay)]
+             embedded_subtitle_bitmap, render_subtitles,
+             ycbcr_matrix, ycbcr_full_range, overlay = std::move(overlay)]
         {
             lnplayer_snapshot_t snapshot{};
             snapshot.struct_size = sizeof(snapshot);
@@ -1779,11 +1786,11 @@ void MainWindow::presentPendingVideoFrame()
     QImage frame = pending_video_frame_;
     VideoFrameHistoryEntry history_entry;
     history_entry.image = frame;
-    history_entry.hdr_transfer = hdr_transfer;
-    history_entry.color_primaries = color_primaries;
-    history_entry.display_aspect_ratio = display_aspect_ratio;
-    history_entry.ycbcr_matrix = ycbcr_matrix;
-    history_entry.ycbcr_full_range = ycbcr_full_range;
+    history_entry.hdr_transfer = pending_hdr_transfer_;
+    history_entry.color_primaries = pending_color_primaries_;
+    history_entry.display_aspect_ratio = pending_video_display_aspect_ratio_;
+    history_entry.ycbcr_matrix = pending_video_ycbcr_matrix_;
+    history_entry.ycbcr_full_range = pending_video_ycbcr_full_range_;
     history_entry.embedded_subtitle = pending_embedded_subtitle_;
     history_entry.embedded_subtitle_bitmap = pending_embedded_subtitle_bitmap_;
     history_entry.pts_ms = pending_video_pts_ms_;

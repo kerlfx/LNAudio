@@ -136,6 +136,10 @@ private:
     bool viewing_historical_frame_ = false;
     QImage pending_video_frame_;
     float pending_video_display_aspect_ratio_ = 0.0f;
+    int pending_hdr_transfer_ = 0;
+    int pending_color_primaries_ = 0;
+    int pending_video_ycbcr_matrix_ = 0;
+    int pending_video_ycbcr_full_range_ = 0;
     QString pending_embedded_subtitle_;
     QImage pending_embedded_subtitle_bitmap_;
     std::shared_ptr<void> pending_hardware_frame_owner_;
