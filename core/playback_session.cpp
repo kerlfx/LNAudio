@@ -482,7 +482,6 @@ SessionResult PlaybackSession::make_result(bool success, std::string message) co
 void PlaybackSession::advance_generation()
 {
     ++snapshot_.generation;
-    media_generation_.store(snapshot_.generation, std::memory_order_release);
 }
 
 void PlaybackSession::reset_media_state()
