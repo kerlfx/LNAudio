@@ -590,6 +590,106 @@ public:
         playback_error_callback_ = std::move(callback);
     }
 
+    std::vector<MediaTrackInfo> audio_tracks() const override
+    {
+        std::vector<MediaTrackInfo> tracks;
+        if (!format_context_)
+            return tracks;
+
+        for (unsigned int index = 0; index < format_context_->nb_streams; ++index)
+        {
+            const AVStream* stream = format_context_->streams[index];
+            if (stream->codecpar->codec_type != AVMEDIA_TYPE_AUDIO)
+                continue;
+
+            MediaTrackInfo track;
+            track.stream_index = static_cast<int>(index);
+            track.codec = avcodec_get_name(stream->codecpar->codec_id);
+            track.channels = stream->codecpar->ch_layout.nb_channels;
+            track.sample_rate = stream->codecpar->sample_rate;
+            track.is_default = (stream->disposition & AV_DISPOSITION_DEFAULT) != 0;
+
+            AVDictionaryEntry* title = av_dict_get(stream->metadata, "title", nullptr, 0);
+            AVDictionaryEntry* language = av_dict_get(stream->metadata, "language", nullptr, 0);
+            if (title)
+                track.title = title->value;
+            if (language)
+                track.language = language->value;
+            tracks.push_back(std::move(track));
+        }
+        return tracks;
+    }
+
+    MediaBackendResult select_audio_track(int stream_index) override
+    {
+        if (!opened_ || !format_context_)
+            return failure("No media source is open.");
+        if (playing_.load(std::memory_order_relaxed))
+            return failure("Pause playback before switching the audio track.");
+
+        AVStream* selected_stream = nullptr;
+        for (unsigned int index = 0; index < format_context_->nb_streams; ++index)
+        {
+            AVStream* stream = format_context_->streams[index];
+            if (static_cast<int>(index) == stream_index &&
+                stream->codecpar->codec_type == AVMEDIA_TYPE_AUDIO)
+            {
+                selected_stream = stream;
+                break;
+            }
+        }
+        if (!selected_stream)
+            return failure("The requested audio track does not exist.");
+        if (stream_index == audio_stream_index_)
+            return success();
+
+        const AVCodec* decoder = avcodec_find_decoder(selected_stream->codecpar->codec_id);
+        if (!decoder)
+            return failure("No FFmpeg decoder is available for the selected audio track.");
+
+        AVCodecContext* replacement_decoder = avcodec_alloc_context3(decoder);
+        if (!replacement_decoder)
+            return failure("Unable to allocate the selected audio decoder.");
+
+        int result = avcodec_parameters_to_context(
+            replacement_decoder, selected_stream->codecpar);
+        if (result >= 0)
+            result = avcodec_open2(replacement_decoder, decoder, nullptr);
+        if (result < 0)
+        {
+            avcodec_free_context(&replacement_decoder);
+            return failure("Unable to open the selected audio decoder: " + ffmpeg_error(result));
+        }
+
+        const int64_t resume_position = position_ms();
+        const MediaBackendResult seek_result = seek(resume_position);
+        if (!seek_result.success)
+        {
+            avcodec_free_context(&replacement_decoder);
+            return seek_result;
+        }
+
+        {
+            std::lock_guard<std::mutex> decode_lock(audio_decode_mutex_);
+            std::lock_guard<std::mutex> demux_lock(demux_mutex_);
+            avcodec_free_context(&audio_decoder_);
+            audio_decoder_ = replacement_decoder;
+            audio_stream_index_ = stream_index;
+            audio_consumer_active_ = true;
+            audio_stream_ended_ = false;
+            audio_draining_ = false;
+            audio_packet_pending_ = false;
+            resampler_drained_ = false;
+            swr_free(&resampler_);
+            av_packet_unref(audio_packet_);
+            av_frame_unref(audio_frame_);
+        }
+#ifdef _WIN32
+        audio_clock_valid_.store(false, std::memory_order_relaxed);
+#endif
+        return success();
+    }
+
     MediaBackendResult read_audio_frame(AudioFrame& output, bool& end_of_stream) override
     {
         std::lock_guard<std::mutex> decode_lock(audio_decode_mutex_);
