@@ -40,6 +40,12 @@ struct VideoFrame
     int64_t pts_ms = 0;
     uint64_t generation = 0;
     float display_aspect_ratio = 0.0f;
+#ifdef _WIN32
+    void* d3d11_texture = nullptr;
+    uint32_t d3d11_array_slice = 0;
+    uint32_t dxgi_format = 0;
+    std::shared_ptr<void> hardware_frame_owner;
+#endif
 };
 
 class MediaBackend
