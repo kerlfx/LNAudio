@@ -47,6 +47,7 @@ private:
     void seekRelative(int64_t offset_ms);
     void takeScreenshot();
     void stepVideoFrame();
+    void setPlaybackRate(float rate);
     void handleCoreEvent(
         lnplayer_event_type_t type,
         lnplayer_result_t result,
@@ -93,6 +94,7 @@ private:
     int64_t video_clock_base_pts_ms_ = 0;
     QElapsedTimer video_clock_;
     int muted_volume_ = 1000;
+    float playback_rate_ = 1.0f;
     uint64_t media_generation_ = 0;
 };
 
