@@ -321,7 +321,7 @@ Player 销毁是生命周期屏障，不是普通的异步播放命令。销毁�
 
 首期错误码固定为：`OK`、`INVALID_ARGUMENT`、`INVALID_HANDLE`、`ALREADY_EXISTS`、`INVALID_STATE`、`NOT_IMPLEMENTED`、`OUT_OF_MEMORY`、`INTERNAL_ERROR`、`BUFFER_TOO_SMALL`、`WOULD_DEADLOCK`。枚举值在 ABI v1 内不得重排或复用。
 
-当前实现状态：ABI v1 头文件、唯一实例生命周期、Playback Controller 命令入口、异步 open/seek 完成事件、同步完成型接口等待、线程安全一致快照、音量设置和线程局部错误读取已建立。Controller 通过独立 `io_context` 线程协调命令；同步接口检测并拒绝在事件线程自等待。当前尚未接入 FFmpeg/音频输出后端：open/seek 会被接受并以 `NOT_IMPLEMENTED` 完成事件结束；play/pause 在无有效播放状态时返回 `INVALID_STATE`，需要媒体后端的操作不会伪报成功。stop/close 可清理空闲或打开失败后的逻辑状态。当前 Controller 的媒体工作仍是后端接入前的控制面骨架，尚未向共享 `thread_pool` 分发实际解码或 I/O 任务。
+当前实现状态：ABI v1、每进程唯一 Player、PlaybackController、异步 open/seek 完成事件、同步完成型 play/pause/stop/close、线程安全快照、音量/速度设置、音视频轨道枚举及 Windows 视频帧 Pull 接口均已接入。Controller 使用独立 `io_context` 线程协调，并通过 `asio::strand` 将同一 Player 的媒体操作串行提交到共享两线程 `thread_pool`；同步接口等待最终结果，拒绝在 Core 事件线程自等待。FFmpeg 后端已接入媒体探测、解封装、音视频解码、Seek/Flush、播放时钟、字幕流和 Windows D3D11VA。Runtime 不再在创建 Player 时强制打开 SQLite；音乐库由首次调用音乐库 C ABI 时按需初始化，视频播放启动不依赖音乐库数据库。当前仍需审查 Controller 的在途任务/销毁屏障、同步视频帧 Pull 对命令响应的影响、状态快照和异步事件的竞态。
 
 ### 4.7 MediaBackend 与 PlaybackSession
 
@@ -335,7 +335,7 @@ Core 内部媒体会话采用两层结构：
 - `MediaBackend` 的同步接口允许后端在调用线程执行阻塞式 FFmpeg API；因此调用必须发生在线程池，而不是 `io_context` worker 或 UI 线程。
 - `MediaBackendFactory` 用于创建具体后端。FFmpeg 版本、依赖获取和链接方式确定后，再提供 FFmpeg 实现；平台音频/视频输出不属于 MediaBackend 的职责。
 
-当前代码已建立 `core/media_backend.h`、`core/playback_session.h/.cpp` 的接口和会话状态管理。具体 FFmpeg 后端及 Controller 到 Session 的任务调度接入仍待实现。
+当前代码已实现 `FFmpegMediaBackend`，并由 `PlaybackSession` 管理媒体后端、会话状态、generation、轨道切换和 Seek。Controller 通过 Asio worker strand 串行调用 Session；同一 Session 的 FFmpeg 操作由 Session mutex 保护。视频帧 Pull 当前采用同步 C ABI：调用线程等待 Controller 将帧读取任务送入 worker strand 并返回结果。该方案避免在 Qt GUI 主线程解码，但帧读取可能占用调用它的 Windows command worker，需与播放命令调度一起审查。
 
 ## 5. Windows 运行模型
 
@@ -392,7 +392,9 @@ Windows 应用使用单一 `LNPlayer.exe`，通过启动参数选择音频或视
 - 视频 Seek 后刷新解码器和 Packet Queue；暂停保留最后一帧。
 - 全屏、快捷键、右键菜单、截图和逐帧操作的基础实现；支持加载外挂 SRT 字幕并在视频帧上叠加显示。
 
-Windows 视频 Renderer 的 D3D11 Device 通过 Windows C ABI 注入 FFmpeg D3D11VA。D3D11 硬件帧由 AVFrame 引用保持生命周期，Renderer 使用 D3D11 Video Processor 转换到 BGRA 输出纹理，并在 GPU 完成查询结束后释放帧引用；硬件路径不下载解码帧到 CPU。Renderer 设备丢失后尝试重建；UI 检测设备身份变化并将新设备注入 Core。Renderer 暂时无法创建设备时，Core detach 旧设备并重建软件解码后端，设备恢复后再切回硬件解码。其他未完成项：独立 Core Video Frame Queue/显示 Scheduler、DXVA2 后备、多音轨选择、内嵌字幕解码、字幕样式/时间偏移、音频变速保音高、色彩空间/旋转元数据、滤镜和完整播放列表。当前 D3D11 Present 由 Windows 命令工作线程执行，窗口 resize 由 UI 线程执行并通过 Renderer 锁串行化；尚未验证实际设备和长时间播放稳定性。
+Windows 视频链路现状：D3D11 Renderer 的 Device 通过 Windows 专用 C ABI 注入 FFmpeg D3D11VA；AVFrame 引用由可 retain/release 的帧所有者维持，Renderer 使用 Video Processor 将 NV12/P010 转为 BGRA 输出纹理，并通过 GPU event query 延迟释放硬件帧。软件解码帧走 BGRA 上传路径；硬件 Video Processor 失败时可按需下载硬件帧并转软件呈现。软件路径已解析 Display Matrix 旋转；视频帧携带色彩矩阵、范围和 PQ/HLG/BT.2020 基础元数据。D3D11 Pixel Shader 已提供基础亮度、对比度、饱和度、色调、锐化、降噪、灰度和基础 SDR Tone Mapping。字幕文本和位图已接入视频帧交付及 overlay。播放队列已支持 QSettings 持久化，视频多音轨和内嵌字幕轨道已接入。
+
+尚未完成或尚未验收的重点包括：ASS/SSA 完整样式/定位/特效；HDR10 Mastering Display、MaxCLL/MaxFALL 及更完整的色域/色调映射；滤镜管线的质量、组合和参数持久化；硬件旋转路径一致性；Core 独立 Video Frame Queue/显示 Scheduler 是否必要；视频帧 Pull 与命令控制之间的阻塞关系；Windows 多进程窗口模型、文件打开分发和安装部署。D3D11 实际设备和长时间播放验证尚未完成。GPU 拔出、驱动重置和多显卡异常恢复按当前项目约定延期。
 
 ## 6. Android 运行模型
 
