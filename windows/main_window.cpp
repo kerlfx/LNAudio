@@ -313,9 +313,12 @@ MainWindow::MainWindow(
         {
             always_on_top_ = enabled;
             const bool was_fullscreen = isFullScreen();
+            const bool was_maximized = isMaximized();
             setWindowFlag(Qt::WindowStaysOnTopHint, enabled);
             if (was_fullscreen)
                 showFullScreen();
+            else if (was_maximized)
+                showMaximized();
             else
                 show();
             QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
@@ -2054,9 +2057,12 @@ void MainWindow::openVideoSettings()
     if (playlist_panel_)
         playlist_panel_->setVisible(playlist_panel_visible_);
     const bool was_fullscreen = isFullScreen();
+    const bool was_maximized = isMaximized();
     setWindowFlag(Qt::WindowStaysOnTopHint, always_on_top_);
     if (was_fullscreen)
         showFullScreen();
+    else if (was_maximized)
+        showMaximized();
     else
         show();
 
