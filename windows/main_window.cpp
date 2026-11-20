@@ -2681,7 +2681,8 @@ void MainWindow::loadExternalSubtitlePath(const QString& path)
 
 void MainWindow::selectSubtitleTrack(int stream_index)
 {
-    QMetaObject::invokeMethod(command_worker_, [this, stream_index]
+    const QString media_path = current_media_path_;
+    QMetaObject::invokeMethod(command_worker_, [this, stream_index, media_path]
     {
         if (!player_)
             return;
@@ -2700,11 +2701,17 @@ void MainWindow::selectSubtitleTrack(int stream_index)
             ? lnplayer_play(player_)
             : LNPLAYER_RESULT_OK;
 
-        QMetaObject::invokeMethod(this, [this, result, resume_playback, resume_result]
+        QMetaObject::invokeMethod(this, [this, result, resume_playback, resume_result, stream_index, media_path]
         {
             is_playing_ = resume_playback && resume_result == LNPLAYER_RESULT_OK;
             if (result == LNPLAYER_RESULT_OK)
             {
+                if (!media_path.isEmpty())
+                {
+                    QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+                    settings.setValue(mediaPreferenceKey(QStringLiteral("SubtitleTrack"), media_path), stream_index);
+                    settings.sync();
+                }
                 pending_embedded_subtitle_.clear();
                 pending_embedded_subtitle_bitmap_ = {};
                 video_frame_history_.clear();
@@ -3763,10 +3770,19 @@ void MainWindow::handleCoreEvent(
                 if (saved_audio_track >= 0)
                     selectAudioTrack(saved_audio_track);
             }
-            if (auto_match_subtitle_ && playlist_index_ >= 0 &&
-                playlist_index_ < playlist_.size())
+            if (playlist_index_ >= 0 && playlist_index_ < playlist_.size())
             {
-                const QFileInfo media_info(playlist_[playlist_index_].toLocalFile());
+                QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+                const QString subtitle_track_key = mediaPreferenceKey(
+                    QStringLiteral("SubtitleTrack"), current_media_path_);
+                if (settings.contains(subtitle_track_key))
+                {
+                    const int saved_subtitle_track = settings.value(subtitle_track_key).toInt();
+                    selectSubtitleTrack(saved_subtitle_track);
+                }
+                else if (auto_match_subtitle_)
+                {
+                    const QFileInfo media_info(playlist_[playlist_index_].toLocalFile());
                 const QString base_name = media_info.completeBaseName();
                 const QStringList subtitle_extensions = {
                     QStringLiteral(".srt"), QStringLiteral(".ass"), QStringLiteral(".ssa")
