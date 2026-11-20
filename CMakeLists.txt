@@ -77,17 +77,17 @@ if(WIN32)
 
     foreach(extension IN LISTS LNPLAYER_VIDEO_EXTENSIONS)
         string(APPEND _lnplayer_nsis_install
-            "        WriteRegStr HKCU \\"Software\\\\Classes\\\\Applications\\\\LNPlayer.exe\\\\SupportedTypes\\" \\".\${extension}\\" \\"\\"\\n"
-            "        WriteRegStr HKCU \\"Software\\\\Classes\\\\.\${extension}\\\\OpenWithProgids\\" \\"LNPlayer.Video\\" \\"\\"\\n"
-            "        WriteRegStr HKCU \\"Software\\\\LNPlayer\\\\Capabilities\\\\FileAssociations\\" \\".\${extension}\\" \\"LNPlayer.Video\\"\\n"
+            "        WriteRegStr HKCU \\"Software\\\\Classes\\\\Applications\\\\LNPlayer.exe\\\\SupportedTypes\\" \\".${extension}\\" \\"\\"\\n"
+            "        WriteRegStr HKCU \\"Software\\\\Classes\\\\.${extension}\\\\OpenWithProgids\\" \\"LNPlayer.Video\\" \\"\\"\\n"
+            "        WriteRegStr HKCU \\"Software\\\\LNPlayer\\\\Capabilities\\\\FileAssociations\\" \\".${extension}\\" \\"LNPlayer.Video\\"\\n"
         )
         string(APPEND _lnplayer_nsis_uninstall
-            "        DeleteRegValue HKCU \\"Software\\\\Classes\\\\.\${extension}\\\\OpenWithProgids\\" \\"LNPlayer.Video\\"\\n"
+            "        DeleteRegValue HKCU \\"Software\\\\Classes\\\\.${extension}\\\\OpenWithProgids\\" \\"LNPlayer.Video\\"\\n"
         )
     endforeach()
 
-    set(CPACK_NSIS_EXTRA_INSTALL_COMMANDS "\${_lnplayer_nsis_install}")
-    set(CPACK_NSIS_EXTRA_UNINSTALL_COMMANDS "\${_lnplayer_nsis_uninstall}")
+    set(CPACK_NSIS_EXTRA_INSTALL_COMMANDS "${_lnplayer_nsis_install}")
+    set(CPACK_NSIS_EXTRA_UNINSTALL_COMMANDS "${_lnplayer_nsis_uninstall}")
     set(CPACK_GENERATOR "NSIS")
     include(CPack)
 endif()
