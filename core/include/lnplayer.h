@@ -187,6 +187,11 @@ LNPLAYER_API lnplayer_result_t lnplayer_set_volume(
     lnplayer_t* player,
     uint32_t volume);
 
+/* Playback rate range: 0.25x through 4.0x; audio pitch changes with rate. */
+LNPLAYER_API lnplayer_result_t lnplayer_set_playback_rate(
+    lnplayer_t* player,
+    float rate);
+
 /* Returns the last error on the calling thread; required_size includes NUL. */
 LNPLAYER_API lnplayer_result_t lnplayer_get_last_error(
     char* buffer,
