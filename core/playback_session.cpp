@@ -16,6 +16,11 @@ PlaybackSession::PlaybackSession(MediaBackendFactory backend_factory)
 
 PlaybackSession::~PlaybackSession()
 {
+    if (backend_)
+    {
+        backend_->close();
+        backend_.reset();
+    }
 #ifdef _WIN32
     if (video_device_)
         static_cast<ID3D11Device*>(video_device_)->Release();
@@ -53,7 +58,7 @@ SessionResult PlaybackSession::set_video_device(void* device)
     if (video_device_)
         static_cast<ID3D11Device*>(video_device_)->Release();
     video_device_ = device;
-    ++snapshot_.generation;
+    advance_generation();
 
     if (source_.empty() || !backend_factory_)
         return make_result(true);
@@ -140,7 +145,7 @@ SessionResult PlaybackSession::open(const std::string& source)
         return make_result(false, "Media source is empty.");
 
     snapshot_.state = SessionState::Opening;
-    ++snapshot_.generation;
+    advance_generation();
     snapshot_.position_ms = 0;
     snapshot_.duration_ms = -1;
     snapshot_.has_audio = false;
@@ -217,7 +222,7 @@ SessionResult PlaybackSession::play()
         if (!seek_result.success)
             return make_result(false, seek_result.message);
         snapshot_.position_ms = 0;
-        ++snapshot_.generation;
+        advance_generation();
     }
 
     const MediaBackendResult result = backend_->play();
@@ -256,12 +261,12 @@ SessionResult PlaybackSession::seek(int64_t position_ms)
          snapshot_.state != SessionState::Paused))
         return make_result(false, "Session cannot seek in its current state.");
 
+    advance_generation();
     const MediaBackendResult result = backend_->seek(position_ms);
     if (!result.success)
         return make_result(false, result.message);
 
     snapshot_.position_ms = position_ms;
-    ++snapshot_.generation;
     return make_result(true);
 }
 
@@ -281,7 +286,7 @@ SessionResult PlaybackSession::stop()
 
     snapshot_.state = SessionState::Ready;
     snapshot_.position_ms = 0;
-    ++snapshot_.generation;
+    advance_generation();
     return make_result(true);
 }
 
@@ -301,7 +306,7 @@ SessionResult PlaybackSession::close()
         backend_.reset();
     }
 
-    ++snapshot_.generation;
+    advance_generation();
     source_.clear();
     reset_media_state();
     return make_result(true);
@@ -309,12 +314,28 @@ SessionResult PlaybackSession::close()
 
 MediaBackendResult PlaybackSession::read_video_frame(VideoFrame& frame, bool& end_of_stream)
 {
-    std::lock_guard<std::mutex> lock(mutex_);
-    if (!backend_)
-        return MediaBackendResult{false, "No media source is open."};
-    const MediaBackendResult result = backend_->read_video_frame(frame, end_of_stream);
-    if (result.success && !end_of_stream)
-        frame.generation = snapshot_.generation;
+    std::shared_ptr<MediaBackend> backend;
+    uint64_t generation = 0;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (!backend_)
+            return MediaBackendResult{false, "No media source is open."};
+        backend = backend_;
+        generation = media_generation_.load(std::memory_order_acquire);
+    }
+
+    const MediaBackendResult result = backend->read_video_frame(frame, end_of_stream);
+    if (!result.success || end_of_stream)
+        return result;
+
+    if (media_generation_.load(std::memory_order_acquire) != generation)
+    {
+        frame = {};
+        end_of_stream = false;
+        return MediaBackendResult{true, {}};
+    }
+
+    frame.generation = generation;
     return result;
 }
 
@@ -337,7 +358,7 @@ SessionResult PlaybackSession::select_audio_track(int stream_index)
         return make_result(false, result.message);
 
     snapshot_.position_ms = backend_->position_ms();
-    ++snapshot_.generation;
+    advance_generation();
     return make_result(true);
 }
 
@@ -360,7 +381,7 @@ SessionResult PlaybackSession::select_subtitle_track(int stream_index)
         return make_result(false, result.message);
 
     snapshot_.position_ms = backend_->position_ms();
-    ++snapshot_.generation;
+    advance_generation();
     return make_result(true);
 }
 
@@ -379,7 +400,7 @@ SessionResult PlaybackSession::set_external_subtitle(const std::string& path)
         return make_result(false, result.message);
 
     snapshot_.position_ms = backend_->position_ms();
-    ++snapshot_.generation;
+    advance_generation();
     return make_result(true);
 }
 
@@ -448,6 +469,12 @@ SessionSnapshot PlaybackSession::snapshot() const
 SessionResult PlaybackSession::make_result(bool success, std::string message) const
 {
     return SessionResult{success, std::move(message), snapshot_};
+}
+
+void PlaybackSession::advance_generation()
+{
+    ++snapshot_.generation;
+    media_generation_.store(snapshot_.generation, std::memory_order_release);
 }
 
 void PlaybackSession::reset_media_state()
