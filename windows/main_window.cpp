@@ -2310,8 +2310,6 @@ void MainWindow::openVideoSettings()
             menuBar()->show();
         }
     }
-    pending_video_frame_valid_ = false;
-    requestVideoFrame();
 }
 
 void MainWindow::removeSelectedPlaylistItem()
