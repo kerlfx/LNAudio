@@ -342,7 +342,9 @@ public:
                 read.frame.subtitle_bgra.data(),
                 read.frame.subtitle_width,
                 read.frame.subtitle_height,
-                read.frame.subtitle_stride
+                read.frame.subtitle_stride,
+                read.frame.hdr_transfer,
+                read.frame.color_primaries
             };
             callback(&frame, user_data);
         }
