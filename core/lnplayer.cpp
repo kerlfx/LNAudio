@@ -29,6 +29,8 @@ struct PlayerSnapshot
     int64_t duration_ms = -1;
     uint32_t volume = 1000;
     uint64_t generation = 0;
+    bool has_audio = false;
+    bool has_video = false;
 };
 
 class PlaybackController
@@ -247,24 +249,37 @@ public:
 
     void get_snapshot(lnplayer_snapshot_t* output) const
     {
+        uint64_t state_version = 0;
+        {
+            std::lock_guard<std::mutex> lock(snapshot_mutex_);
+            state_version = state_version_;
+        }
+
         const lnplayer::SessionSnapshot session_snapshot = session_.snapshot();
         std::lock_guard<std::mutex> lock(snapshot_mutex_);
-        const bool snapshot_matches_session =
-            snapshot_.generation == session_snapshot.generation;
-        output->state = snapshot_.state;
-        output->position_ms = snapshot_matches_session
-            ? session_snapshot.position_ms
-            : snapshot_.position_ms;
-        output->duration_ms = snapshot_matches_session
-            ? session_snapshot.duration_ms
-            : snapshot_.duration_ms;
+        const bool snapshot_is_newer =
+            snapshot_.generation > session_snapshot.generation;
+        const bool state_changed_during_read = state_version_ != state_version;
+
+        output->state = state_changed_during_read ||
+            snapshot_.state == LNPLAYER_STATE_SEEKING
+            ? snapshot_.state
+            : convert_state(session_snapshot.state);
+        output->position_ms = snapshot_is_newer
+            ? snapshot_.position_ms
+            : session_snapshot.position_ms;
+        output->duration_ms = snapshot_is_newer
+            ? snapshot_.duration_ms
+            : session_snapshot.duration_ms;
         output->volume = snapshot_.volume;
-        output->reserved =
-            (session_snapshot.has_audio ? LNPLAYER_MEDIA_HAS_AUDIO : 0u) |
-            (session_snapshot.has_video ? LNPLAYER_MEDIA_HAS_VIDEO : 0u);
-        output->generation = snapshot_matches_session
-            ? session_snapshot.generation
-            : snapshot_.generation;
+        output->reserved = snapshot_is_newer
+            ? ((snapshot_.has_audio ? LNPLAYER_MEDIA_HAS_AUDIO : 0u) |
+               (snapshot_.has_video ? LNPLAYER_MEDIA_HAS_VIDEO : 0u))
+            : ((session_snapshot.has_audio ? LNPLAYER_MEDIA_HAS_AUDIO : 0u) |
+               (session_snapshot.has_video ? LNPLAYER_MEDIA_HAS_VIDEO : 0u));
+        output->generation = snapshot_is_newer
+            ? snapshot_.generation
+            : session_snapshot.generation;
     }
 
 #ifdef _WIN32
@@ -404,6 +419,10 @@ private:
             snapshot_.position_ms = session_snapshot.position_ms;
             snapshot_.duration_ms = session_snapshot.duration_ms;
             snapshot_.generation = session_snapshot.generation;
+            snapshot_.has_audio = session_snapshot.has_audio;
+            snapshot_.has_video = session_snapshot.has_video;
+            if (changed)
+                ++state_version_;
         }
 
         if (changed)
@@ -483,6 +502,8 @@ private:
             std::lock_guard<std::mutex> lock(snapshot_mutex_);
             changed = snapshot_.state != next;
             snapshot_.state = next;
+            if (changed)
+                ++state_version_;
         }
 
         if (changed)
@@ -523,6 +544,7 @@ private:
     lnplayer::PlaybackSession session_;
     mutable std::mutex snapshot_mutex_;
     PlayerSnapshot snapshot_;
+    uint64_t state_version_ = 0;
     std::atomic<uint64_t> next_operation_id_{1};
 };
 
