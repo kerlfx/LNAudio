@@ -485,6 +485,11 @@ public:
         if (FAILED(blt_result))
             return false;
 
+        context_->End(completion_query.Get());
+        context_->Flush();
+        pending_hardware_frames_.push_back(
+            PendingHardwareFrame{std::move(completion_query), std::move(frame_owner)});
+
         if (overlay && overlay_stride >= static_cast<int>(output_width * 4))
         {
             if (!overlay_texture_ ||
@@ -549,10 +554,6 @@ public:
         }
 
         context_->CopyResource(back_buffer.Get(), hardware_output_texture_.Get());
-        context_->End(completion_query.Get());
-        context_->Flush();
-        pending_hardware_frames_.push_back(
-            PendingHardwareFrame{std::move(completion_query), std::move(frame_owner)});
         return SUCCEEDED(swap_chain_->Present(1, 0));
     }
 
