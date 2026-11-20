@@ -154,13 +154,14 @@ public:
 
     void get_snapshot(lnplayer_snapshot_t* output) const
     {
+        const lnplayer::SessionSnapshot session_snapshot = session_.snapshot();
         std::lock_guard<std::mutex> lock(snapshot_mutex_);
-        output->state = snapshot_.state;
-        output->position_ms = snapshot_.position_ms;
-        output->duration_ms = snapshot_.duration_ms;
+        output->state = convert_state(session_snapshot.state);
+        output->position_ms = session_snapshot.position_ms;
+        output->duration_ms = session_snapshot.duration_ms;
         output->volume = snapshot_.volume;
         output->reserved = 0;
-        output->generation = snapshot_.generation;
+        output->generation = session_snapshot.generation;
     }
 
     void set_volume(uint32_t volume)
