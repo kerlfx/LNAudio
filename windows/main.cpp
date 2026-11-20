@@ -25,10 +25,9 @@ int main(int argc, char* argv[])
         ? PlayerMode::Video
         : PlayerMode::Audio;
 
-    const QStringList positional_arguments = parser.positionalArguments();
-    const QString initial_media = positional_arguments.isEmpty() ? QString() : positional_arguments.first();
+    const QStringList initial_media_files = parser.positionalArguments();
 
-    MainWindow window(mode, initial_media);
+    MainWindow window(mode, initial_media_files);
     window.show();
 
     return application.exec();

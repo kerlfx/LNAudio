@@ -34,7 +34,7 @@ enum class PlayerMode
 class MainWindow final : public QMainWindow
 {
 public:
-    explicit MainWindow(PlayerMode mode, const QString& initial_media = QString(), QWidget* parent = nullptr);
+    explicit MainWindow(PlayerMode mode, const QStringList& initial_media_files = {}, QWidget* parent = nullptr);
     ~MainWindow() override;
 
 protected:

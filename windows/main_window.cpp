@@ -306,7 +306,8 @@ QString format_position(int64_t position_ms)
 
 }
 
-MainWindow::MainWindow(PlayerMode mode, const QString& initial_media, QWidget* parent)
+MainWindow::MainWindow(
+    PlayerMode mode, const QStringList& initial_media_files, QWidget* parent)
     : QMainWindow(parent)
     , mode_(mode)
     , status_label_(new QLabel(this))
@@ -1120,8 +1121,14 @@ MainWindow::MainWindow(PlayerMode mode, const QString& initial_media, QWidget* p
             requestVideoFrame();
     });
 
-    if (!initial_media.isEmpty())
-        openFiles({QUrl::fromLocalFile(initial_media)});
+    if (!initial_media_files.isEmpty())
+    {
+        QList<QUrl> initial_urls;
+        initial_urls.reserve(initial_media_files.size());
+        for (const QString& path : initial_media_files)
+            initial_urls.append(QUrl::fromLocalFile(path));
+        openFiles(initial_urls);
+    }
     else if (mode_ == PlayerMode::Video)
         loadVideoPlaylist();
 }
