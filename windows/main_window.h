@@ -14,9 +14,9 @@
 
 #include "lnplayer.h"
 #include "subtitle_manager.h"
+#include "video_surface.h"
 
 class QLabel;
-class VideoSurface;
 class QLineEdit;
 class QListWidget;
 class QListWidgetItem;

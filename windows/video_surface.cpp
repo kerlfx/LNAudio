@@ -1,0 +1,255 @@
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+
+#include "video_surface.h"
+#include "d3d11_video_renderer.h"
+
+#include <Windows.h>
+
+#include <QMouseEvent>
+#include <QPainter>
+#include <QPaintEvent>
+#include <QResizeEvent>
+#include <QWheelEvent>
+
+#include <utility>
+#include <vector>
+
+class VideoSurface final : public QWidget
+{
+public:
+    explicit VideoSurface(QWidget* parent = nullptr);
+    ~VideoSurface() override;
+
+    void set_frame(const QImage& frame);
+    bool has_renderer() const;
+    void* native_device() const;
+    void set_stretch(bool enabled);
+    void set_aspect_ratio(float ratio);
+    void set_source_aspect_ratio(float ratio);
+    void set_video_filter(
+        float brightness, float contrast, float saturation, float hue_degrees,
+        float sharpness, float denoise, bool grayscale);
+    void set_hdr_metadata(int transfer, int color_primaries);
+    void set_video_color_space(int ycbcr_matrix, int full_range);
+    bool present_frame_threadsafe(const QImage& frame);
+    bool present_hardware_frame(
+        void* texture, uint32_t array_slice, uint32_t format,
+        int width, int height, std::shared_ptr<void> frame_owner,
+        const QImage& overlay);
+    QImage capture_frame() const;
+    void set_interaction_callbacks(
+        std::function<void()> double_click,
+        std::function<void(int)> wheel);
+
+protected:
+    void paintEvent(QPaintEvent* event) override;
+    void resizeEvent(QResizeEvent* event) override;
+    void mouseDoubleClickEvent(QMouseEvent* event) override;
+    void wheelEvent(QWheelEvent* event) override;
+
+private:
+    QImage frame_;
+    lnplayer::windows::D3D11VideoRenderer* renderer_ = nullptr;
+    bool stretch_ = false;
+    float aspect_ratio_ = 0.0f;
+    float source_aspect_ratio_ = 0.0f;
+    std::function<void()> double_click_callback_;
+    std::function<void(int)> wheel_callback_;
+};
+
+VideoSurface::VideoSurface(QWidget* parent)
+    : QWidget(parent)
+{
+    setMinimumSize(640, 360);
+    setAttribute(Qt::WA_NativeWindow);
+    setAttribute(Qt::WA_NoSystemBackground);
+    setAttribute(Qt::WA_OpaquePaintEvent);
+    setAutoFillBackground(false);
+    setStyleSheet(QStringLiteral("background-color: #101010;"));
+
+    renderer_ = new lnplayer::windows::D3D11VideoRenderer();
+    const HWND window = reinterpret_cast<HWND>(static_cast<quintptr>(winId()));
+    if (!renderer_->initialize(window))
+    {
+        delete renderer_;
+        renderer_ = nullptr;
+    }
+}
+
+VideoSurface::~VideoSurface()
+{
+    delete renderer_;
+    renderer_ = nullptr;
+}
+
+void VideoSurface::set_frame(const QImage& frame)
+{
+    frame_ = frame;
+    if (renderer_)
+    {
+        if (frame_.isNull())
+            renderer_->clear();
+        else
+            renderer_->present(
+                frame_.constBits(),
+                frame_.width(),
+                frame_.height(),
+                frame_.bytesPerLine());
+        return;
+    }
+    update();
+}
+
+bool VideoSurface::has_renderer() const
+{
+    return renderer_ != nullptr;
+}
+
+void* VideoSurface::native_device() const
+{
+    return renderer_ ? renderer_->native_device() : nullptr;
+}
+
+void VideoSurface::set_stretch(bool enabled)
+{
+    stretch_ = enabled;
+    if (renderer_)
+        renderer_->set_stretch(enabled);
+    else
+        update();
+}
+
+void VideoSurface::set_aspect_ratio(float ratio)
+{
+    aspect_ratio_ = ratio;
+    stretch_ = false;
+    if (renderer_)
+        renderer_->set_aspect_ratio(ratio > 0.0f ? ratio : source_aspect_ratio_);
+    else
+        update();
+}
+
+void VideoSurface::set_source_aspect_ratio(float ratio)
+{
+    source_aspect_ratio_ = ratio;
+    if (aspect_ratio_ <= 0.0f && renderer_)
+        renderer_->set_aspect_ratio(source_aspect_ratio_);
+    else
+        update();
+}
+
+void VideoSurface::set_video_filter(
+    float brightness, float contrast, float saturation, float hue_degrees,
+    float sharpness, float denoise, bool grayscale)
+{
+    if (renderer_)
+        renderer_->set_video_filter(
+            brightness, contrast, saturation, hue_degrees, sharpness, denoise, grayscale);
+}
+
+void VideoSurface::set_hdr_metadata(int transfer, int color_primaries)
+{
+    if (renderer_)
+        renderer_->set_hdr_metadata(transfer, color_primaries);
+}
+
+void VideoSurface::set_video_color_space(int ycbcr_matrix, int full_range)
+{
+    if (renderer_)
+        renderer_->set_video_color_space(ycbcr_matrix, full_range);
+}
+
+bool VideoSurface::present_frame_threadsafe(const QImage& frame)
+{
+    return renderer_ && !frame.isNull() && renderer_->present(
+        frame.constBits(),
+        frame.width(),
+        frame.height(),
+        frame.bytesPerLine());
+}
+
+bool VideoSurface::present_hardware_frame(
+    void* texture, uint32_t array_slice, uint32_t format,
+    int width, int height, std::shared_ptr<void> frame_owner,
+    const QImage& overlay)
+{
+    return renderer_ && renderer_->present_hardware(
+        texture, array_slice, format, width, height, std::move(frame_owner),
+        overlay.isNull() ? nullptr : overlay.constBits(),
+        overlay.isNull() ? 0 : overlay.bytesPerLine());
+}
+
+QImage VideoSurface::capture_frame() const
+{
+    if (!renderer_)
+        return frame_;
+    std::vector<uint8_t> pixels;
+    int width = 0;
+    int height = 0;
+    if (!renderer_->capture_bgra(pixels, width, height))
+        return frame_;
+    return QImage(
+        pixels.data(), width, height, width * 4, QImage::Format_ARGB32).copy();
+}
+
+void VideoSurface::set_interaction_callbacks(
+    std::function<void()> double_click,
+    std::function<void(int)> wheel)
+{
+    double_click_callback_ = std::move(double_click);
+    wheel_callback_ = std::move(wheel);
+}
+
+void VideoSurface::mouseDoubleClickEvent(QMouseEvent* event)
+{
+    if (event->button() == Qt::LeftButton && double_click_callback_)
+        double_click_callback_();
+    QWidget::mouseDoubleClickEvent(event);
+}
+
+void VideoSurface::wheelEvent(QWheelEvent* event)
+{
+    if (wheel_callback_ && event->angleDelta().y() != 0)
+        wheel_callback_(event->angleDelta().y() > 0 ? 1 : -1);
+    event->accept();
+}
+
+void VideoSurface::paintEvent(QPaintEvent* event)
+{
+    Q_UNUSED(event);
+    if (renderer_)
+        return;
+
+    QPainter painter(this);
+    painter.fillRect(rect(), Qt::black);
+    if (frame_.isNull())
+        return;
+
+    const float display_aspect = aspect_ratio_ > 0.0f
+        ? aspect_ratio_
+        : source_aspect_ratio_;
+    const QSize source_size = display_aspect > 0.0f
+        ? QSize(static_cast<int>(frame_.height() * display_aspect), frame_.height())
+        : frame_.size();
+    const QSize fitted = source_size.scaled(
+        size(), stretch_ ? Qt::IgnoreAspectRatio : Qt::KeepAspectRatio);
+    const QRect target(
+        (width() - fitted.width()) / 2,
+        (height() - fitted.height()) / 2,
+        fitted.width(),
+        fitted.height());
+    painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
+    painter.drawImage(target, frame_);
+}
+
+void VideoSurface::resizeEvent(QResizeEvent* event)
+{
+    QWidget::resizeEvent(event);
+    if (renderer_)
+        renderer_->resize(
+            static_cast<uint32_t>(event->size().width()),
+            static_cast<uint32_t>(event->size().height()));
+}
+
