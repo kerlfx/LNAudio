@@ -77,6 +77,7 @@ private:
     void loadVideoPlaylist();
     void saveVideoPlaylist() const;
     void removeSelectedPlaylistItem();
+    void clearPlaylist();
     void moveSelectedPlaylistItem(int offset);
     void cycleRepeatMode();
     void resetShuffleOrder();
@@ -138,6 +139,7 @@ private:
     int64_t duration_ms_ = -1;
     bool slider_dragging_ = false;
     bool fullscreen_controls_visible_ = true;
+    bool playlist_panel_visible_ = true;
     bool has_video_ = false;
     bool has_audio_ = false;
     bool is_playing_ = false;
