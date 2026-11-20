@@ -177,6 +177,8 @@ private:
     bool remember_position_ = true;
     bool always_on_top_ = false;
     QByteArray normal_geometry_;
+    int video_width_ = 0;
+    int video_height_ = 0;
     int64_t loop_a_ms_ = -1;
     int64_t loop_b_ms_ = -1;
     bool has_video_ = false;
