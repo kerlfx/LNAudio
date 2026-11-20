@@ -20,6 +20,7 @@
 #include <QCursor>
 #include <QDragEnterEvent>
 #include <QDir>
+#include <QDesktopServices>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QFormLayout>
@@ -272,6 +273,8 @@ MainWindow::MainWindow(
         playlist_widget_ = new QListWidget(content);
         playlist_widget_->setMaximumWidth(280);
         playlist_widget_->setDragDropMode(QAbstractItemView::InternalMove);
+        playlist_widget_->setSelectionMode(QAbstractItemView::ExtendedSelection);
+        playlist_widget_->setContextMenuPolicy(Qt::CustomContextMenu);
         playlist_widget_->setDefaultDropAction(Qt::MoveAction);
         playlist_panel_ = new QWidget(content);
         auto* playlist_panel_layout = new QVBoxLayout(playlist_panel_);
@@ -352,6 +355,28 @@ MainWindow::MainWindow(
             {
                 openPlaylistIndex(playlist_widget_->row(item));
             });
+        connect(playlist_widget_, &QWidget::customContextMenuRequested, this,
+            [this](const QPoint& point)
+        {
+            QListWidgetItem* item = playlist_widget_->itemAt(point);
+            if (item && !item->isSelected())
+            {
+                playlist_widget_->clearSelection();
+                item->setSelected(true);
+                playlist_widget_->setCurrentItem(item);
+            }
+            QMenu menu(playlist_widget_);
+            QAction* play_selected = menu.addAction(QStringLiteral("播放"));
+            QAction* remove_selected = menu.addAction(QStringLiteral("移除选中项"));
+            QAction* clear_all = menu.addAction(QStringLiteral("清空播放列表"));
+            QAction* selected = menu.exec(playlist_widget_->mapToGlobal(point));
+            if (selected == play_selected && item)
+                openPlaylistIndex(playlist_widget_->row(item));
+            else if (selected == remove_selected)
+                removeSelectedPlaylistItem();
+            else if (selected == clear_all)
+                clearPlaylist();
+        });
         video_surface_->set_interaction_callbacks(
             [this]
             {
@@ -1421,8 +1446,12 @@ void MainWindow::rebuildPlaylistWidget()
     playlist_widget_->clear();
     for (const QUrl& url : playlist_)
     {
-        auto* item = new QListWidgetItem(QFileInfo(url.toLocalFile()).fileName(), playlist_widget_);
+        const QFileInfo info(url.toLocalFile());
+        auto* item = new QListWidgetItem(info.fileName(), playlist_widget_);
         item->setData(Qt::UserRole, url.toLocalFile());
+        item->setToolTip(QStringLiteral("%1\n%2 bytes")
+            .arg(info.absoluteFilePath())
+            .arg(info.exists() ? info.size() : 0));
     }
     playing_playlist_item_ = nullptr;
     if (playlist_index_ >= 0 && playlist_index_ < playlist_.size())
@@ -1485,9 +1514,6 @@ void MainWindow::saveVideoPlaylist() const
 
 void MainWindow::clearPlaylist()
 {
-    if (playlist_.isEmpty())
-        return;
-
     playlist_.clear();
     playlist_index_ = -1;
     shuffle_order_.clear();
@@ -1678,37 +1704,48 @@ void MainWindow::removeSelectedPlaylistItem()
 {
     if (!playlist_widget_)
         return;
-    const int row = playlist_widget_->currentRow();
-    if (row < 0 || row >= playlist_.size())
+
+    std::vector<int> rows;
+    const auto selected_items = playlist_widget_->selectedItems();
+    for (QListWidgetItem* item : selected_items)
+        rows.push_back(playlist_widget_->row(item));
+    if (rows.empty() && playlist_widget_->currentRow() >= 0)
+        rows.push_back(playlist_widget_->currentRow());
+    if (rows.empty())
         return;
 
-    const bool removing_current = row == playlist_index_;
-    playlist_.removeAt(row);
-    if (row < playlist_index_)
-        --playlist_index_;
-    resetShuffleOrder();
-    rebuildPlaylistWidget();
+    std::sort(rows.begin(), rows.end());
+    rows.erase(std::unique(rows.begin(), rows.end()), rows.end());
+    const int old_current = playlist_index_;
+    const bool removing_current = std::binary_search(rows.begin(), rows.end(), old_current);
+    const int first_removed = rows.front();
+    const int removed_before_current = static_cast<int>(
+        std::count_if(rows.begin(), rows.end(), [old_current](int row)
+        {
+            return row < old_current;
+        }));
+
+    for (auto it = rows.rbegin(); it != rows.rend(); ++it)
+    {
+        if (*it >= 0 && *it < playlist_.size())
+            playlist_.removeAt(*it);
+    }
 
     if (removing_current)
     {
         if (playlist_.isEmpty())
         {
-            playlist_index_ = -1;
-            playlist_open_pending_ = false;
-            video_timer_->stop();
-            QMetaObject::invokeMethod(command_worker_, [this]
-            {
-                if (player_)
-                    lnplayer_close(player_);
-            }, Qt::QueuedConnection);
-            if (video_surface_)
-                video_surface_->set_frame(QImage());
+            clearPlaylist();
+            return;
         }
-        else
-        {
-            openPlaylistIndex(std::min(row, static_cast<int>(playlist_.size()) - 1));
-        }
+        openPlaylistIndex(std::min(first_removed, static_cast<int>(playlist_.size()) - 1));
+        return;
     }
+
+    if (old_current >= 0)
+        playlist_index_ = old_current - removed_before_current;
+    resetShuffleOrder();
+    rebuildPlaylistWidget();
     saveVideoPlaylist();
 }
 
