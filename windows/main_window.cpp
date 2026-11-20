@@ -2223,11 +2223,7 @@ void MainWindow::openVideoSettings()
     settings.setValue(QStringLiteral("Video/Subtitle/VerticalPosition"), subtitle_vertical_position_);
     settings.sync();
 
-    QMetaObject::invokeMethod(command_worker_, [this, offset = subtitle_offset_ms_]
-    {
-        if (player_)
-            lnplayer_set_subtitle_offset(player_, offset);
-    }, Qt::QueuedConnection);
+    setSubtitleOffset(subtitle_offset_ms_);
     if (isFullScreen())
     {
         showFullscreenControls();
