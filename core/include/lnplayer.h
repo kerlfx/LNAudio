@@ -133,6 +133,33 @@ typedef struct lnplayer_subtitle_track_info
     const char* codec_utf8;
 } lnplayer_subtitle_track_info_t;
 
+#define LNPLAYER_VIDEO_INFO_TEXT_CAPACITY 128u
+
+typedef struct lnplayer_video_info
+{
+    uint32_t struct_size;
+    int32_t width;
+    int32_t height;
+    int64_t bit_rate;
+    int32_t frame_rate_num;
+    int32_t frame_rate_den;
+    int32_t sample_aspect_ratio_num;
+    int32_t sample_aspect_ratio_den;
+    int32_t rotation_degrees;
+    int32_t color_range;
+    int32_t color_primaries;
+    int32_t color_transfer;
+    int32_t color_space;
+    int32_t bit_depth;
+    char container_format[LNPLAYER_VIDEO_INFO_TEXT_CAPACITY];
+    char container_long_name[LNPLAYER_VIDEO_INFO_TEXT_CAPACITY];
+    char codec_name[LNPLAYER_VIDEO_INFO_TEXT_CAPACITY];
+    char codec_long_name[LNPLAYER_VIDEO_INFO_TEXT_CAPACITY];
+    char decoder_name[LNPLAYER_VIDEO_INFO_TEXT_CAPACITY];
+    char profile[LNPLAYER_VIDEO_INFO_TEXT_CAPACITY];
+    char pixel_format[LNPLAYER_VIDEO_INFO_TEXT_CAPACITY];
+} lnplayer_video_info_t;
+
 /* Subtitle track metadata strings are valid only during the callback. */
 typedef void (*lnplayer_subtitle_track_callback_t)(
     const lnplayer_subtitle_track_info_t* track,
@@ -215,6 +242,11 @@ LNPLAYER_API lnplayer_result_t lnplayer_library_search_tracks(
 LNPLAYER_API lnplayer_result_t lnplayer_get_snapshot(
     lnplayer_t* player,
     lnplayer_snapshot_t* snapshot);
+
+/* Returns container and primary video stream metadata for the open media. */
+LNPLAYER_API lnplayer_result_t lnplayer_get_video_info(
+    lnplayer_t* player,
+    lnplayer_video_info_t* info);
 
 /* Volume range: 0 (muted) through 1000 (100%). */
 LNPLAYER_API lnplayer_result_t lnplayer_set_volume(
