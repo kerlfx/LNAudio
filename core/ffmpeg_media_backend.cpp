@@ -1313,7 +1313,8 @@ private:
                 static_cast<size_t>(source_stride) * source_height, 0);
             for (const DecodedSubtitleCue& cue : active_subtitle_cues_)
             {
-                if (cue.start_ms > position_ms || position_ms >= cue.end_ms)
+                if (cue.start_ms > subtitle_position_ms ||
+                    subtitle_position_ms >= cue.end_ms)
                     continue;
                 for (const auto& bitmap : cue.bitmaps)
                 {

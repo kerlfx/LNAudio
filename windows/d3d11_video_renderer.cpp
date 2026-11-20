@@ -814,6 +814,10 @@ private:
         float denoise;
         float texel_x;
         float texel_y;
+        float hdr_transfer;
+        float color_primaries;
+        float padding_x;
+        float padding_y;
     };
 
     void update_filter_constants(int width, int height)
