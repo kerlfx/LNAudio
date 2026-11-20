@@ -99,6 +99,7 @@ Windows 端同时提供音频和视频播放界面，两套 UI 属于同一个 L
 - UI 使用 Qt 6 Widgets，构建要求 Qt 6.12 或更新的 Qt 6 版本。
 - Core 使用独立的 Standalone Asio 头文件依赖，不依赖 Boost；默认从仓库的 `3rd_cache/asio/asio/include` 或 `3rd_cache/asio/include` 查找 `asio.hpp`。
 - Core Runtime 使用单线程 `asio::io_context` 和共享 `asio::thread_pool`。异步业务优先使用 Asio 原生执行器、Completion Token、C++20 Coroutine、`steady_timer` 和 `strand`；标准库线程/同步原语仅用于 Asio 不适合或平台接口明确要求的边界。
+- 音乐库 SQLite 连接按需初始化：创建 Player 和启动视频模式不得强制打开音乐库数据库；只有调用音乐库 API 时才初始化 SQLite。视频播放路径不应因本地音乐库目录、数据库权限或数据库损坏而无法启动。
 - 当前 Windows 已接入 FFmpeg 音频解码、WASAPI 输出和 SQLite 音乐库；视频模式已接入 FFmpeg 视频解码、Windows D3D11 Swap Chain 呈现、D3D11VA 尝试与软件回退。
 - 视频帧通过 Windows 专用 `lnplayer_windows.h` Pull 接口交付，不扩展通用播放控制 C ABI。视频 UI 已具备 PTS 基础等待、全屏、快捷键、右键菜单、原始比例/16:9/4:3/拉伸切换、截图及上一帧/下一帧逐帧控制；逐帧历史缓存最多保留 120 帧，浏览历史帧时同步显示对应 PTS 时间。视频播放队列支持打开/拖放文件整体替换、追加视频文件、移除条目、上移/下移、拖动排序、双击切换、上一项/下一项、随机顺序、关闭/列表/单项循环及播放结束自动切换；视频播放队列已通过 QSettings 持久化文件列表、当前索引、随机播放和循环模式。视频文件的多音轨已支持 FFmpeg 枚举、C ABI 查询/选择和 Windows 右键菜单切换；切换要求暂停后执行，UI 会自动暂停并尝试恢复原播放状态。外挂 SRT 字幕支持 UTF-8、UTF-8 BOM、UTF-16 LE/BE BOM、UTF-32 LE/BE BOM 和系统本地编码回退；外挂 ASS/SSA 已支持按事件时间提取文本并处理基础换行/空格转义，但未实现 ASS 样式、定位和特效。字幕启用/禁用及 ±500 ms 时间调整已提供，时间偏移同时作用于外挂和内嵌字幕；内嵌字幕已接入 FFmpeg 字幕流枚举、默认轨道选择、字幕包队列、文本/ASS 字幕解码、轨道切换与禁用，并通过 Windows 视频帧回调将当前字幕文本交给现有叠加层；位图字幕已接入 BGRA 叠加，并按视频显示宽高比定位；完整 ASS 样式、定位和特效仍待完成。
 - 无音频视频播放时钟由 Core 使用 `std::chrono::steady_clock` 实现；暂停冻结时钟，恢复重新计时，Seek 和播放速度变化时重新锚定时钟。Windows UI 不再使用 `QElapsedTimer` 维护视频媒体时钟。
