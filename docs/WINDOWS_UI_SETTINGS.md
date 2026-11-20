@@ -29,7 +29,7 @@ LNPlayer/
 - 仅保留一次性旧版本迁移：首次启动时尝试读取旧版 `HKCU\\Software\\LNPlayer\\LNPlayer`，只补入 INI 中不存在的键，然后记录迁移标记。后续启动不再读取注册表。
 - Windows 安装包只在**当前用户**范围注册文件类型和 ProgID，写入 `HKCU\\Software\\Classes` 与 `HKCU\\Software\\RegisteredApplications`，不写 HKLM，不影响其他 Windows 用户，也不要求管理员权限。
 - 卸载时只移除 LNPlayer 自己注册的 ProgID、OpenWith 项和 RegisteredApplications 项，不修改 Windows 当前默认应用选择。
-- Windows 10/11 不允许普通桌面程序静默接管用户默认应用。安装后用户仍需在 Windows“默认应用”设置中选择 LNPlayer；播放器设置页提供直达入口。
+- Windows 10/11 不允许普通桌面程序静默接管用户默认应用。安装后用户仍需在 Windows“默认应用”设置中选择 LNPlayer；播放器设置页使用 `ms-settings:defaultapps?registeredAppUser=LNPlayer` 直达 LNPlayer 的默认应用设置页。
 - 便携版不主动修改系统文件关联；用户可在文件“打开方式”中选择 LNPlayer。
 
 ## 支持的视频文件格式
