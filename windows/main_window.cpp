@@ -923,12 +923,6 @@ MainWindow::MainWindow(
                 settings.setValue(QStringLiteral("Video/Filter/Brightness"), video_brightness_);
                 settings.setValue(QStringLiteral("Video/Filter/Contrast"), video_contrast_);
                 settings.setValue(QStringLiteral("Video/Filter/Saturation"), video_saturation_);
-    settings.setValue(QStringLiteral("Video/Subtitle/AutoMatch"), auto_match_subtitle_);
-    settings.setValue(QStringLiteral("Video/Subtitle/OffsetMs"), subtitle_offset_ms_);
-    settings.setValue(QStringLiteral("Video/Subtitle/FontFamily"), subtitle_font_family_);
-    settings.setValue(QStringLiteral("Video/Subtitle/FontSize"), subtitle_font_size_);
-    settings.setValue(QStringLiteral("Video/Subtitle/Color"), subtitle_color_);
-    settings.setValue(QStringLiteral("Video/Subtitle/VerticalPosition"), subtitle_vertical_position_);
                 settings.setValue(QStringLiteral("Video/Filter/HueDegrees"), video_hue_degrees_);
                 settings.setValue(QStringLiteral("Video/Filter/Sharpness"), video_sharpness_);
                 settings.setValue(QStringLiteral("Video/Filter/Denoise"), video_denoise_);
@@ -2037,6 +2031,12 @@ void MainWindow::openVideoSettings()
     settings.setValue(QStringLiteral("Video/Filter/Brightness"), video_brightness_);
     settings.setValue(QStringLiteral("Video/Filter/Contrast"), video_contrast_);
     settings.setValue(QStringLiteral("Video/Filter/Saturation"), video_saturation_);
+    settings.setValue(QStringLiteral("Video/Subtitle/AutoMatch"), auto_match_subtitle_);
+    settings.setValue(QStringLiteral("Video/Subtitle/OffsetMs"), subtitle_offset_ms_);
+    settings.setValue(QStringLiteral("Video/Subtitle/FontFamily"), subtitle_font_family_);
+    settings.setValue(QStringLiteral("Video/Subtitle/FontSize"), subtitle_font_size_);
+    settings.setValue(QStringLiteral("Video/Subtitle/Color"), subtitle_color_);
+    settings.setValue(QStringLiteral("Video/Subtitle/VerticalPosition"), subtitle_vertical_position_);
     settings.sync();
 
     QMetaObject::invokeMethod(command_worker_, [this, offset = subtitle_offset_ms_]
