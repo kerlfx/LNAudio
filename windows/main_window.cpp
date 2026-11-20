@@ -325,6 +325,8 @@ MainWindow::MainWindow(
             QStringLiteral("Video/Subtitle/Enabled"), true).toBool();
         remember_position_ = settings.value(
             QStringLiteral("Video/Playback/RememberPosition"), true).toBool();
+        auto_play_next_ = settings.value(
+            QStringLiteral("Video/Playback/AutoPlayNext"), true).toBool();
         always_on_top_ = settings.value(
             QStringLiteral("Video/Window/AlwaysOnTop"), false).toBool();
         subtitle_offset_ms_ = settings.value(
@@ -2650,6 +2652,9 @@ void MainWindow::openVideoSettings()
     auto* remember_position = new QCheckBox(
         QStringLiteral("记住每个视频上次播放位置"), playback_page);
     remember_position->setChecked(remember_position_);
+    auto* auto_play_next = new QCheckBox(
+        QStringLiteral("当前视频结束后自动播放下一项"), playback_page);
+    auto_play_next->setChecked(auto_play_next_);
     auto* default_playback_rate = new QDoubleSpinBox(playback_page);
     default_playback_rate->setRange(0.25, 4.0);
     default_playback_rate->setSingleStep(0.25);
@@ -2657,6 +2662,7 @@ void MainWindow::openVideoSettings()
     default_playback_rate->setSuffix(QStringLiteral(" ×"));
     default_playback_rate->setValue(playback_rate_);
     playback_form->addRow(remember_position);
+    playback_form->addRow(auto_play_next);
     playback_form->addRow(QStringLiteral("默认播放速度"), default_playback_rate);
     tabs->addTab(playback_page, QStringLiteral("播放"));
 
@@ -2853,6 +2859,7 @@ void MainWindow::openVideoSettings()
     connect(defaults, &QPushButton::clicked, &dialog, [=]
     {
         remember_position->setChecked(true);
+        auto_play_next->setChecked(true);
         default_playback_rate->setValue(1.0);
         hide_delay->setValue(2);
         osd_duration->setValue(1500);
@@ -2919,6 +2926,7 @@ void MainWindow::openVideoSettings()
         return;
 
     remember_position_ = remember_position->isChecked();
+    auto_play_next_ = auto_play_next->isChecked();
     if (std::abs(playback_rate_ - default_playback_rate->value()) > 0.001)
         setPlaybackRate(static_cast<float>(default_playback_rate->value()));
     fullscreen_hide_delay_ms_ = hide_delay->value() * 1000;
@@ -2976,6 +2984,7 @@ void MainWindow::openVideoSettings()
 
     QSettings settings(settings_file_path(), QSettings::IniFormat);
     settings.setValue(QStringLiteral("Video/Playback/RememberPosition"), remember_position_);
+    settings.setValue(QStringLiteral("Video/Playback/AutoPlayNext"), auto_play_next_);
     settings.setValue(QStringLiteral("Video/Window/AlwaysOnTop"), always_on_top_);
     settings.setValue(QStringLiteral("Video/UI/FullscreenHideDelayMs"), fullscreen_hide_delay_ms_);
     settings.setValue(QStringLiteral("Video/UI/OSDDurationMs"), osd_duration_ms_);
@@ -4600,6 +4609,12 @@ void MainWindow::handleCoreEvent(
         if (repeat_mode_ == 2 && playlist_index_ >= 0)
         {
             openPlaylistIndex(playlist_index_);
+            break;
+        }
+        if (!auto_play_next_ && repeat_mode_ != 1)
+        {
+            video_timer_->stop();
+            status_label_->setText(QStringLiteral("播放结束"));
             break;
         }
         const int next_index = nextPlaylistIndex(false);
