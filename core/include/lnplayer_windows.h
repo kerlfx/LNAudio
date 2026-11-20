@@ -27,7 +27,7 @@ typedef void (*lnplayer_windows_video_frame_callback_t)(
 
 /*
  * Attach the D3D11 device owned by the video renderer before opening media.
- * The renderer must keep the device alive until the Player is destroyed.
+ * The function takes ownership of one COM reference supplied by the caller.
  */
 LNPLAYER_API lnplayer_result_t lnplayer_windows_set_d3d11_device(
     lnplayer_t* player,
