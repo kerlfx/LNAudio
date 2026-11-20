@@ -84,8 +84,16 @@ namespace
 QString format_position(int64_t position_ms)
 {
     const int64_t total_seconds = position_ms < 0 ? 0 : position_ms / 1000;
-    const int64_t minutes = total_seconds / 60;
+    const int64_t hours = total_seconds / 3600;
+    const int64_t minutes = total_seconds / 60 % 60;
     const int64_t seconds = total_seconds % 60;
+    if (hours > 0)
+    {
+        return QStringLiteral("%1:%2:%3")
+            .arg(hours)
+            .arg(minutes, 2, 10, QLatin1Char('0'))
+            .arg(seconds, 2, 10, QLatin1Char('0'));
+    }
     return QStringLiteral("%1:%2")
         .arg(minutes)
         .arg(seconds, 2, 10, QLatin1Char('0'));
