@@ -11,7 +11,7 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
-MainWindow::MainWindow(PlayerMode mode, QWidget* parent)
+MainWindow::MainWindow(PlayerMode mode, const QString& initial_media, QWidget* parent)
     : QMainWindow(parent)
     , mode_(mode)
     , status_label_(new QLabel(this))
@@ -54,6 +54,9 @@ MainWindow::MainWindow(PlayerMode mode, QWidget* parent)
     layout->addWidget(status_label_);
     setCentralWidget(content);
     statusBar()->showMessage(QStringLiteral("就绪"));
+
+    if (!initial_media.isEmpty())
+        openFiles({QUrl::fromLocalFile(initial_media)});
 }
 
 void MainWindow::dragEnterEvent(QDragEnterEvent* event)
