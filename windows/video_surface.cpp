@@ -78,6 +78,13 @@ void VideoSurface::set_gesture_enabled(bool enabled)
     gesture_triggered_ = false;
 }
 
+bool VideoSurface::consume_gesture_context_menu()
+{
+    const bool triggered = gesture_triggered_;
+    gesture_triggered_ = false;
+    return triggered;
+}
+
 void VideoSurface::set_stretch(bool enabled)
 {
     stretch_ = enabled;
