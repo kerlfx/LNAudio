@@ -224,6 +224,7 @@ public:
         clear_packet_queues();
         audio_consumer_active_ = audio_decoder_ != nullptr;
         video_consumer_active_ = false;
+        video_consumer_seen_ = false;
         audio_stream_ended_ = false;
         video_stream_ended_ = false;
         return success();
@@ -492,6 +493,7 @@ public:
         resampler_drained_ = false;
         audio_consumer_active_ = false;
         video_consumer_active_ = false;
+        video_consumer_seen_ = false;
         audio_stream_ended_ = false;
         video_stream_ended_ = false;
         return success();
@@ -653,6 +655,7 @@ public:
         {
             std::lock_guard<std::mutex> demux_lock(demux_mutex_);
             video_consumer_active_ = true;
+            video_consumer_seen_ = true;
         }
 
         for (;;)
@@ -732,7 +735,8 @@ private:
         }
 
         const bool all_audio_ended = !audio_decoder_ || audio_stream_ended_;
-        const bool all_video_ended = !video_decoder_ || video_stream_ended_;
+        const bool all_video_ended =
+            !video_decoder_ || !video_consumer_seen_ || video_stream_ended_;
         if (!all_audio_ended || !all_video_ended)
             return false;
 
@@ -1296,6 +1300,7 @@ private:
     bool demux_eof_ = false;
     bool audio_consumer_active_ = false;
     bool video_consumer_active_ = false;
+    bool video_consumer_seen_ = false;
     bool audio_stream_ended_ = false;
     bool video_stream_ended_ = false;
 };
