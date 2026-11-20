@@ -596,14 +596,21 @@ lnplayer_result_t lnplayer_library_scan_directory(
     if (!path_utf8 || !path_utf8[0] || !imported_count)
         return set_error(LNPLAYER_RESULT_INVALID_ARGUMENT, "Invalid library scan arguments.");
 
-    std::string error;
-    int count = 0;
-    if (!player->runtime.music_library().scan_directory(
-        path_utf8, recursive != 0, count, error))
-        return set_error(LNPLAYER_RESULT_INTERNAL_ERROR, error.c_str());
+    try
+    {
+        std::string error;
+        int count = 0;
+        if (!player->runtime.music_library().scan_directory(
+            path_utf8, recursive != 0, count, error))
+            return set_error(LNPLAYER_RESULT_INTERNAL_ERROR, error.c_str());
 
-    *imported_count = count;
-    return finish_result(LNPLAYER_RESULT_OK);
+        *imported_count = count;
+        return finish_result(LNPLAYER_RESULT_OK);
+    }
+    catch (...)
+    {
+        return set_error(LNPLAYER_RESULT_INTERNAL_ERROR, "Unexpected error while scanning library directory.");
+    }
 }
 
 lnplayer_result_t lnplayer_library_search_tracks(
@@ -618,27 +625,34 @@ lnplayer_result_t lnplayer_library_search_tracks(
     if (!query_utf8 || !callback)
         return set_error(LNPLAYER_RESULT_INVALID_ARGUMENT, "Invalid library search arguments.");
 
-    std::string error;
-    const auto tracks = player->runtime.music_library().search_tracks(
-        query_utf8, limit, error);
-    if (!error.empty())
-        return set_error(LNPLAYER_RESULT_INTERNAL_ERROR, error.c_str());
-
-    for (const auto& track : tracks)
+    try
     {
-        const lnplayer_library_track_t item{
-            sizeof(lnplayer_library_track_t),
-            track.id,
-            track.duration_ms,
-            track.path.c_str(),
-            track.title.c_str(),
-            track.artist.c_str(),
-            track.album.c_str()
-        };
-        callback(&item, user_data);
-    }
+        std::string error;
+        const auto tracks = player->runtime.music_library().search_tracks(
+            query_utf8, limit, error);
+        if (!error.empty())
+            return set_error(LNPLAYER_RESULT_INTERNAL_ERROR, error.c_str());
 
-    return finish_result(LNPLAYER_RESULT_OK);
+        for (const auto& track : tracks)
+        {
+            const lnplayer_library_track_t item{
+                sizeof(lnplayer_library_track_t),
+                track.id,
+                track.duration_ms,
+                track.path.c_str(),
+                track.title.c_str(),
+                track.artist.c_str(),
+                track.album.c_str()
+            };
+            callback(&item, user_data);
+        }
+
+        return finish_result(LNPLAYER_RESULT_OK);
+    }
+    catch (...)
+    {
+        return set_error(LNPLAYER_RESULT_INTERNAL_ERROR, "Unexpected error while querying music library.");
+    }
 }
 
 lnplayer_result_t lnplayer_get_snapshot(
