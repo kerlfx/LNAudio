@@ -3210,6 +3210,13 @@ void MainWindow::openVideoSettings()
 
     navigation->setCurrentRow(0);
 
+    auto* reset_scope = new QLabel(
+        QStringLiteral("恢复默认仅重置播放器偏好设置；不会删除播放列表、书签、最近播放记录或各视频的播放位置。"),
+        &dialog);
+    reset_scope->setWordWrap(true);
+    reset_scope->setStyleSheet(QStringLiteral("color: #9ba6b5;"));
+    root->addWidget(reset_scope);
+
     auto* buttons = new QDialogButtonBox(
         QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
     auto* defaults = buttons->addButton(QStringLiteral("恢复默认"), QDialogButtonBox::ResetRole);
