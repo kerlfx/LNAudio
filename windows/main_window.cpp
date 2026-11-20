@@ -781,8 +781,9 @@ void MainWindow::loadExternalSubtitle()
             continue;
 
         SubtitleCue cue;
+        const QString end_timestamp = times[1].trimmed().section(QLatin1Char(' '), 0, 0);
         if (!parse_timestamp(times[0], cue.start_ms) ||
-            !parse_timestamp(times[1].section(QLatin1Char(' '), 0, 0), cue.end_ms) ||
+            !parse_timestamp(end_timestamp, cue.end_ms) ||
             cue.end_ms <= cue.start_ms)
             continue;
 
