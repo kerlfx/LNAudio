@@ -1139,6 +1139,9 @@ MainWindow::MainWindow(
         video_surface_->setContextMenuPolicy(Qt::CustomContextMenu);
         connect(video_surface_, &QWidget::customContextMenuRequested, this, [this](const QPoint& point)
         {
+            if (video_surface_->consume_gesture_context_menu())
+                return;
+
             QMenu menu(this);
             menu.setMouseTracking(true);
             menu.installEventFilter(this);
