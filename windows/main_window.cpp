@@ -33,6 +33,7 @@
 #include <QColor>
 #include <QCryptographicHash>
 #include <QComboBox>
+#include <QCursor>
 #include <QDoubleSpinBox>
 #include <QSpinBox>
 #include <QScrollArea>
@@ -2236,6 +2237,7 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event)
             watched == playlist_panel_ ||
             (playlist_panel_ && watched_widget && playlist_panel_->isAncestorOf(watched_widget)) ||
             watched == menuBar() || (menuBar() && watched_widget && menuBar()->isAncestorOf(watched_widget)) ||
+            watched == statusBar() || (statusBar() && watched_widget && statusBar()->isAncestorOf(watched_widget)) ||
             is_menu_widget;
         if (watched == video_surface_ && event->type() == QEvent::Resize &&
             empty_state_label_ && empty_state_label_->isVisible())
@@ -2276,7 +2278,18 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event)
         }
         else if (event->type() == QEvent::Leave && is_control_widget)
         {
-            if (fullscreen_hide_delay_ms_ > 0)
+            QWidget* cursor_widget = QApplication::widgetAt(QCursor::pos());
+            const bool pointer_over_controls = cursor_widget &&
+                ((control_panel_ &&
+                    (cursor_widget == control_panel_ || control_panel_->isAncestorOf(cursor_widget))) ||
+                 (playlist_panel_ &&
+                    (cursor_widget == playlist_panel_ || playlist_panel_->isAncestorOf(cursor_widget))) ||
+                 (menuBar() &&
+                    (cursor_widget == menuBar() || menuBar()->isAncestorOf(cursor_widget))) ||
+                 (statusBar() &&
+                    (cursor_widget == statusBar() || statusBar()->isAncestorOf(cursor_widget))));
+            if (!pointer_over_controls && !QApplication::activePopupWidget() &&
+                fullscreen_hide_delay_ms_ > 0)
                 fullscreen_hide_timer_->start(fullscreen_hide_delay_ms_);
         }
     }
