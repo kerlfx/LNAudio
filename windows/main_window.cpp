@@ -370,7 +370,7 @@ MainWindow::MainWindow(
     , pause_button_(new QPushButton(QStringLiteral("暂停"), this))
     , stop_button_(new QPushButton(QStringLiteral("停止"), this))
     , ui_io_work_guard_(asio::make_work_guard(ui_io_context_))
-    , ui_thread_pool_(2)
+    , ui_thread_pool_(3)
     , command_executor_(asio::make_strand(ui_thread_pool_))
     , frame_executor_(asio::make_strand(ui_thread_pool_))
     , library_executor_(asio::make_strand(ui_thread_pool_))
@@ -1968,7 +1968,7 @@ MainWindow::MainWindow(
     snapshot_timer_->setInterval(250);
     connect(snapshot_timer_, &QTimer::timeout, this, &MainWindow::refreshSnapshot);
 
-    video_timer_->setInterval(1);
+    video_timer_->setInterval(4);
     video_timer_->setTimerType(Qt::PreciseTimer);
     connect(video_timer_, &QTimer::timeout, this, [this]
     {
@@ -3802,10 +3802,15 @@ void MainWindow::refreshLibrary()
 
     postLibrary([this, player_handle, query_utf8]
     {
+        struct TrackItem
+        {
+            QString label;
+            QString path;
+        };
         struct SearchContext
         {
-            MainWindow* window;
-        } context{this};
+            std::vector<TrackItem> tracks;
+        } context;
 
         const lnplayer_result_t result = lnplayer_library_search_tracks(
             player_handle,
@@ -3816,20 +3821,21 @@ void MainWindow::refreshLibrary()
                 auto* context = static_cast<SearchContext*>(user_data);
                 const QString title = QString::fromUtf8(track->title_utf8);
                 const QString artist = QString::fromUtf8(track->artist_utf8);
-                const QString path = QString::fromUtf8(track->path_utf8);
-                const QString label = artist.isEmpty()
-                    ? title
-                    : QStringLiteral("%1 — %2").arg(title, artist);
-                QMetaObject::invokeMethod(context->window, [window = context->window, label, path]
-                {
-                    auto* item = new QListWidgetItem(label, window->library_list_);
-                    item->setData(Qt::UserRole, path);
-                }, Qt::QueuedConnection);
+                context->tracks.push_back({
+                    artist.isEmpty() ? title : QStringLiteral("%1 — %2").arg(title, artist),
+                    QString::fromUtf8(track->path_utf8)
+                });
             },
             &context);
 
-        QMetaObject::invokeMethod(this, [this, result]
+        QMetaObject::invokeMethod(this,
+            [this, result, tracks = std::move(context.tracks)]
         {
+            for (const TrackItem& track : tracks)
+            {
+                auto* item = new QListWidgetItem(track.label, library_list_);
+                item->setData(Qt::UserRole, track.path);
+            }
             if (result != LNPLAYER_RESULT_OK)
                 status_label_->setText(QStringLiteral("音乐库查询失败"));
         }, Qt::QueuedConnection);
@@ -4938,45 +4944,34 @@ void MainWindow::handleCoreEvent(
 
 void MainWindow::refreshSnapshot()
 {
-    postCommand([this]
+    lnplayer_t* player = player_.load(std::memory_order_acquire);
+    if (!player)
+        return;
+
+    lnplayer_snapshot_t snapshot{};
+    snapshot.struct_size = sizeof(snapshot);
+    if (lnplayer_get_snapshot(player, &snapshot) != LNPLAYER_RESULT_OK)
+        return;
+
+    media_generation_ = std::max(media_generation_, snapshot.generation);
+    has_audio_ = (snapshot.reserved & LNPLAYER_MEDIA_HAS_AUDIO) != 0;
+    has_video_ = (snapshot.reserved & LNPLAYER_MEDIA_HAS_VIDEO) != 0;
+    updatePlaybackState(snapshot.state, snapshot.position_ms, snapshot.duration_ms);
+
+    if (mode_ == PlayerMode::Video && !has_video_ &&
+        !playlist_open_pending_ && !current_media_path_.isEmpty() && empty_state_label_)
     {
-        if (!player_)
-            return;
-
-        lnplayer_snapshot_t snapshot{};
-        snapshot.struct_size = sizeof(snapshot);
-        if (lnplayer_get_snapshot(player_, &snapshot) != LNPLAYER_RESULT_OK)
-            return;
-
-        const lnplayer_state_t state = snapshot.state;
-        const int64_t position_ms = snapshot.position_ms;
-        const int64_t duration_ms = snapshot.duration_ms;
-        const uint64_t generation = snapshot.generation;
-        const bool has_audio = (snapshot.reserved & LNPLAYER_MEDIA_HAS_AUDIO) != 0;
-        const bool has_video = (snapshot.reserved & LNPLAYER_MEDIA_HAS_VIDEO) != 0;
-
-        QMetaObject::invokeMethod(this, [this, state, position_ms, duration_ms, generation, has_audio, has_video]
-        {
-            media_generation_ = std::max(media_generation_, generation);
-            has_audio_ = has_audio;
-            has_video_ = has_video;
-            updatePlaybackState(state, position_ms, duration_ms);
-            if (mode_ == PlayerMode::Video && !has_video_ &&
-                !playlist_open_pending_ && !current_media_path_.isEmpty() && empty_state_label_)
-            {
-                empty_state_label_->setText(QStringLiteral("当前媒体没有可播放的视频流"));
-                empty_state_label_->adjustSize();
-                empty_state_label_->move(
-                    (video_surface_->width() - empty_state_label_->width()) / 2,
-                    (video_surface_->height() - empty_state_label_->height()) / 2);
-                empty_state_label_->show();
-                empty_state_label_->raise();
-            }
-            if (has_video_ && !video_first_frame_received_ &&
-                !pending_video_frame_valid_ && !video_frame_pending_)
-                requestVideoFrame();
-        }, Qt::QueuedConnection);
-    });
+        empty_state_label_->setText(QStringLiteral("当前媒体没有可播放的视频流"));
+        empty_state_label_->adjustSize();
+        empty_state_label_->move(
+            (video_surface_->width() - empty_state_label_->width()) / 2,
+            (video_surface_->height() - empty_state_label_->height()) / 2);
+        empty_state_label_->show();
+        empty_state_label_->raise();
+    }
+    if (has_video_ && !video_first_frame_received_ &&
+        !pending_video_frame_valid_ && !video_frame_pending_)
+        requestVideoFrame();
 }
 
 void MainWindow::updatePlaybackState(
