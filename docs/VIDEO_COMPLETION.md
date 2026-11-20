@@ -229,3 +229,12 @@
 
 - [x] 播放音量及静音前音量使用 QSettings 持久化；Player 创建后在 Core 命令线程恢复音量，UI 控件只在 GUI 线程读取。
 提交：`992550cbffa056523d9003b612a78e5d807c19be`（后续线程边界修正：`501cfef55d1d93ea22ec07d27efb44c15c075dfe`）。
+
+### 2026-11-21 — Windows 字幕单元测试
+
+- [x] 新增 Qt Core 字幕测试目标，覆盖 SRT 时间区间、换行、结束边界、正向延迟、禁用状态。
+- [x] 覆盖 UTF-16LE BOM 解码。
+- [x] 覆盖 ASS fallback 对 Dialogue 字段、逗号、Override Tag 和换行的基础处理。
+- [ ] 尚未在 Windows/Qt 环境编译或运行；libass 的完整 ASS 样式和特效仍需集成测试，不由 fallback parser 测试代替。
+
+提交：`8154dfd93a18b4e5d4b91b262de95174c4ff7e04`、`ca1051775937547962d2acad2db24f4168858173`。
