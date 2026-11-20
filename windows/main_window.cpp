@@ -2243,14 +2243,28 @@ void MainWindow::presentPendingVideoFrame()
 void MainWindow::togglePlayback()
 {
     const bool should_pause = is_playing_;
-    QMetaObject::invokeMethod(command_worker_, [this, should_pause]
+    const bool resume_from_history = !should_pause && viewing_historical_frame_;
+    const int64_t resume_position = current_position_ms_;
+    if (resume_from_history)
+        viewing_historical_frame_ = false;
+
+    QMetaObject::invokeMethod(command_worker_,
+        [this, should_pause, resume_from_history, resume_position]
     {
         if (!player_)
             return;
         if (should_pause)
+        {
             lnplayer_pause(player_);
-        else
-            lnplayer_play(player_);
+            return;
+        }
+        if (resume_from_history)
+        {
+            uint64_t operation_id = 0;
+            if (lnplayer_seek(player_, resume_position, &operation_id) != LNPLAYER_RESULT_OK)
+                return;
+        }
+        lnplayer_play(player_);
     }, Qt::QueuedConnection);
 }
 
