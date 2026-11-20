@@ -70,6 +70,9 @@ private:
     SessionResult make_result(bool success, std::string message = {}) const;
     void reset_media_state();
 
+#ifdef _WIN32
+    void* video_device_ = nullptr;
+#endif
     MediaBackendFactory backend_factory_;
     mutable std::mutex mutex_;
     std::unique_ptr<MediaBackend> backend_;
