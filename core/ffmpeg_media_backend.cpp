@@ -184,6 +184,8 @@ public:
         demux_eof_ = false;
         resampler_drained_ = false;
         clear_packet_queues();
+        audio_consumer_active_ = false;
+        video_consumer_active_ = false;
         return success();
     }
 
@@ -455,6 +457,7 @@ public:
 
         if (!opened_ || !audio_decoder_ || !audio_packet_ || !audio_frame_)
             return failure("No decodable audio stream is open.");
+        audio_consumer_active_ = true;
 
         for (;;)
         {
@@ -551,6 +554,7 @@ public:
 
         if (!opened_ || !video_decoder_ || !video_packet_ || !video_frame_)
             return failure("No decodable video stream is open.");
+        video_consumer_active_ = true;
 
         for (;;)
         {
@@ -642,9 +646,9 @@ private:
             }
 
             std::deque<AVPacket*>* destination = nullptr;
-            if (packet->stream_index == audio_stream_index_)
+            if (packet->stream_index == audio_stream_index_ && audio_consumer_active_)
                 destination = &audio_packet_queue_;
-            else if (packet->stream_index == video_stream_index_)
+            else if (packet->stream_index == video_stream_index_ && video_consumer_active_)
                 destination = &video_packet_queue_;
 
             if (destination)
@@ -989,6 +993,8 @@ private:
     bool video_draining_ = false;
     bool video_packet_pending_ = false;
     bool demux_eof_ = false;
+    bool audio_consumer_active_ = false;
+    bool video_consumer_active_ = false;
 };
 
 }
