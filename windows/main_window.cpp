@@ -3903,6 +3903,14 @@ void MainWindow::handleCoreEvent(
             if (playlist_index_ >= 0 && playlist_index_ < playlist_.size())
             {
                 QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+                const int saved_audio_track = settings.value(
+                    mediaPreferenceKey(QStringLiteral("AudioTrack"), current_media_path_), -1).toInt();
+                if (saved_audio_track >= 0)
+                    selectAudioTrack(saved_audio_track);
+            }
+            if (playlist_index_ >= 0 && playlist_index_ < playlist_.size())
+            {
+                QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
                 const QString external_subtitle_key = mediaPreferenceKey(
                     QStringLiteral("ExternalSubtitle"), current_media_path_);
                 const QString external_subtitle_path = settings.value(external_subtitle_key).toString();
