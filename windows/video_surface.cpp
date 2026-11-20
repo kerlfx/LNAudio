@@ -15,6 +15,7 @@
 #include <QResizeEvent>
 #include <QWheelEvent>
 
+#include <algorithm>
 #include <utility>
 #include <vector>
 
@@ -96,6 +97,20 @@ void VideoSurface::set_aspect_ratio(float ratio)
         update();
 }
 
+void VideoSurface::adjust_zoom(int direction)
+{
+    zoom_ = std::clamp(zoom_ + static_cast<float>(direction) * 0.1f, 1.0f, 3.0f);
+    if (renderer_)
+        renderer_->set_zoom(zoom_);
+    else
+        update();
+}
+
+float VideoSurface::zoom() const
+{
+    return zoom_;
+}
+
 void VideoSurface::set_source_aspect_ratio(float ratio)
 {
     source_aspect_ratio_ = ratio;
@@ -161,7 +176,7 @@ QImage VideoSurface::capture_frame() const
 
 void VideoSurface::set_interaction_callbacks(
     std::function<void()> double_click,
-    std::function<void(int)> wheel,
+    std::function<void(int, bool)> wheel,
     std::function<void()> middle_click,
     std::function<void(int)> gesture)
 {
@@ -231,7 +246,9 @@ void VideoSurface::contextMenuEvent(QContextMenuEvent* event)
 void VideoSurface::wheelEvent(QWheelEvent* event)
 {
     if (wheel_callback_ && event->angleDelta().y() != 0)
-        wheel_callback_(event->angleDelta().y() > 0 ? 1 : -1);
+        wheel_callback_(
+            event->angleDelta().y() > 0 ? 1 : -1,
+            event->modifiers().testFlag(Qt::ControlModifier));
     event->accept();
 }
 
@@ -254,11 +271,14 @@ void VideoSurface::paintEvent(QPaintEvent* event)
         : frame_.size();
     const QSize fitted = source_size.scaled(
         size(), stretch_ ? Qt::IgnoreAspectRatio : Qt::KeepAspectRatio);
+    const QSize zoomed(
+        static_cast<int>(fitted.width() * zoom_),
+        static_cast<int>(fitted.height() * zoom_));
     const QRect target(
-        (width() - fitted.width()) / 2,
-        (height() - fitted.height()) / 2,
-        fitted.width(),
-        fitted.height());
+        (width() - zoomed.width()) / 2,
+        (height() - zoomed.height()) / 2,
+        zoomed.width(),
+        zoomed.height());
     painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
     painter.drawImage(target, frame_);
 }
