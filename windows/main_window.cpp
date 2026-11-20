@@ -62,7 +62,6 @@
 #include <QMetaObject>
 #include <QMimeData>
 #include <QMouseEvent>
-#include <QStyle>
 #include <QPushButton>
 #include <QPainter>
 #include <QRegularExpression>
@@ -774,6 +773,7 @@ MainWindow::MainWindow(
         playlist_widget_->setItemDelegate(new PlaylistItemDelegate(playlist_widget_));
         playlist_widget_->setMaximumWidth(360);
         playlist_widget_->setDragDropMode(QAbstractItemView::InternalMove);
+        playlist_widget_->setDropIndicatorShown(true);
         playlist_widget_->setAcceptDrops(true);
         playlist_widget_->installEventFilter(this);
         playlist_widget_->setSelectionMode(QAbstractItemView::ExtendedSelection);
@@ -2379,6 +2379,7 @@ void MainWindow::showPlaylistWindow()
     root->addWidget(create_playlist_header(dialog));
     view->setSelectionMode(QAbstractItemView::ExtendedSelection);
     view->setDragDropMode(QAbstractItemView::InternalMove);
+    view->setDropIndicatorShown(true);
     view->setDefaultDropAction(Qt::MoveAction);
     view->setEditTriggers(QAbstractItemView::NoEditTriggers);
     root->addWidget(view, 1);
