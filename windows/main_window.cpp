@@ -18,10 +18,8 @@
 #include <QFont>
 #include <QFontComboBox>
 #include <QApplication>
-#include <QCursor>
 #include <QDragEnterEvent>
 #include <QDir>
-#include <QDesktopServices>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QFormLayout>
@@ -894,8 +892,7 @@ MainWindow::MainWindow(
             menuBar()->hide();
         if (playlist_panel_)
             playlist_panel_->hide();
-        if (QApplication::widgetAt(QCursor::pos()) == video_surface_)
-            setCursor(Qt::BlankCursor);
+        setCursor(Qt::BlankCursor);
     });
     if (video_surface_)
     {
