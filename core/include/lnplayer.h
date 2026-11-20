@@ -117,6 +117,7 @@ typedef struct lnplayer_audio_track_info
     const char* codec_utf8;
 } lnplayer_audio_track_info_t;
 
+/* Audio track metadata strings are valid only during the callback. */
 typedef void (*lnplayer_audio_track_callback_t)(
     const lnplayer_audio_track_info_t* track,
     void* user_data);
