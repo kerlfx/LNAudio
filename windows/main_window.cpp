@@ -1032,7 +1032,6 @@ void MainWindow::resetShuffleOrder()
 
 int MainWindow::nextPlaylistIndex(bool manual) const
 {
-    Q_UNUSED(manual);
     if (playlist_.isEmpty() || playlist_index_ < 0)
         return -1;
 
@@ -1043,7 +1042,7 @@ int MainWindow::nextPlaylistIndex(bool manual) const
             return -1;
         if (current + 1 < shuffle_order_.size())
             return shuffle_order_[current + 1];
-        return repeat_mode_ == 1 && !shuffle_order_.isEmpty()
+        return (manual || repeat_mode_ == 1) && !shuffle_order_.isEmpty()
             ? shuffle_order_.front()
             : -1;
     }
@@ -1051,7 +1050,7 @@ int MainWindow::nextPlaylistIndex(bool manual) const
     const int next = playlist_index_ + 1;
     if (next < playlist_.size())
         return next;
-    return repeat_mode_ == 1 ? 0 : -1;
+    return manual || repeat_mode_ == 1 ? 0 : -1;
 }
 
 void MainWindow::openPlaylistIndex(int index)
@@ -1110,8 +1109,23 @@ void MainWindow::openPlaylistIndex(int index)
 
 void MainWindow::playPrevious()
 {
-    if (playlist_index_ > 0)
-        openPlaylistIndex(playlist_index_ - 1);
+    if (playlist_.isEmpty() || playlist_index_ < 0)
+        return;
+
+    if (shuffle_enabled_)
+    {
+        const int current = shuffle_order_.indexOf(playlist_index_);
+        if (current < 0 || shuffle_order_.isEmpty())
+            return;
+        const int previous = current > 0 ? current - 1 : shuffle_order_.size() - 1;
+        openPlaylistIndex(shuffle_order_[previous]);
+        return;
+    }
+
+    const int previous = playlist_index_ > 0
+        ? playlist_index_ - 1
+        : playlist_.size() - 1;
+    openPlaylistIndex(previous);
 }
 
 void MainWindow::playNext()
