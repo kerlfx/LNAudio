@@ -1773,24 +1773,50 @@ private:
             : transfer == AVCOL_TRC_ARIB_STD_B67 ? 2 : 0;
         output.color_primaries = primaries == AVCOL_PRI_BT2020 ? 1 : 0;
 
-        if (AVFrameSideData* mastering_side_data = av_frame_get_side_data(
-                video_frame_, AV_FRAME_DATA_MASTERING_DISPLAY_METADATA))
+        AVFrameSideData* mastering_side_data = av_frame_get_side_data(
+            video_frame_, AV_FRAME_DATA_MASTERING_DISPLAY_METADATA);
+        const AVMasteringDisplayMetadata* mastering = nullptr;
+        if (mastering_side_data &&
+            mastering_side_data->size >= sizeof(AVMasteringDisplayMetadata))
         {
-            const auto* mastering = reinterpret_cast<const AVMasteringDisplayMetadata*>(
+            mastering = reinterpret_cast<const AVMasteringDisplayMetadata*>(
                 mastering_side_data->data);
-            if (mastering->has_luminance)
-            {
-                mastering_max_luminance_ =
-                    static_cast<float>(av_q2d(mastering->max_luminance));
-                mastering_min_luminance_ =
-                    static_cast<float>(av_q2d(mastering->min_luminance));
-            }
         }
-        if (AVFrameSideData* content_light_side_data = av_frame_get_side_data(
-                video_frame_, AV_FRAME_DATA_CONTENT_LIGHT_LEVEL))
+        else
         {
-            const auto* content_light = reinterpret_cast<const AVContentLightMetadata*>(
+            size_t side_data_size = 0;
+            uint8_t* stream_side_data = av_stream_get_side_data(
+                video_stream, AV_PKT_DATA_MASTERING_DISPLAY_METADATA, &side_data_size);
+            if (stream_side_data && side_data_size >= sizeof(AVMasteringDisplayMetadata))
+                mastering = reinterpret_cast<const AVMasteringDisplayMetadata*>(stream_side_data);
+        }
+        if (mastering && mastering->has_luminance)
+        {
+            mastering_max_luminance_ =
+                static_cast<float>(av_q2d(mastering->max_luminance));
+            mastering_min_luminance_ =
+                static_cast<float>(av_q2d(mastering->min_luminance));
+        }
+
+        AVFrameSideData* content_light_side_data = av_frame_get_side_data(
+            video_frame_, AV_FRAME_DATA_CONTENT_LIGHT_LEVEL);
+        const AVContentLightMetadata* content_light = nullptr;
+        if (content_light_side_data &&
+            content_light_side_data->size >= sizeof(AVContentLightMetadata))
+        {
+            content_light = reinterpret_cast<const AVContentLightMetadata*>(
                 content_light_side_data->data);
+        }
+        else
+        {
+            size_t side_data_size = 0;
+            uint8_t* stream_side_data = av_stream_get_side_data(
+                video_stream, AV_PKT_DATA_CONTENT_LIGHT_LEVEL, &side_data_size);
+            if (stream_side_data && side_data_size >= sizeof(AVContentLightMetadata))
+                content_light = reinterpret_cast<const AVContentLightMetadata*>(stream_side_data);
+        }
+        if (content_light)
+        {
             max_content_light_level_ = content_light->MaxCLL;
             max_frame_average_light_level_ = content_light->MaxFALL;
         }
