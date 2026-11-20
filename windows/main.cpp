@@ -7,6 +7,9 @@
 int main(int argc, char* argv[])
 {
     QApplication application(argc, argv);
+    application.setOrganizationName(QStringLiteral("LNPlayer"));
+    application.setApplicationName(QStringLiteral("LNPlayer"));
+    application.setApplicationVersion(QStringLiteral("0.1.0"));
 
     QCommandLineParser parser;
     parser.addHelpOption();
