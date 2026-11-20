@@ -45,6 +45,7 @@ class PlaybackSession
 {
 public:
     explicit PlaybackSession(MediaBackendFactory backend_factory);
+    ~PlaybackSession();
 
     PlaybackSession(const PlaybackSession&) = delete;
     PlaybackSession& operator=(const PlaybackSession&) = delete;
