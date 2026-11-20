@@ -32,6 +32,7 @@ struct MediaVideoInfo
     int color_transfer = 0;
     int color_space = 0;
     int bit_depth = 0;
+    bool hardware_decoding = false;
 };
 
 struct MediaInfo
