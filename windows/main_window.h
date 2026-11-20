@@ -43,6 +43,8 @@ public:
 protected:
     void dragEnterEvent(QDragEnterEvent* event) override;
     void dropEvent(QDropEvent* event) override;
+    bool eventFilter(QObject* watched, QEvent* event) override;
+    void changeEvent(QEvent* event) override;
 
 private:
     struct VideoFrameHistoryEntry
@@ -101,6 +103,8 @@ private:
         const QString& message);
     void refreshSnapshot();
     void updatePlaybackState(lnplayer_state_t state, int64_t position_ms, int64_t duration_ms);
+    void showFullscreenControls();
+    void updateFullscreenUi();
 
     PlayerMode mode_;
     QLabel* status_label_;
@@ -110,6 +114,8 @@ private:
     QListWidget* library_list_;
     QListWidget* playlist_widget_ = nullptr;
     VideoSurface* video_surface_ = nullptr;
+    QWidget* control_panel_ = nullptr;
+    QWidget* playlist_panel_ = nullptr;
     QSlider* seek_slider_;
     QSlider* volume_slider_;
     QPushButton* play_button_;
@@ -126,10 +132,12 @@ private:
     QTimer* snapshot_timer_;
     QTimer* video_timer_;
     QTimer* device_timer_;
+    QTimer* fullscreen_hide_timer_;
     lnplayer_t* player_ = nullptr;
     void* video_device_identity_ = nullptr;
     int64_t duration_ms_ = -1;
     bool slider_dragging_ = false;
+    bool fullscreen_controls_visible_ = true;
     bool has_video_ = false;
     bool has_audio_ = false;
     bool is_playing_ = false;
