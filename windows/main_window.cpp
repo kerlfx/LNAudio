@@ -1,3 +1,7 @@
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+
 #include "main_window.h"
 #include "d3d11_video_renderer.h"
 #include "lnplayer_windows.h"
