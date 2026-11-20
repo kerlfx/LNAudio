@@ -36,6 +36,15 @@ if(WIN32)
     set(CPACK_NSIS_PACKAGE_NAME "LNPlayer")
     set(CPACK_NSIS_URL_INFO_ABOUT "https://github.com/kerlfx/LNPlayer")
     set(CPACK_NSIS_ENABLE_UNINSTALL_BEFORE_INSTALL ON)
+    set(CPACK_NSIS_EXECUTABLES_DIRECTORY ".")
+    set(CPACK_NSIS_CREATE_ICONS_EXTRA [=[
+        CreateDirectory "$SMPROGRAMS\\LNPlayer"
+        CreateShortCut "$SMPROGRAMS\\LNPlayer\\LNPlayer Video.lnk" "$INSTDIR\\LNPlayer.exe" "--video"
+    ]=])
+    set(CPACK_NSIS_DELETE_ICONS_EXTRA [=[
+        Delete "$SMPROGRAMS\\LNPlayer\\LNPlayer Video.lnk"
+        RMDir "$SMPROGRAMS\\LNPlayer"
+    ]=])
     set(CPACK_NSIS_EXTRA_INSTALL_COMMANDS [=[
         WriteRegStr HKCR "LNPlayer.Video" "" "LNPlayer Video"
         WriteRegStr HKCR "LNPlayer.Video\DefaultIcon" "" '"$INSTDIR\LNPlayer.exe",0'
