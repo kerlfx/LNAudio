@@ -249,16 +249,22 @@ public:
     {
         const lnplayer::SessionSnapshot session_snapshot = session_.snapshot();
         std::lock_guard<std::mutex> lock(snapshot_mutex_);
-        output->state = snapshot_.state == LNPLAYER_STATE_SEEKING
-            ? LNPLAYER_STATE_SEEKING
-            : convert_state(session_snapshot.state);
-        output->position_ms = session_snapshot.position_ms;
-        output->duration_ms = session_snapshot.duration_ms;
+        const bool snapshot_matches_session =
+            snapshot_.generation == session_snapshot.generation;
+        output->state = snapshot_.state;
+        output->position_ms = snapshot_matches_session
+            ? session_snapshot.position_ms
+            : snapshot_.position_ms;
+        output->duration_ms = snapshot_matches_session
+            ? session_snapshot.duration_ms
+            : snapshot_.duration_ms;
         output->volume = snapshot_.volume;
         output->reserved =
             (session_snapshot.has_audio ? LNPLAYER_MEDIA_HAS_AUDIO : 0u) |
             (session_snapshot.has_video ? LNPLAYER_MEDIA_HAS_VIDEO : 0u);
-        output->generation = session_snapshot.generation;
+        output->generation = snapshot_matches_session
+            ? session_snapshot.generation
+            : snapshot_.generation;
     }
 
 #ifdef _WIN32
