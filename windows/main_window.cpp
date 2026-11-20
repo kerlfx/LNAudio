@@ -418,6 +418,8 @@ MainWindow::MainWindow(
             settings.value(QStringLiteral("Video/Subtitle/VerticalPosition"), 80).toInt(), 60, 80);
         middle_click_action_ = std::clamp(
             settings.value(QStringLiteral("Video/Mouse/MiddleClickAction"), 1).toInt(), 0, 2);
+        wheel_action_ = std::clamp(
+            settings.value(QStringLiteral("Video/Mouse/WheelAction"), 0).toInt(), 0, 2);
         mouse_gestures_enabled_ = settings.value(
             QStringLiteral("Video/Mouse/RightDragGestures"), false).toBool();
         auto_match_subtitle_ = settings.value(
@@ -1170,11 +1172,16 @@ MainWindow::MainWindow(
             },
             [this](int direction, bool control)
             {
-                if (control)
+                if (control || wheel_action_ == 2)
                 {
                     video_surface_->adjust_zoom(direction);
                     showOsd(QStringLiteral("画面缩放 %1%")
                         .arg(static_cast<int>(video_surface_->zoom() * 100.0f)));
+                    return;
+                }
+                if (wheel_action_ == 1)
+                {
+                    seekRelative(static_cast<int64_t>(direction) * 5000);
                     return;
                 }
                 volume_slider_->setValue(std::clamp(
@@ -2852,9 +2859,18 @@ void MainWindow::openVideoSettings()
     default_playback_rate->setDecimals(2);
     default_playback_rate->setSuffix(QStringLiteral(" ×"));
     default_playback_rate->setValue(playback_rate_);
+    auto* repeat_mode = new QComboBox(playback_page);
+    repeat_mode->addItem(QStringLiteral("关闭循环"), 0);
+    repeat_mode->addItem(QStringLiteral("列表循环"), 1);
+    repeat_mode->addItem(QStringLiteral("单项循环"), 2);
+    repeat_mode->setCurrentIndex(repeat_mode_);
+    auto* shuffle_enabled = new QCheckBox(QStringLiteral("启用随机播放"), playback_page);
+    shuffle_enabled->setChecked(shuffle_enabled_);
     playback_form->addRow(remember_position);
     playback_form->addRow(auto_play_next);
     playback_form->addRow(QStringLiteral("默认播放速度"), default_playback_rate);
+    playback_form->addRow(QStringLiteral("循环模式"), repeat_mode);
+    playback_form->addRow(shuffle_enabled);
     add_settings_page(QStringLiteral("播放"), playback_page);
 
     auto* interface_page = new QWidget(pages);
@@ -2886,12 +2902,18 @@ void MainWindow::openVideoSettings()
     auto* mouse_gestures = new QCheckBox(
         QStringLiteral("启用右键拖动手势（左/右：快退/快进，上/下：音量）"), interface_page);
     mouse_gestures->setChecked(mouse_gestures_enabled_);
+    auto* wheel_action = new QComboBox(interface_page);
+    wheel_action->addItem(QStringLiteral("调节音量"), 0);
+    wheel_action->addItem(QStringLiteral("快退/快进 5 秒"), 1);
+    wheel_action->addItem(QStringLiteral("缩放画面"), 2);
+    wheel_action->setCurrentIndex(wheel_action_);
     interface_form->addRow(QStringLiteral("全屏控制栏自动隐藏"), hide_delay);
     interface_form->addRow(QStringLiteral("OSD 显示时长"), osd_duration);
     interface_form->addRow(QStringLiteral("OSD 位置"), osd_position);
     interface_form->addRow(show_playlist);
     interface_form->addRow(always_on_top);
     interface_form->addRow(QStringLiteral("画面中键操作"), middle_click);
+    interface_form->addRow(QStringLiteral("鼠标滚轮操作"), wheel_action);
     interface_form->addRow(mouse_gestures);
     add_settings_page(QStringLiteral("界面"), interface_page);
 
@@ -3054,12 +3076,15 @@ void MainWindow::openVideoSettings()
         remember_position->setChecked(true);
         auto_play_next->setChecked(true);
         default_playback_rate->setValue(1.0);
+        repeat_mode->setCurrentIndex(0);
+        shuffle_enabled->setChecked(false);
         hide_delay->setValue(2);
         osd_duration->setValue(1500);
         osd_position->setCurrentIndex(1);
         show_playlist->setChecked(true);
         always_on_top->setChecked(false);
         middle_click->setCurrentIndex(1);
+        wheel_action->setCurrentIndex(0);
         mouse_gestures->setChecked(false);
         aspect->setCurrentIndex(0);
         brightness->setValue(0.0);
@@ -3121,6 +3146,9 @@ void MainWindow::openVideoSettings()
 
     remember_position_ = remember_position->isChecked();
     auto_play_next_ = auto_play_next->isChecked();
+    repeat_mode_ = repeat_mode->currentData().toInt();
+    shuffle_enabled_ = shuffle_enabled->isChecked();
+    wheel_action_ = wheel_action->currentData().toInt();
     if (std::abs(playback_rate_ - default_playback_rate->value()) > 0.001)
         setPlaybackRate(static_cast<float>(default_playback_rate->value()));
     fullscreen_hide_delay_ms_ = hide_delay->value() * 1000;
@@ -3133,6 +3161,17 @@ void MainWindow::openVideoSettings()
     mouse_gestures_enabled_ = mouse_gestures->isChecked();
     if (video_surface_)
         video_surface_->set_gesture_enabled(mouse_gestures_enabled_);
+    if (shuffle_button_)
+    {
+        shuffle_button_->setChecked(shuffle_enabled_);
+        shuffle_button_->setText(shuffle_enabled_
+            ? QStringLiteral("随机：开") : QStringLiteral("随机：关"));
+    }
+    if (repeat_button_)
+        repeat_button_->setText(repeat_mode_ == 0 ? QStringLiteral("循环：关")
+            : repeat_mode_ == 1 ? QStringLiteral("循环：列表") : QStringLiteral("循环：单项"));
+    resetShuffleOrder();
+    saveVideoPlaylist();
     if (playlist_visibility_action_)
         playlist_visibility_action_->setChecked(playlist_panel_visible_);
     if (always_on_top_action_)
@@ -3194,6 +3233,7 @@ void MainWindow::openVideoSettings()
     }
     settings.setValue(QStringLiteral("Video/UI/PlaylistVisible"), playlist_panel_visible_);
     settings.setValue(QStringLiteral("Video/Mouse/MiddleClickAction"), middle_click_action_);
+    settings.setValue(QStringLiteral("Video/Mouse/WheelAction"), wheel_action_);
     settings.setValue(QStringLiteral("Video/Mouse/RightDragGestures"), mouse_gestures_enabled_);
     settings.setValue(QStringLiteral("Video/Display/AspectRatio"), video_aspect_ratio_override_);
     settings.setValue(QStringLiteral("Video/Display/Stretch"), video_stretch_);
