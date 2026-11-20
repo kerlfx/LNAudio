@@ -56,6 +56,8 @@ private:
     QPushButton* stop_button_;
     QObject* command_worker_;
     QThread* command_thread_;
+    QObject* library_worker_;
+    QThread* library_thread_;
     QTimer* snapshot_timer_;
     lnplayer_t* player_ = nullptr;
     int64_t duration_ms_ = -1;
