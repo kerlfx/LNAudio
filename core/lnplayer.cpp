@@ -3,6 +3,9 @@
 #include "runtime.h"
 #include "ffmpeg_media_backend.h"
 #include "playback_session.h"
+#ifdef _WIN32
+#include "lnplayer_windows.h"
+#endif
 
 #include <atomic>
 #include <cstring>
@@ -273,8 +276,8 @@ public:
         *end_of_stream = read.end_of_stream ? 1 : 0;
         if (!read.end_of_stream && callback && !read.frame.bgra.empty())
         {
-            const lnplayer_video_frame_t frame{
-                sizeof(lnplayer_video_frame_t),
+            const lnplayer_windows_video_frame_t frame{
+                sizeof(lnplayer_windows_video_frame_t),
                 read.frame.bgra.data(),
                 read.frame.width,
                 read.frame.height,
@@ -722,9 +725,9 @@ lnplayer_result_t lnplayer_library_search_tracks(
     }
 }
 
-lnplayer_result_t lnplayer_read_video_frame(
+lnplayer_result_t lnplayer_windows_read_video_frame(
     lnplayer_t* player,
-    lnplayer_video_frame_callback_t callback,
+    lnplayer_windows_video_frame_callback_t callback,
     void* user_data,
     int* end_of_stream)
 {
