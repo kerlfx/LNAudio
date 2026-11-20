@@ -19,6 +19,7 @@ extern "C"
 
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <cerrno>
 #include <cmath>
 #include <condition_variable>
@@ -246,6 +247,12 @@ public:
         {
             if (!video_decoder_)
                 return failure("The media source has no playable stream.");
+            {
+                std::lock_guard<std::mutex> clock_lock(video_clock_mutex_);
+                video_clock_anchor_position_ms_ = position_ms_.load(std::memory_order_relaxed);
+                video_clock_anchor_time_ = std::chrono::steady_clock::now();
+                video_clock_running_ = true;
+            }
             playing_ = true;
             playback_ended_.store(false, std::memory_order_relaxed);
             return success();
@@ -292,6 +299,11 @@ public:
         {
             if (!playing_)
                 return failure("The media source is not playing.");
+            {
+                std::lock_guard<std::mutex> clock_lock(video_clock_mutex_);
+                position_ms_.store(video_clock_position_locked(), std::memory_order_relaxed);
+                video_clock_running_ = false;
+            }
             playing_ = false;
             return success();
         }
@@ -405,6 +417,13 @@ public:
         }
 
         position_ms_.store(position_ms, std::memory_order_relaxed);
+        if (!audio_decoder_)
+        {
+            std::lock_guard<std::mutex> clock_lock(video_clock_mutex_);
+            video_clock_anchor_position_ms_ = position_ms;
+            video_clock_anchor_time_ = std::chrono::steady_clock::now();
+            video_clock_running_ = playing_.load(std::memory_order_relaxed);
+        }
 #ifdef _WIN32
         audio_clock_valid_.store(false, std::memory_order_relaxed);
 #endif
@@ -492,6 +511,12 @@ public:
         video_stream_index_ = -1;
         start_time_ms_ = 0;
         position_ms_.store(0, std::memory_order_relaxed);
+        {
+            std::lock_guard<std::mutex> clock_lock(video_clock_mutex_);
+            video_clock_anchor_position_ms_ = 0;
+            video_clock_anchor_time_ = std::chrono::steady_clock::now();
+            video_clock_running_ = false;
+        }
 #ifdef _WIN32
         audio_clock_valid_.store(false, std::memory_order_relaxed);
 #endif
@@ -515,6 +540,11 @@ public:
 
     int64_t position_ms() const override
     {
+        if (!audio_decoder_)
+        {
+            std::lock_guard<std::mutex> clock_lock(video_clock_mutex_);
+            return video_clock_position_locked();
+        }
         return position_ms_.load(std::memory_order_relaxed);
     }
 
@@ -531,6 +561,12 @@ public:
     void set_playback_rate(float rate) override
     {
         std::lock_guard<std::mutex> lock(audio_decode_mutex_);
+        if (!audio_decoder_)
+        {
+            std::lock_guard<std::mutex> clock_lock(video_clock_mutex_);
+            video_clock_anchor_position_ms_ = video_clock_position_locked();
+            video_clock_anchor_time_ = std::chrono::steady_clock::now();
+        }
         playback_rate_.store(rate, std::memory_order_relaxed);
 #ifdef _WIN32
         audio_clock_valid_.store(false, std::memory_order_relaxed);
@@ -761,6 +797,12 @@ private:
         if (!playback_ended_.compare_exchange_strong(expected, true, std::memory_order_relaxed))
             return false;
 
+        if (!audio_decoder_)
+        {
+            std::lock_guard<std::mutex> clock_lock(video_clock_mutex_);
+            position_ms_.store(video_clock_position_locked(), std::memory_order_relaxed);
+            video_clock_running_ = false;
+        }
         playing_ = false;
         return true;
     }
@@ -1379,6 +1421,16 @@ private:
     }
 #endif
 
+    int64_t video_clock_position_locked() const
+    {
+        if (!video_clock_running_)
+            return position_ms_.load(std::memory_order_relaxed);
+        const auto elapsed = std::chrono::steady_clock::now() - video_clock_anchor_time_;
+        const double elapsed_ms = std::chrono::duration<double, std::milli>(elapsed).count();
+        return video_clock_anchor_position_ms_ + static_cast<int64_t>(
+            elapsed_ms * playback_rate_.load(std::memory_order_relaxed));
+    }
+
     static MediaBackendResult success()
     {
         return MediaBackendResult{true, {}};
@@ -1409,6 +1461,11 @@ private:
 #endif
     int output_sample_rate_ = kOutputSampleRate;
     std::atomic<int64_t> position_ms_{0};
+    mutable std::mutex video_clock_mutex_;
+    std::chrono::steady_clock::time_point video_clock_anchor_time_ =
+        std::chrono::steady_clock::now();
+    int64_t video_clock_anchor_position_ms_ = 0;
+    bool video_clock_running_ = false;
 #ifdef _WIN32
     std::atomic<uint64_t> audio_clock_anchor_frames_{0};
     std::atomic<int64_t> audio_clock_anchor_media_ms_{0};
