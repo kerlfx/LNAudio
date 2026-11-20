@@ -1620,11 +1620,15 @@ private:
                 : video_stream->codecpar->color_range;
         output.ycbcr_matrix = frame_color_space == AVCOL_SPC_BT709 ? 1 : 0;
         output.ycbcr_full_range = frame_color_range == AVCOL_RANGE_JPEG ? 1 : 0;
+        const bool hardware_matrix_supported =
+            frame_color_space == AVCOL_SPC_UNSPECIFIED ||
+            frame_color_space == AVCOL_SPC_BT709 ||
+            frame_color_space == AVCOL_SPC_BT470BG ||
+            frame_color_space == AVCOL_SPC_SMPTE170M;
 #ifdef _WIN32
         if (video_frame_->format == AV_PIX_FMT_D3D11 &&
             video_device_shared_ && frame_rotation == 0 && output.hdr_transfer == 0 &&
-            frame_color_space != AVCOL_SPC_BT2020_NCL &&
-            frame_color_space != AVCOL_SPC_BT2020_CL)
+            hardware_matrix_supported)
         {
             AVFrame* retained_frame = av_frame_clone(video_frame_);
             if (!retained_frame)
