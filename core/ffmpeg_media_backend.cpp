@@ -486,6 +486,9 @@ public:
         video_stream_index_ = -1;
         start_time_ms_ = 0;
         position_ms_.store(0, std::memory_order_relaxed);
+#ifdef _WIN32
+        audio_clock_valid_.store(false, std::memory_order_relaxed);
+#endif
         playback_ended_.store(false, std::memory_order_relaxed);
         playback_failed_.store(false, std::memory_order_relaxed);
         opened_ = false;
