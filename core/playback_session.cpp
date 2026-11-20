@@ -87,6 +87,7 @@ SessionResult PlaybackSession::play()
         if (!seek_result.success)
             return make_result(false, seek_result.message);
         snapshot_.position_ms = 0;
+        ++snapshot_.generation;
     }
 
     const MediaBackendResult result = backend_->play();
@@ -150,6 +151,7 @@ SessionResult PlaybackSession::stop()
 
     snapshot_.state = SessionState::Ready;
     snapshot_.position_ms = 0;
+    ++snapshot_.generation;
     return make_result(true);
 }
 
