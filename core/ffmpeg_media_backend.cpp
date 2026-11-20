@@ -270,6 +270,10 @@ public:
                 close();
                 return failure(message);
             }
+#ifdef _WIN32
+            info.video.hardware_decoding =
+                video_hardware_decode_ && video_decoder_->pix_fmt == AV_PIX_FMT_D3D11;
+#endif
 
             video_packet_ = av_packet_alloc();
             video_frame_ = av_frame_alloc();
