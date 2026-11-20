@@ -362,6 +362,13 @@ SessionResult PlaybackSession::select_subtitle_track(int stream_index)
     return make_result(true);
 }
 
+void PlaybackSession::set_subtitle_offset_ms(int64_t offset_ms)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (backend_)
+        backend_->set_subtitle_offset_ms(offset_ms);
+}
+
 void PlaybackSession::set_volume(float volume)
 {
     std::lock_guard<std::mutex> lock(mutex_);

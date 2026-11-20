@@ -212,6 +212,11 @@ public:
         return session_.subtitle_tracks();
     }
 
+    void set_subtitle_offset_ms(int64_t offset_ms)
+    {
+        session_.set_subtitle_offset_ms(offset_ms);
+    }
+
     lnplayer_result_t shutdown()
     {
         const lnplayer_result_t result =
@@ -1023,6 +1028,14 @@ lnplayer_result_t lnplayer_select_subtitle_track(lnplayer_t* player, int32_t str
     if (stream_index < -1)
         return set_error(LNPLAYER_RESULT_INVALID_ARGUMENT, "Subtitle stream index must be -1 or a valid stream index.");
     return finish_result(player->controller->select_subtitle_track(stream_index));
+}
+
+lnplayer_result_t lnplayer_set_subtitle_offset(lnplayer_t* player, int64_t offset_ms)
+{
+    if (!is_current_player(player))
+        return set_error(LNPLAYER_RESULT_INVALID_HANDLE, "Invalid Player handle.");
+    player->controller->set_subtitle_offset_ms(offset_ms);
+    return finish_result(LNPLAYER_RESULT_OK);
 }
 
 lnplayer_result_t lnplayer_get_last_error(

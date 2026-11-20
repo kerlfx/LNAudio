@@ -800,6 +800,12 @@ public:
         return success();
     }
 
+    void set_subtitle_offset_ms(int64_t offset_ms) override
+    {
+        std::lock_guard<std::mutex> lock(demux_mutex_);
+        subtitle_offset_ms_ = offset_ms;
+    }
+
     MediaBackendResult read_audio_frame(AudioFrame& output, bool& end_of_stream) override
     {
         std::lock_guard<std::mutex> decode_lock(audio_decode_mutex_);
@@ -1143,6 +1149,7 @@ private:
     void update_subtitle_for_position(int64_t position_ms, VideoFrame& output)
     {
         std::lock_guard<std::mutex> demux_lock(demux_mutex_);
+        const int64_t subtitle_position_ms = position_ms - subtitle_offset_ms_;
         if (subtitle_decoder_ && subtitle_stream_index_ >= 0)
         {
             AVStream* stream = format_context_->streams[subtitle_stream_index_];
@@ -1154,7 +1161,7 @@ private:
                     : packet->dts != AV_NOPTS_VALUE
                         ? av_rescale_q(packet->dts, stream->time_base, AVRational{1, 1000}) - start_time_ms_
                         : position_ms;
-                if (packet_timestamp > position_ms)
+                if (packet_timestamp > subtitle_position_ms)
                     break;
 
                 subtitle_packet_queue_.pop_front();
@@ -1273,13 +1280,13 @@ private:
         }
 
         while (!active_subtitle_cues_.empty() &&
-            active_subtitle_cues_.front().end_ms <= position_ms)
+            active_subtitle_cues_.front().end_ms <= subtitle_position_ms)
             active_subtitle_cues_.pop_front();
 
         bool has_bitmap = false;
         for (const DecodedSubtitleCue& cue : active_subtitle_cues_)
         {
-            if (cue.start_ms <= position_ms && position_ms < cue.end_ms)
+            if (cue.start_ms <= subtitle_position_ms && subtitle_position_ms < cue.end_ms)
             {
                 if (!cue.text.empty())
                 {
@@ -2113,6 +2120,7 @@ private:
     int video_stream_index_ = -1;
     int subtitle_stream_index_ = -1;
     int stream_rotation_degrees_ = 0;
+    int64_t subtitle_offset_ms_ = 0;
     int64_t start_time_ms_ = 0;
     bool opened_ = false;
     std::atomic<bool> playing_{false};

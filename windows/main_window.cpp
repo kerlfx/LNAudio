@@ -718,6 +718,12 @@ MainWindow::MainWindow(PlayerMode mode, const QString& initial_media, QWidget* p
                     subtitle_offset_ms_ -= 500;
                 else
                     subtitle_offset_ms_ = 0;
+                const int64_t subtitle_offset_ms = subtitle_offset_ms_;
+                QMetaObject::invokeMethod(command_worker_, [this, subtitle_offset_ms]
+                {
+                    if (player_)
+                        lnplayer_set_subtitle_offset(player_, subtitle_offset_ms);
+                }, Qt::QueuedConnection);
                 pending_video_frame_valid_ = false;
                 requestVideoFrame();
                 statusBar()->showMessage(QStringLiteral("字幕时间偏移：%1 ms").arg(subtitle_offset_ms_));

@@ -250,6 +250,11 @@ LNPLAYER_API lnplayer_result_t lnplayer_select_subtitle_track(
     lnplayer_t* player,
     int32_t stream_index);
 
+/* Subtitle offset in milliseconds; positive values delay subtitles. */
+LNPLAYER_API lnplayer_result_t lnplayer_set_subtitle_offset(
+    lnplayer_t* player,
+    int64_t offset_ms);
+
 /* Returns the last error on the calling thread; required_size includes NUL. */
 LNPLAYER_API lnplayer_result_t lnplayer_get_last_error(
     char* buffer,
