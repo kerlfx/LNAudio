@@ -123,6 +123,9 @@ MainWindow::MainWindow(
         fullscreen_hide_delay_ms_ = std::clamp(
             settings.value(QStringLiteral("Video/UI/FullscreenHideDelayMs"), 2000).toInt(),
             0, 10000);
+        osd_duration_ms_ = std::clamp(
+            settings.value(QStringLiteral("Video/UI/OSDDurationMs"), 1500).toInt(),
+            500, 5000);
         subtitle_font_family_ = settings.value(
             QStringLiteral("Video/Subtitle/FontFamily"), QStringLiteral("Segoe UI")).toString();
         subtitle_color_ = settings.value(
@@ -1620,7 +1623,7 @@ void MainWindow::showOsd(const QString& message)
         (video_surface_->height() - osd_label_->height()) / 2);
     osd_label_->raise();
     osd_label_->show();
-    osd_timer_->start(1500);
+    osd_timer_->start(osd_duration_ms_);
 }
 
 void MainWindow::showFullscreenControls()
@@ -2025,6 +2028,11 @@ void MainWindow::openVideoSettings()
     hide_delay->setSuffix(QStringLiteral(" 秒"));
     hide_delay->setSpecialValueText(QStringLiteral("关闭"));
     hide_delay->setValue(fullscreen_hide_delay_ms_ / 1000);
+    auto* osd_duration = new QSpinBox(interface_page);
+    osd_duration->setRange(500, 5000);
+    osd_duration->setSingleStep(250);
+    osd_duration->setSuffix(QStringLiteral(" ms"));
+    osd_duration->setValue(osd_duration_ms_);
     auto* show_playlist = new QCheckBox(QStringLiteral("显示播放列表侧栏"), interface_page);
     show_playlist->setChecked(playlist_panel_visible_);
     auto* always_on_top = new QCheckBox(QStringLiteral("窗口始终置顶"), interface_page);
@@ -2035,6 +2043,7 @@ void MainWindow::openVideoSettings()
     middle_click->addItem(QStringLiteral("切换全屏"), 2);
     middle_click->setCurrentIndex(middle_click_action_);
     interface_form->addRow(QStringLiteral("全屏控制栏自动隐藏"), hide_delay);
+    interface_form->addRow(QStringLiteral("OSD 显示时长"), osd_duration);
     interface_form->addRow(show_playlist);
     interface_form->addRow(always_on_top);
     interface_form->addRow(QStringLiteral("画面中键操作"), middle_click);
@@ -2134,6 +2143,7 @@ void MainWindow::openVideoSettings()
     {
         remember_position->setChecked(true);
         hide_delay->setValue(2);
+        osd_duration->setValue(1500);
         show_playlist->setChecked(true);
         always_on_top->setChecked(false);
         middle_click->setCurrentIndex(1);
@@ -2183,6 +2193,7 @@ void MainWindow::openVideoSettings()
 
     remember_position_ = remember_position->isChecked();
     fullscreen_hide_delay_ms_ = hide_delay->value() * 1000;
+    osd_duration_ms_ = osd_duration->value();
     fullscreen_hide_timer_->setInterval(fullscreen_hide_delay_ms_);
     playlist_panel_visible_ = show_playlist->isChecked();
     always_on_top_ = always_on_top->isChecked();
@@ -2224,6 +2235,7 @@ void MainWindow::openVideoSettings()
     settings.setValue(QStringLiteral("Video/Playback/RememberPosition"), remember_position_);
     settings.setValue(QStringLiteral("Video/Window/AlwaysOnTop"), always_on_top_);
     settings.setValue(QStringLiteral("Video/UI/FullscreenHideDelayMs"), fullscreen_hide_delay_ms_);
+    settings.setValue(QStringLiteral("Video/UI/OSDDurationMs"), osd_duration_ms_);
     for (auto it = shortcuts_.begin(); it != shortcuts_.end(); ++it)
     {
         const QKeySequence sequence = shortcut_edits.value(it.key())->keySequence();
