@@ -950,11 +950,16 @@ private:
             const MediaBackendResult decode_result = read_audio_frame(frame, end_of_stream);
             if (!decode_result.success || end_of_stream)
             {
-                if (decode_result.success && end_of_stream && !output.drain())
+                bool drain_success = true;
+                bool drain_audio = false;
+                if (decode_result.success && end_of_stream)
                 {
-                    playback_failed_.store(true, std::memory_order_relaxed);
-                    if (playback_error_callback_)
-                        playback_error_callback_("Unable to drain the Windows audio output buffer.");
+                    {
+                        std::lock_guard<std::mutex> lock(playback_mutex_);
+                        drain_audio = decode_generation == playback_generation_;
+                    }
+                    if (drain_audio)
+                        drain_success = output.drain();
                 }
 
                 bool stale_result = false;
@@ -965,9 +970,9 @@ private:
                     {
                         playback_active_ = false;
                         playing_ = false;
-                        if (decode_result.success && end_of_stream)
+                        if (decode_result.success && end_of_stream && drain_success)
                             playback_ended_.store(true, std::memory_order_relaxed);
-                        else if (!decode_result.success)
+                        else if (!decode_result.success || !drain_success)
                             playback_failed_.store(true, std::memory_order_relaxed);
                     }
                     playback_condition_.notify_all();
@@ -975,10 +980,13 @@ private:
 
                 if (stale_result)
                     continue;
-                if (decode_result.success && end_of_stream && playback_end_callback_)
+                if (decode_result.success && end_of_stream && drain_success && playback_end_callback_)
                     playback_end_callback_();
-                else if (!decode_result.success && playback_error_callback_)
-                    playback_error_callback_(decode_result.message);
+                else if ((!decode_result.success || !drain_success) && playback_error_callback_)
+                    playback_error_callback_(
+                        decode_result.success
+                            ? "Unable to drain the Windows audio output buffer."
+                            : decode_result.message);
                 continue;
             }
 
