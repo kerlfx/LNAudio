@@ -1188,6 +1188,8 @@ private:
         frame.width = target_width;
         frame.height = target_height;
         frame.stride = target_stride;
+        if ((degrees == 90 || degrees == 270) && frame.display_aspect_ratio > 0.0f)
+            frame.display_aspect_ratio = 1.0f / frame.display_aspect_ratio;
         if (degrees == 90 || degrees == 270)
             frame.display_aspect_ratio = frame.display_aspect_ratio > 0.0f
                 ? 1.0f / frame.display_aspect_ratio
