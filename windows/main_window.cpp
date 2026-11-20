@@ -1085,6 +1085,7 @@ MainWindow::MainWindow(
     {
         slider_dragging_ = false;
         viewing_historical_frame_ = false;
+        video_seek_pending_ = true;
         video_frame_history_.clear();
         video_frame_history_index_ = -1;
         pending_video_frame_valid_ = false;
@@ -1103,6 +1104,8 @@ MainWindow::MainWindow(
             }
             QMetaObject::invokeMethod(this, [this]
             {
+                video_seek_pending_ = false;
+                video_end_of_stream_ = false;
                 requestVideoFrame();
             }, Qt::QueuedConnection);
         }, Qt::QueuedConnection);
@@ -1463,6 +1466,7 @@ void MainWindow::openPlaylistIndex(int index)
 
     subtitle_cues_.clear();
     viewing_historical_frame_ = false;
+    video_seek_pending_ = false;
     pending_embedded_subtitle_.clear();
     pending_embedded_subtitle_bitmap_ = {};
     pending_video_display_aspect_ratio_ = 0.0f;
@@ -1937,8 +1941,12 @@ void MainWindow::requestVideoFrame()
 
             if (end_of_stream)
             {
-                video_end_of_stream_ = true;
-                video_timer_->stop();
+                if (!video_seek_pending_ && requested_generation >= media_generation_)
+                {
+                    media_generation_ = requested_generation;
+                    video_end_of_stream_ = true;
+                    video_timer_->stop();
+                }
                 return;
             }
 
@@ -1946,6 +1954,8 @@ void MainWindow::requestVideoFrame()
                 generation == requested_generation && generation >= media_generation_)
             {
                 media_generation_ = generation;
+                video_seek_pending_ = false;
+                video_end_of_stream_ = false;
                 video_first_frame_received_ = true;
                 if (video_surface_)
                 {
@@ -2279,6 +2289,7 @@ void MainWindow::togglePlayback()
         video_frame_history_index_ = -1;
         pending_video_frame_valid_ = false;
         video_end_of_stream_ = false;
+        video_seek_pending_ = true;
         video_timer_->start();
     }
 
@@ -2299,6 +2310,15 @@ void MainWindow::togglePlayback()
                 return;
         }
         lnplayer_play(player_);
+        if (resume_from_history)
+        {
+            QMetaObject::invokeMethod(this, [this]
+            {
+                video_seek_pending_ = false;
+                video_end_of_stream_ = false;
+                requestVideoFrame();
+            }, Qt::QueuedConnection);
+        }
     }, Qt::QueuedConnection);
 }
 
@@ -2308,6 +2328,7 @@ void MainWindow::seekRelative(int64_t offset_ms)
         return;
 
     viewing_historical_frame_ = false;
+    video_seek_pending_ = true;
     video_frame_history_.clear();
     video_frame_history_index_ = -1;
     pending_video_frame_valid_ = false;
@@ -2324,6 +2345,8 @@ void MainWindow::seekRelative(int64_t offset_ms)
         }
         QMetaObject::invokeMethod(this, [this]
         {
+            video_seek_pending_ = false;
+            video_end_of_stream_ = false;
             requestVideoFrame();
         }, Qt::QueuedConnection);
     }, Qt::QueuedConnection);
