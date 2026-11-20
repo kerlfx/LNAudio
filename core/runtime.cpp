@@ -1,5 +1,6 @@
 #include "runtime.h"
 
+#include <exception>
 #include <string>
 
 namespace lnplayer
@@ -57,8 +58,16 @@ bool Runtime::open_music_library(std::string& error)
     if (music_library_open_)
         return true;
 
-    if (!music_library_.open_default(error))
+    try
+    {
+        if (!music_library_.open_default(error))
+            return false;
+    }
+    catch (const std::exception& exception)
+    {
+        error = exception.what();
         return false;
+    }
 
     music_library_open_ = true;
     return true;
