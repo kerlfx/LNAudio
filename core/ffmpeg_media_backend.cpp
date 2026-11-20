@@ -1465,6 +1465,7 @@ std::unique_ptr<MediaBackend> create_ffmpeg_media_backend()
 {
     return std::make_unique<FFmpegMediaBackend>();
 }
+
 bool convert_d3d11_frame_to_bgra(
     const std::shared_ptr<void>& frame_owner,
     std::vector<uint8_t>& pixels,
