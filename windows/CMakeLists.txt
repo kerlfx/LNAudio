@@ -1,5 +1,8 @@
 find_package(Qt6 6.12 REQUIRED COMPONENTS Widgets)
 
+target_include_directories(LNPlayerApp PRIVATE "${ASIO_INCLUDE_DIR}")
+target_compile_definitions(LNPlayerApp PRIVATE ASIO_STANDALONE)
+
 aux_source_directory("${CMAKE_CURRENT_SOURCE_DIR}" LNPLAYER_WINDOWS_SOURCES)
 
 qt_add_executable(LNPlayerApp WIN32
