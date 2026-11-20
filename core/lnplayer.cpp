@@ -166,6 +166,7 @@ public:
 
     void set_volume(uint32_t volume)
     {
+        session_.set_volume(static_cast<float>(volume) / 1000.0f);
         std::lock_guard<std::mutex> lock(snapshot_mutex_);
         snapshot_.volume = volume;
     }
