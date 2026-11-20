@@ -82,6 +82,7 @@ MainWindow::MainWindow(
     , library_thread_(mode == PlayerMode::Audio ? new QThread(this) : nullptr)
     , snapshot_timer_(new QTimer(this))
     , video_timer_(new QTimer(this))
+    , device_timer_(new QTimer(this))
 {
     if (mode_ == PlayerMode::Video)
     {
@@ -973,42 +974,48 @@ MainWindow::MainWindow(
     snapshot_timer_->setInterval(250);
     connect(snapshot_timer_, &QTimer::timeout, this, &MainWindow::refreshSnapshot);
 
-    video_timer_->setInterval(16);
+    video_timer_->setInterval(1);
+    video_timer_->setTimerType(Qt::PreciseTimer);
     connect(video_timer_, &QTimer::timeout, this, [this]
     {
         presentPendingVideoFrame();
-
-        if (video_surface_)
-        {
-            void* current_device = video_surface_->native_device();
-            if (current_device != video_device_identity_)
-            {
-                video_device_identity_ = current_device;
-                QMetaObject::invokeMethod(command_worker_, [this, current_device]
-                {
-                    if (player_)
-                    {
-                        const lnplayer_result_t result =
-                            lnplayer_windows_set_d3d11_device(player_, current_device);
-                        if (result != LNPLAYER_RESULT_OK && current_device)
-                            static_cast<ID3D11Device*>(current_device)->Release();
-                    }
-                    else if (current_device)
-                    {
-                        static_cast<ID3D11Device*>(current_device)->Release();
-                    }
-                }, Qt::QueuedConnection);
-            }
-            else if (current_device)
-            {
-                static_cast<ID3D11Device*>(current_device)->Release();
-            }
-        }
-
         if (is_playing_ && has_video_ && !video_seek_pending_ &&
             !video_frame_pending_ && !pending_video_frame_valid_)
             requestVideoFrame();
     });
+
+    device_timer_->setInterval(250);
+    connect(device_timer_, &QTimer::timeout, this, [this]
+    {
+        if (!video_surface_)
+            return;
+
+        void* current_device = video_surface_->native_device();
+        if (current_device != video_device_identity_)
+        {
+            video_device_identity_ = current_device;
+            QMetaObject::invokeMethod(command_worker_, [this, current_device]
+            {
+                if (player_)
+                {
+                    const lnplayer_result_t result =
+                        lnplayer_windows_set_d3d11_device(player_, current_device);
+                    if (result != LNPLAYER_RESULT_OK && current_device)
+                        static_cast<ID3D11Device*>(current_device)->Release();
+                }
+                else if (current_device)
+                {
+                    static_cast<ID3D11Device*>(current_device)->Release();
+                }
+            }, Qt::QueuedConnection);
+        }
+        else if (current_device)
+        {
+            static_cast<ID3D11Device*>(current_device)->Release();
+        }
+    });
+    if (mode_ == PlayerMode::Video)
+        device_timer_->start();
 
     if (!initial_media_files.isEmpty())
     {
@@ -1027,6 +1034,7 @@ MainWindow::~MainWindow()
     saveVideoPlaylist();
     snapshot_timer_->stop();
     video_timer_->stop();
+    device_timer_->stop();
 
     if (library_thread_ && library_thread_->isRunning())
     {
