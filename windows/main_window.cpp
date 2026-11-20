@@ -389,6 +389,56 @@ MainWindow::MainWindow(
         });
 
         auto* subtitle_menu = menuBar()->addMenu(QStringLiteral("字幕"));
+        auto* embedded_tracks_menu = subtitle_menu->addMenu(QStringLiteral("内嵌字幕"));
+        connect(embedded_tracks_menu, &QMenu::aboutToShow, this, [this, embedded_tracks_menu]
+        {
+            embedded_tracks_menu->clear();
+            QAction* disable_action = embedded_tracks_menu->addAction(QStringLiteral("禁用内嵌字幕"));
+            connect(disable_action, &QAction::triggered, this, [this]
+            {
+                selectSubtitleTrack(-1);
+            });
+            embedded_tracks_menu->addSeparator();
+            struct TrackEntry
+            {
+                int index;
+                QString label;
+            };
+            std::vector<TrackEntry> tracks;
+            if (player_)
+            {
+                lnplayer_enumerate_subtitle_tracks(
+                    player_,
+                    [](const lnplayer_subtitle_track_info_t* track, void* user_data)
+                    {
+                        auto* entries = static_cast<std::vector<TrackEntry>*>(user_data);
+                        QString label = track->title_utf8 && track->title_utf8[0]
+                            ? QString::fromUtf8(track->title_utf8)
+                            : QString::fromUtf8(track->language_utf8 ? track->language_utf8 : "");
+                        if (label.isEmpty())
+                            label = QString::fromUtf8(track->codec_utf8 ? track->codec_utf8 : "Subtitle");
+                        if (track->is_default)
+                            label.prepend(QStringLiteral("[默认] "));
+                        if (track->is_selected)
+                            label.prepend(QStringLiteral("✓ "));
+                        entries->push_back({track->stream_index, label});
+                    },
+                    &tracks);
+            }
+            for (const auto& track : tracks)
+            {
+                QAction* action = embedded_tracks_menu->addAction(track.label);
+                connect(action, &QAction::triggered, this, [this, index = track.index]
+                {
+                    selectSubtitleTrack(index);
+                });
+            }
+            if (tracks.empty())
+            {
+                QAction* unavailable = embedded_tracks_menu->addAction(QStringLiteral("无可用内嵌字幕"));
+                unavailable->setEnabled(false);
+            }
+        });
         auto* load_subtitle_action = subtitle_menu->addAction(QStringLiteral("加载外挂字幕..."));
         connect(load_subtitle_action, &QAction::triggered, this, [this] { loadExternalSubtitle(); });
         auto* subtitles_enabled_action = subtitle_menu->addAction(QStringLiteral("启用字幕"));
@@ -864,51 +914,9 @@ MainWindow::MainWindow(
             else if (selected == disable_embedded_subtitle ||
                 (selected && selected->parent() == embedded_subtitle_menu))
             {
-                const int stream_index = selected == disable_embedded_subtitle
+                selectSubtitleTrack(selected == disable_embedded_subtitle
                     ? -1
-                    : selected->data().toInt();
-                QMetaObject::invokeMethod(command_worker_, [this, stream_index]
-                {
-                    if (!player_)
-                        return;
-
-                    lnplayer_snapshot_t snapshot{};
-                    snapshot.struct_size = sizeof(snapshot);
-                    if (lnplayer_get_snapshot(player_, &snapshot) != LNPLAYER_RESULT_OK)
-                        return;
-
-                    const bool resume_playback = snapshot.state == LNPLAYER_STATE_PLAYING;
-                    if (resume_playback && lnplayer_pause(player_) != LNPLAYER_RESULT_OK)
-                        return;
-
-                    const lnplayer_result_t result =
-                        lnplayer_select_subtitle_track(player_, stream_index);
-                    const lnplayer_result_t resume_result = resume_playback
-                        ? lnplayer_play(player_)
-                        : LNPLAYER_RESULT_OK;
-
-                    QMetaObject::invokeMethod(this, [this, result, resume_playback, resume_result]
-                    {
-                        is_playing_ = resume_playback && resume_result == LNPLAYER_RESULT_OK;
-                        if (result == LNPLAYER_RESULT_OK)
-                        {
-                            pending_embedded_subtitle_.clear();
-                            pending_embedded_subtitle_bitmap_ = {};
-                            video_frame_history_.clear();
-                            video_frame_history_index_ = -1;
-                            pending_video_frame_valid_ = false;
-                            requestVideoFrame();
-                            statusBar()->showMessage(
-                                resume_result == LNPLAYER_RESULT_OK
-                                    ? QStringLiteral("内嵌字幕已切换")
-                                    : QStringLiteral("内嵌字幕已切换，但恢复播放失败"));
-                        }
-                        else
-                        {
-                            statusBar()->showMessage(QStringLiteral("内嵌字幕切换失败"));
-                        }
-                    }, Qt::QueuedConnection);
-                }, Qt::QueuedConnection);
+                    : selected->data().toInt());
             }
             else if (selected == subtitles_enabled)
             {
@@ -2534,6 +2542,50 @@ void MainWindow::loadExternalSubtitlePath(const QString& path)
 
             pending_video_frame_valid_ = false;
             requestVideoFrame();
+        }, Qt::QueuedConnection);
+    }, Qt::QueuedConnection);
+}
+
+void MainWindow::selectSubtitleTrack(int stream_index)
+{
+    QMetaObject::invokeMethod(command_worker_, [this, stream_index]
+    {
+        if (!player_)
+            return;
+
+        lnplayer_snapshot_t snapshot{};
+        snapshot.struct_size = sizeof(snapshot);
+        if (lnplayer_get_snapshot(player_, &snapshot) != LNPLAYER_RESULT_OK)
+            return;
+
+        const bool resume_playback = snapshot.state == LNPLAYER_STATE_PLAYING;
+        if (resume_playback && lnplayer_pause(player_) != LNPLAYER_RESULT_OK)
+            return;
+
+        const lnplayer_result_t result = lnplayer_select_subtitle_track(player_, stream_index);
+        const lnplayer_result_t resume_result = resume_playback
+            ? lnplayer_play(player_)
+            : LNPLAYER_RESULT_OK;
+
+        QMetaObject::invokeMethod(this, [this, result, resume_playback, resume_result]
+        {
+            is_playing_ = resume_playback && resume_result == LNPLAYER_RESULT_OK;
+            if (result == LNPLAYER_RESULT_OK)
+            {
+                pending_embedded_subtitle_.clear();
+                pending_embedded_subtitle_bitmap_ = {};
+                video_frame_history_.clear();
+                video_frame_history_index_ = -1;
+                pending_video_frame_valid_ = false;
+                requestVideoFrame();
+                showOsd(resume_result == LNPLAYER_RESULT_OK
+                    ? QStringLiteral("内嵌字幕已切换")
+                    : QStringLiteral("内嵌字幕已切换，但恢复播放失败"));
+            }
+            else
+            {
+                statusBar()->showMessage(QStringLiteral("内嵌字幕切换失败"));
+            }
         }, Qt::QueuedConnection);
     }, Qt::QueuedConnection);
 }
