@@ -1599,9 +1599,9 @@ void MainWindow::showPlaybackInfo()
         : QStringLiteral("D3D11 渲染器不可用");
 
     const QString details = QStringLiteral(
-        "媒体：%1\\n路径：%2\\n状态：%3\\n位置：%4 / %5\\n"
-        "视频：%6\\n分辨率：%7\\n音轨：%8\\n播放速度：%9x\\n音量：%10%\\n"
-        "字幕偏移：%11 ms\\n渲染：%12")
+        "媒体：%1\n路径：%2\n状态：%3\n位置：%4 / %5\n"
+        "视频：%6\n分辨率：%7\n音轨：%8\n播放速度：%9x\n音量：%10%\n"
+        "字幕偏移：%11 ms\n渲染：%12")
         .arg(media_title_label_->text())
         .arg(media_path.isEmpty() ? QStringLiteral("无") : media_path)
         .arg(status_label_->text())
