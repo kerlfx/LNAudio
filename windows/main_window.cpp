@@ -281,6 +281,7 @@ MainWindow::MainWindow(
     , device_timer_(new QTimer(this))
     , fullscreen_hide_timer_(new QTimer(this))
     , osd_timer_(new QTimer(this))
+    , volume_settings_timer_(new QTimer(this))
 {
     initialize_settings_file();
     if (mode_ == PlayerMode::Video)
@@ -1762,16 +1763,21 @@ MainWindow::MainWindow(
         }, Qt::QueuedConnection);
     });
 
-    connect(volume_slider_, &QSlider::valueChanged, this, [this](int value)
+    volume_settings_timer_->setSingleShot(true);
+    volume_settings_timer_->setInterval(300);
+    connect(volume_settings_timer_, &QTimer::timeout, this, [this]
     {
         QSettings settings(settings_file_path(), QSettings::IniFormat);
-        settings.setValue(QStringLiteral("Playback/Volume"), value);
-        if (value > 0)
-        {
-            muted_volume_ = value;
-            settings.setValue(QStringLiteral("Playback/MutedVolume"), value);
-        }
+        settings.setValue(QStringLiteral("Playback/Volume"), volume_slider_->value());
+        settings.setValue(QStringLiteral("Playback/MutedVolume"), muted_volume_);
         settings.sync();
+    });
+
+    connect(volume_slider_, &QSlider::valueChanged, this, [this](int value)
+    {
+        if (value > 0)
+            muted_volume_ = value;
+        volume_settings_timer_->start();
 
         showOsd(value == 0 ? QStringLiteral("静音")
             : QStringLiteral("音量 %1%").arg(value / 10));
@@ -1884,6 +1890,13 @@ MainWindow::MainWindow(
 
 MainWindow::~MainWindow()
 {
+    volume_settings_timer_->stop();
+    {
+        QSettings settings(settings_file_path(), QSettings::IniFormat);
+        settings.setValue(QStringLiteral("Playback/Volume"), volume_slider_->value());
+        settings.setValue(QStringLiteral("Playback/MutedVolume"), muted_volume_);
+        settings.sync();
+    }
     savePlaybackPosition();
     if (mode_ == PlayerMode::Video)
     {
