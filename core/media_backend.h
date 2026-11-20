@@ -106,6 +106,10 @@ public:
     {
         return MediaBackendResult{false, "Subtitle track selection is not supported by this backend."};
     }
+    virtual MediaBackendResult set_external_subtitle(const std::string&)
+    {
+        return MediaBackendResult{false, "External subtitle rendering is not supported by this backend."};
+    }
     virtual void set_subtitle_offset_ms(int64_t) {}
     virtual int64_t position_ms() const = 0;
     virtual bool playback_ended() const = 0;

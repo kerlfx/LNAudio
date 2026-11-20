@@ -832,6 +832,42 @@ public:
         return success();
     }
 
+    MediaBackendResult set_external_subtitle(const std::string& path) override
+    {
+        if (!opened_ || !video_decoder_)
+            return failure("No video source is open.");
+
+        std::unique_ptr<SubtitleFilter> replacement;
+        int width = 0;
+        int height = 0;
+        if (!path.empty())
+        {
+            replacement = std::make_unique<SubtitleFilter>();
+            width = video_decoder_->width;
+            height = video_decoder_->height;
+            std::string error;
+            if (!replacement->open(path, -1, width, height, error))
+                return failure(error);
+        }
+
+        std::lock_guard<std::mutex> decode_lock(video_decode_mutex_);
+        std::lock_guard<std::mutex> demux_lock(demux_mutex_);
+        avcodec_free_context(&subtitle_decoder_);
+        for (AVPacket* packet : subtitle_packet_queue_)
+            av_packet_free(&packet);
+        subtitle_packet_queue_.clear();
+        subtitle_packet_queue_bytes_ = 0;
+        active_subtitle_cues_.clear();
+        subtitle_stream_index_ = -1;
+        subtitle_filter_ = std::move(replacement);
+        subtitle_filter_active_ = subtitle_filter_ != nullptr;
+        subtitle_filter_path_ = path;
+        subtitle_filter_stream_ordinal_ = -1;
+        subtitle_filter_width_ = width;
+        subtitle_filter_height_ = height;
+        return success();
+    }
+
     void set_subtitle_offset_ms(int64_t offset_ms) override
     {
         std::lock_guard<std::mutex> lock(demux_mutex_);
