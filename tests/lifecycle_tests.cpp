@@ -148,6 +148,11 @@ bool test_async_open_is_drained_before_destroy()
 }
 
 
+void count_chapter(const lnplayer_chapter_info_t*, void* user_data)
+{
+    ++*static_cast<int*>(user_data);
+}
+
 bool test_video_metadata_api_contract()
 {
     lnplayer_t* player = nullptr;
@@ -164,6 +169,11 @@ bool test_video_metadata_api_contract()
         info.max_content_light_level == 0;
     const lnplayer_result_t invalid_probe =
         lnplayer_probe_media(nullptr, nullptr, nullptr);
+    int chapter_count = 0;
+    const lnplayer_result_t chapters_result =
+        lnplayer_enumerate_chapters(player, count_chapter, &chapter_count);
+    const lnplayer_result_t invalid_chapters =
+        lnplayer_enumerate_chapters(player, nullptr, nullptr);
     const lnplayer_result_t destroy_result = lnplayer_destroy(player);
 
     return expect(query_result == LNPLAYER_RESULT_OK,
@@ -172,6 +182,10 @@ bool test_video_metadata_api_contract()
                "video metadata query returns cleared fields without an open media") &&
         expect(invalid_probe == LNPLAYER_RESULT_INVALID_ARGUMENT,
                "media probe rejects invalid arguments") &&
+        expect(chapters_result == LNPLAYER_RESULT_OK && chapter_count == 0,
+               "chapter enumeration returns an empty list before media is opened") &&
+        expect(invalid_chapters == LNPLAYER_RESULT_INVALID_ARGUMENT,
+               "chapter enumeration rejects a null callback") &&
         expect(destroy_result == LNPLAYER_RESULT_OK,
                "destroy Player after video metadata API test");
 }
