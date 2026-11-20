@@ -79,6 +79,8 @@ private:
     bool is_playing_ = false;
     bool video_frame_pending_ = false;
     bool pending_video_frame_valid_ = false;
+    bool video_first_frame_received_ = false;
+    bool video_end_of_stream_ = false;
     QImage pending_video_frame_;
     int64_t pending_video_pts_ms_ = 0;
     int64_t current_position_ms_ = 0;
