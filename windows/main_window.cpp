@@ -3404,6 +3404,12 @@ void MainWindow::openVideoSettings()
     settings.setValue(QStringLiteral("Video/Screenshot/Directory"), screenshot_directory_);
     settings.setValue(QStringLiteral("Video/Screenshot/Format"), screenshot_format_);
     settings.sync();
+    if (settings.status() != QSettings::NoError)
+    {
+        QMessageBox::warning(this, QStringLiteral("设置保存失败"),
+            QStringLiteral("设置已应用到当前会话，但无法写入配置文件：\n%1")
+                .arg(settings_file_path()));
+    }
 
     setSubtitleOffset(subtitle_offset_ms_);
     postCommand([this, enabled = subtitles_enabled_]
