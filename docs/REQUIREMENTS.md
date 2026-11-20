@@ -178,6 +178,19 @@ FFmpeg 负责媒体探测、解封装和解码。构建配置必须包含上述�
 | P0 | 硬件解码优先及软件解码回退 |
 | P2 | 高级视频渲染器和硬件解码高级配置 |
 
+### 9.5 Qt Widgets 职责划分
+
+Windows 视频 UI 可按以下职责组织组件，具体文件和类名在实现阶段确定：
+
+- **VideoWindow**：窗口生命周期、整体布局及窗口模式管理。
+- **VideoSurface / VideoContainer**：视频显示区域及画面交互；内部承载原生 Win32 子窗口，作为 D3D11 Renderer 的显示目标。
+- **PlaybackControls**：播放控制、进度和音量等界面操作。
+- **VideoContextMenu**：右键菜单及子菜单。
+- **PlaylistPanel**：播放列表展示和操作。
+- **PlayerController**：键盘快捷键、鼠标操作到 Core 播放接口的控制映射。
+
+UI 通过 Core 对外接口执行播放操作，不直接访问 FFmpeg 上下文。Qt 管理视频区域的布局、尺寸和窗口生命周期；原生 Win32 子窗口承载 D3D11 Renderer。Qt GUI 线程不执行 FFmpeg 解码或 D3D11 GPU 呈现。
+
 ### 9.6 视频解码与渲染技术要求
 
 #### 9.6.1 通用要求
@@ -212,19 +225,6 @@ FFmpeg 负责媒体探测、解封装和解码。构建配置必须包含上述�
 - 评估 MediaCodec 直接输出 Surface 与硬件帧交给 Native Renderer 两种路径。前者可减少应用层帧搬运；后者更容易统一 PTS 调度，但需要验证硬件帧与 Android 图形 API 的互操作。
 - 不预设所有 MediaCodec 输出都表现为普通 CPU 可读 AVFrame，也不预设 FFmpeg 自动处理任意 Surface 的绑定和显示时机。
 - 最终输出路径根据目标 Android 版本、FFmpeg 构建和设备验证结果确定；平台专用资源和 Surface 生命周期由 Android 适配层封装。
-
-### 9.5 Qt Widgets 职责划分
-
-Windows 视频 UI 可按以下职责组织组件，具体文件和类名在实现阶段确定：
-
-- **VideoWindow**：窗口生命周期、整体布局及窗口模式管理。
-- **VideoSurface / VideoContainer**：视频显示区域及画面交互；内部承载原生 Win32 子窗口，作为 D3D11 Renderer 的显示目标。
-- **PlaybackControls**：播放控制、进度和音量等界面操作。
-- **VideoContextMenu**：右键菜单及子菜单。
-- **PlaylistPanel**：播放列表展示和操作。
-- **PlayerController**：键盘快捷键、鼠标操作到 Core 播放接口的控制映射。
-
-UI 通过 Core 对外接口执行播放操作，不直接访问 FFmpeg 上下文。Qt 管理视频区域的布局、尺寸和窗口生命周期；原生 Win32 子窗口承载 D3D11 Renderer。Qt GUI 线程不执行 FFmpeg 解码或 D3D11 GPU 呈现。
 
 ## 10. 当前明确不做的内容
 
