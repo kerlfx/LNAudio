@@ -2,6 +2,7 @@
 #define LNPLAYER_MAIN_WINDOW_H
 
 #include <QMainWindow>
+#include <QDebug>
 #include <QByteArray>
 #include <QElapsedTimer>
 #include <QImage>
@@ -17,6 +18,7 @@
 #include <memory>
 #include <atomic>
 #include <cstdint>
+#include <exception>
 #include <utility>
 
 #include "lnplayer.h"
@@ -159,7 +161,18 @@ private:
                             tracker->finish();
                         }
                     } completion{tracker};
-                    task();
+                    try
+                    {
+                        task();
+                    }
+                    catch (const std::exception& error)
+                    {
+                        qWarning() << "LNPlayer UI background task failed:" << error.what();
+                    }
+                    catch (...)
+                    {
+                        qWarning() << "LNPlayer UI background task failed with an unknown exception";
+                    }
                 });
             });
     }
