@@ -38,6 +38,9 @@ std::string detect_subtitle_encoding(const std::string& path)
     if (bytes_read >= 4 &&
         bom[0] == 0x00 && bom[1] == 0x00 && bom[2] == 0xFE && bom[3] == 0xFF)
         return "UTF-32BE";
+    if (bytes_read >= 3 &&
+        bom[0] == 0xEF && bom[1] == 0xBB && bom[2] == 0xBF)
+        return "UTF-8";
     if (bytes_read >= 2 && bom[0] == 0xFF && bom[1] == 0xFE)
         return "UTF-16LE";
     if (bytes_read >= 2 && bom[0] == 0xFE && bom[1] == 0xFF)
