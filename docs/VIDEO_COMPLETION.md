@@ -238,3 +238,13 @@
 - [ ] 尚未在 Windows/Qt 环境编译或运行；libass 的完整 ASS 样式和特效仍需集成测试，不由 fallback parser 测试代替。
 
 提交：`8154dfd93a18b4e5d4b91b262de95174c4ff7e04`、`ca1051775937547962d2acad2db24f4168858173`。
+
+### 2026-11-21 — 高刷新率视频调度
+
+- [x] 视频呈现 timer 使用 1ms PreciseTimer，避免固定 16ms 轮询把高帧率视频限制在约 60fps。
+- [x] D3D11 Device 变更检测拆到独立 250ms timer，避免高频呈现循环每帧重复 COM AddRef/Release。
+- [x] UI 以 QElapsedTimer 在 Core 快照之间插值媒体时钟，避免 250ms 快照周期造成帧呈现等待误差。
+- [x] 播放速度改变时先锚定当前插值位置，再重启 UI 时钟，避免速度切换造成时钟跳变。
+- [ ] 需要用 24/30/60/120/144/240fps 视频和 60/120/144/240Hz 显示器组合验证；Present/VSync 行为仍依赖显示设备。
+
+提交：`aede919c7d256750930c7926938c12261c44e9f7`、`7a9c9ec52fb52d2944b60c2307152eecde381fbe`。
