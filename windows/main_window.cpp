@@ -1632,7 +1632,12 @@ void MainWindow::showPlaybackInfo()
         .arg(volume_slider_->value() / 10)
         .arg(subtitle_offset_ms_)
         .arg(renderer_state);
+    const bool fullscreen_before_dialog = isFullScreen();
+    if (fullscreen_before_dialog)
+        fullscreen_hide_timer_->stop();
     QMessageBox::information(this, QStringLiteral("播放信息"), details);
+    if (fullscreen_before_dialog && isFullScreen())
+        showFullscreenControls();
 }
 
 void MainWindow::positionOsd()
@@ -2276,7 +2281,13 @@ void MainWindow::openVideoSettings()
         dialog.accept();
     });
     connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
-    if (dialog.exec() != QDialog::Accepted)
+    const bool fullscreen_before_dialog = isFullScreen();
+    if (fullscreen_before_dialog)
+        fullscreen_hide_timer_->stop();
+    const int dialog_result = dialog.exec();
+    if (fullscreen_before_dialog && isFullScreen())
+        showFullscreenControls();
+    if (dialog_result != QDialog::Accepted)
         return;
 
     remember_position_ = remember_position->isChecked();
