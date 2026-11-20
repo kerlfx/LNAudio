@@ -23,6 +23,7 @@
 #include <QApplication>
 #include <QDragEnterEvent>
 #include <QDir>
+#include <QDirIterator>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QFormLayout>
@@ -210,6 +211,7 @@ MainWindow::MainWindow(
                 this, QStringLiteral("打开视频文件夹"));
             if (directory.isEmpty())
                 return;
+
             const QStringList filters = {
                 QStringLiteral("*.mp4"), QStringLiteral("*.mkv"), QStringLiteral("*.mov"),
                 QStringLiteral("*.avi"), QStringLiteral("*.webm"), QStringLiteral("*.wmv"),
@@ -217,19 +219,28 @@ MainWindow::MainWindow(
                 QStringLiteral("*.m4v"), QStringLiteral("*.ts"), QStringLiteral("*.mts"),
                 QStringLiteral("*.m2ts"), QStringLiteral("*.3gp"), QStringLiteral("*.3g2"),
                 QStringLiteral("*.vob"), QStringLiteral("*.ogv"), QStringLiteral("*.mxf"),
-                QStringLiteral("*.asf"), QStringLiteral("*.f4v"), QStringLiteral("*.divx")
+                QStringLiteral("*.asf"), QStringLiteral("*.f4v"), QStringLiteral("*.divx"),
+                QStringLiteral("*.mpe"), QStringLiteral("*.mpv")
             };
-            const QFileInfoList entries = QDir(directory).entryInfoList(
-                filters, QDir::Files | QDir::Readable, QDir::Name);
+            QStringList paths;
+            QDirIterator iterator(
+                directory, filters, QDir::Files | QDir::Readable,
+                QDirIterator::Subdirectories);
+            while (iterator.hasNext())
+                paths.append(QFileInfo(iterator.next()).absoluteFilePath());
+            std::sort(paths.begin(), paths.end(), [](const QString& left, const QString& right)
+            {
+                return left.compare(right, Qt::CaseInsensitive) < 0;
+            });
+
             QList<QUrl> urls;
-            for (const QFileInfo& entry : entries)
-                urls.append(QUrl::fromLocalFile(entry.absoluteFilePath()));
+            for (const QString& path : paths)
+                urls.append(QUrl::fromLocalFile(path));
             if (!urls.isEmpty())
                 openFiles(urls);
             else
-                statusBar()->showMessage(QStringLiteral("文件夹中没有支持的视频文件"));
+                statusBar()->showMessage(QStringLiteral("文件夹及其子目录中没有支持的视频文件"));
         });
-
         auto* recent_menu = file_menu->addMenu(QStringLiteral("最近播放"));
         connect(recent_menu, &QMenu::aboutToShow, this, [this, recent_menu]
         {
