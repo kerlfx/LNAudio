@@ -29,6 +29,7 @@ public:
     void* native_device() const;
     void set_stretch(bool enabled);
     void set_gesture_enabled(bool enabled);
+    bool consume_gesture_context_menu();
     void set_aspect_ratio(float ratio);
     void adjust_zoom(int direction);
     float zoom() const;
