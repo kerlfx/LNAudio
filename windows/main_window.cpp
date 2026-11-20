@@ -19,6 +19,7 @@
 #include <QAbstractSpinBox>
 #include <QByteArray>
 #include <QFont>
+#include <QFontMetrics>
 #include <QFontComboBox>
 #include <QApplication>
 #include <QDragEnterEvent>
@@ -75,6 +76,7 @@
 #include <QThread>
 #include <QTimer>
 #include <QUrl>
+#include <QVariant>
 #include <QVBoxLayout>
 #include <QWidget>
 
