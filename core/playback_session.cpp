@@ -50,6 +50,7 @@ SessionResult PlaybackSession::open(const std::string& source)
 
     backend_->set_volume(volume_);
     backend_->set_playback_end_callback(playback_end_callback_);
+    backend_->set_playback_error_callback(playback_error_callback_);
 
     MediaInfo info;
     const MediaBackendResult result = backend_->open(source, info);
@@ -188,6 +189,14 @@ void PlaybackSession::set_playback_end_callback(std::function<void()> callback)
         backend_->set_playback_end_callback(playback_end_callback_);
 }
 
+void PlaybackSession::set_playback_error_callback(std::function<void(std::string)> callback)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    playback_error_callback_ = std::move(callback);
+    if (backend_)
+        backend_->set_playback_error_callback(playback_error_callback_);
+}
+
 SessionSnapshot PlaybackSession::snapshot() const
 {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -195,7 +204,9 @@ SessionSnapshot PlaybackSession::snapshot() const
     if (backend_)
     {
         current.position_ms = backend_->position_ms();
-        if (backend_->playback_ended())
+        if (backend_->playback_failed())
+            current.state = SessionState::Error;
+        else if (backend_->playback_ended())
             current.state = SessionState::Ended;
     }
     return current;
