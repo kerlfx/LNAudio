@@ -69,6 +69,7 @@ public:
     void set_video_filter(
         float brightness, float contrast, float saturation, float hue_degrees,
         float sharpness, float denoise, bool grayscale);
+    void set_hdr_metadata(int transfer, int color_primaries);
     bool present_frame_threadsafe(const QImage& frame);
     bool present_hardware_frame(
         void* texture, uint32_t array_slice, uint32_t format,
@@ -183,6 +184,12 @@ void VideoSurface::set_video_filter(
     if (renderer_)
         renderer_->set_video_filter(
             brightness, contrast, saturation, hue_degrees, sharpness, denoise, grayscale);
+}
+
+void VideoSurface::set_hdr_metadata(int transfer, int color_primaries)
+{
+    if (renderer_)
+        renderer_->set_hdr_metadata(transfer, color_primaries);
 }
 
 bool VideoSurface::present_frame_threadsafe(const QImage& frame)
@@ -1775,6 +1782,8 @@ void MainWindow::requestVideoFrame()
             int64_t pts_ms = 0;
             uint64_t generation = 0;
             float display_aspect_ratio = 0.0f;
+            int hdr_transfer = 0;
+            int color_primaries = 0;
             QString subtitle;
             QImage subtitle_bitmap;
         } context;
@@ -1788,6 +1797,8 @@ void MainWindow::requestVideoFrame()
                 context->pts_ms = frame->pts_ms;
                 context->generation = frame->generation;
                 context->display_aspect_ratio = frame->display_aspect_ratio;
+                context->hdr_transfer = frame->hdr_transfer;
+                context->color_primaries = frame->color_primaries;
                 context->subtitle = QString::fromUtf8(
                     frame->subtitle_utf8 ? frame->subtitle_utf8 : "");
                 if (frame->subtitle_bgra && frame->subtitle_width > 0 &&
@@ -1839,12 +1850,15 @@ void MainWindow::requestVideoFrame()
         const int64_t pts_ms = context.pts_ms;
         const uint64_t generation = context.generation;
         const float display_aspect_ratio = context.display_aspect_ratio;
+        const int hdr_transfer = context.hdr_transfer;
+        const int color_primaries = context.color_primaries;
         const QString embedded_subtitle = context.subtitle;
         const QImage embedded_subtitle_bitmap = context.subtitle_bitmap;
         QMetaObject::invokeMethod(this,
             [this, result, end_of_stream, image, hardware_owner, hardware_texture,
              hardware_array_slice, hardware_format, hardware_width, hardware_height,
-             pts_ms, generation, display_aspect_ratio, embedded_subtitle, embedded_subtitle_bitmap]
+             pts_ms, generation, display_aspect_ratio, hdr_transfer, color_primaries,
+             embedded_subtitle, embedded_subtitle_bitmap]
         {
             video_frame_pending_ = false;
             if (result != LNPLAYER_RESULT_OK)
@@ -1865,7 +1879,10 @@ void MainWindow::requestVideoFrame()
             {
                 video_first_frame_received_ = true;
                 if (video_surface_)
+                {
+                    video_surface_->set_hdr_metadata(hdr_transfer, color_primaries);
                     video_surface_->set_source_aspect_ratio(display_aspect_ratio);
+                }
                 pending_video_frame_ = image;
                 pending_hardware_frame_owner_ = hardware_owner;
                 pending_hardware_texture_ = const_cast<void*>(hardware_texture);
@@ -1963,6 +1980,8 @@ void MainWindow::presentPendingVideoFrame()
         history_entry.hardware_format = pending_hardware_format_;
         history_entry.hardware_width = pending_hardware_width_;
         history_entry.hardware_height = pending_hardware_height_;
+        history_entry.hdr_transfer = hdr_transfer;
+        history_entry.color_primaries = color_primaries;
         history_entry.embedded_subtitle = pending_embedded_subtitle_;
         history_entry.embedded_subtitle_bitmap = pending_embedded_subtitle_bitmap_;
         history_entry.pts_ms = pending_video_pts_ms_;
@@ -2088,6 +2107,8 @@ void MainWindow::presentPendingVideoFrame()
     QImage frame = pending_video_frame_;
     VideoFrameHistoryEntry history_entry;
     history_entry.image = frame;
+    history_entry.hdr_transfer = hdr_transfer;
+    history_entry.color_primaries = color_primaries;
     history_entry.embedded_subtitle = pending_embedded_subtitle_;
     history_entry.embedded_subtitle_bitmap = pending_embedded_subtitle_bitmap_;
     history_entry.pts_ms = pending_video_pts_ms_;
@@ -2276,6 +2297,8 @@ void MainWindow::presentHistoricalVideoFrame()
         return;
 
     const VideoFrameHistoryEntry entry = video_frame_history_[video_frame_history_index_];
+    if (video_surface_)
+        video_surface_->set_hdr_metadata(entry.hdr_transfer, entry.color_primaries);
     QImage frame = entry.image;
     if (subtitles_enabled_ && !entry.embedded_subtitle_bitmap.isNull() && !entry.hardware_owner)
     {

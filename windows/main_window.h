@@ -58,6 +58,8 @@ private:
         uint32_t hardware_format = 0;
         int hardware_width = 0;
         int hardware_height = 0;
+        int hdr_transfer = 0;
+        int color_primaries = 0;
         QString embedded_subtitle;
         QImage embedded_subtitle_bitmap;
         int64_t pts_ms = 0;

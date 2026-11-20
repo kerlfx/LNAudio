@@ -62,12 +62,52 @@ cbuffer VideoFilterSettings : register(b0)
     float sharpness;
     float denoise;
     float2 texel_size;
+    float hdr_transfer;
+    float color_primaries;
+    float2 padding;
 };
 
 float4 main(float4 position : SV_POSITION, float2 uv : TEXCOORD0) : SV_TARGET
 {
     float4 sampled = image_texture.Sample(image_sampler, uv);
     float3 rgb = sampled.rgb;
+    if (hdr_transfer > 0.5)
+    {
+        float3 linear_rgb;
+        if (hdr_transfer < 1.5)
+        {
+            const float m1 = 0.1593017578;
+            const float m2 = 78.84375;
+            const float c1 = 0.8359375;
+            const float c2 = 18.8515625;
+            const float c3 = 18.6875;
+            float3 p = pow(saturate(rgb), 1.0 / m2);
+            linear_rgb = pow(
+                max(p - c1, 0.0) / max(c2 - c3 * p, 0.000001),
+                1.0 / m1) * 100.0;
+        }
+        else
+        {
+            const float a = 0.17883277;
+            const float b = 1.0 - 4.0 * a;
+            const float c = 0.5 - a * log(4.0 * a);
+            float3 scene = lerp(
+                rgb * rgb / 3.0,
+                (exp((rgb - c) / a) + b) / 12.0,
+                step(0.5, rgb));
+            linear_rgb = pow(max(scene, 0.0), 1.2) * 10.0;
+        }
+
+        if (color_primaries > 0.5)
+        {
+            linear_rgb = float3(
+                1.6605 * linear_rgb.r - 0.5876 * linear_rgb.g - 0.0728 * linear_rgb.b,
+                -0.1246 * linear_rgb.r + 1.1329 * linear_rgb.g - 0.0083 * linear_rgb.b,
+                -0.0182 * linear_rgb.r - 0.1006 * linear_rgb.g + 1.1187 * linear_rgb.b);
+        }
+        rgb = pow(saturate(linear_rgb / (1.0 + linear_rgb)), 1.0 / 2.2);
+    }
+
     if (sharpness > 0.0 || denoise > 0.0)
     {
         float3 neighbors =
@@ -269,6 +309,13 @@ public:
         grayscale_ = grayscale;
     }
 
+    void set_hdr_metadata(int transfer, int color_primaries)
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        hdr_transfer_ = transfer;
+        color_primaries_ = color_primaries;
+    }
+
     bool present(const uint8_t* pixels, int width, int height, int stride)
     {
         std::unique_lock<std::mutex> lock(mutex_);
@@ -394,7 +441,7 @@ public:
             return false;
         if (brightness_ != 0.0f || contrast_ != 1.0f || saturation_ != 1.0f ||
             hue_degrees_ != 0.0f || sharpness_ != 0.0f || denoise_ != 0.0f ||
-            grayscale_)
+            grayscale_ || hdr_transfer_ != 0)
             return false;
 
         reap_completed_hardware_frames();
@@ -752,7 +799,11 @@ private:
             brightness_, contrast_, saturation_, hue_degrees_,
             sharpness_, denoise_,
             width > 0 ? 1.0f / width : 0.0f,
-            height > 0 ? 1.0f / height : 0.0f
+            height > 0 ? 1.0f / height : 0.0f,
+            static_cast<float>(hdr_transfer_),
+            static_cast<float>(color_primaries_),
+            0.0f,
+            0.0f
         };
         context_->UpdateSubresource(filter_constants_buffer_.Get(), 0, nullptr, &values, 0, 0);
         ID3D11Buffer* buffers[] = {filter_constants_buffer_.Get()};
@@ -884,6 +935,8 @@ private:
     float sharpness_ = 0.0f;
     float denoise_ = 0.0f;
     bool grayscale_ = false;
+    int hdr_transfer_ = 0;
+    int color_primaries_ = 0;
     ComPtr<ID3D11Device> device_;
     ComPtr<ID3D11DeviceContext> context_;
     ComPtr<ID3D11VideoDevice> video_device_;
@@ -956,6 +1009,11 @@ void D3D11VideoRenderer::set_video_filter(
 {
     impl_->set_video_filter(
         brightness, contrast, saturation, hue_degrees, sharpness, denoise, grayscale);
+}
+
+void D3D11VideoRenderer::set_hdr_metadata(int transfer, int color_primaries)
+{
+    impl_->set_hdr_metadata(transfer, color_primaries);
 }
 
 bool D3D11VideoRenderer::present(const uint8_t* bgra, int width, int height, int stride)

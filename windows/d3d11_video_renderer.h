@@ -31,6 +31,7 @@ public:
     void set_video_filter(
         float brightness, float contrast, float saturation, float hue_degrees,
         float sharpness, float denoise, bool grayscale);
+    void set_hdr_metadata(int transfer, int color_primaries);
     bool present(const uint8_t* bgra, int width, int height, int stride);
     bool present_hardware(
         void* texture, uint32_t array_slice, uint32_t format,
