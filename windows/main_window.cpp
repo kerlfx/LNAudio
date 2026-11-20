@@ -30,6 +30,7 @@
 #include <QComboBox>
 #include <QDoubleSpinBox>
 #include <QSpinBox>
+#include <QScrollArea>
 #include <QTabWidget>
 #include <QDropEvent>
 #include <QEvent>
@@ -45,6 +46,8 @@
 #include <QMenu>
 #include <QShortcut>
 #include <QKeySequence>
+#include <QKeySequenceEdit>
+#include <QMessageBox>
 #include <QMetaObject>
 #include <QMimeData>
 #include <QPushButton>
@@ -901,10 +904,19 @@ MainWindow::MainWindow(
 
     if (mode_ == PlayerMode::Video)
     {
-        auto bind_shortcut = [this](int key, std::function<void()> action)
+        auto bind_shortcut = [this](const QString& id, const QString& label,
+            int key, std::function<void()> action)
         {
-            auto* shortcut = new QShortcut(QKeySequence(key), this);
+            const QKeySequence default_sequence(key);
+            QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+            const QString setting_key = QStringLiteral("Video/Shortcuts/") + id;
+            const QKeySequence sequence = QKeySequence::fromString(
+                settings.value(setting_key, default_sequence.toString()).toString());
+            auto* shortcut = new QShortcut(sequence, this);
             shortcut->setContext(Qt::WindowShortcut);
+            shortcut->setProperty("commandLabel", label);
+            shortcut->setProperty("defaultSequence", default_sequence.toString());
+            shortcuts_.insert(id, shortcut);
             connect(shortcut, &QShortcut::activated, this,
                 [action = std::move(action)]
             {
@@ -915,53 +927,53 @@ MainWindow::MainWindow(
                 action();
             });
         };
-        bind_shortcut(Qt::Key_Space, [this] { togglePlayback(); });
-        bind_shortcut(Qt::Key_F11, [this]
+        bind_shortcut(QStringLiteral("play_pause"), QStringLiteral("播放/暂停"), Qt::Key_Space, [this] { togglePlayback(); });
+        bind_shortcut(QStringLiteral("fullscreen"), QStringLiteral("全屏切换"), Qt::Key_F11, [this]
         {
             if (isFullScreen())
                 showNormal();
             else
                 showFullScreen();
         });
-        bind_shortcut(Qt::Key_Escape, [this]
+        bind_shortcut(QStringLiteral("exit_fullscreen"), QStringLiteral("退出全屏"), Qt::Key_Escape, [this]
         {
             if (isFullScreen())
                 showNormal();
         });
-        bind_shortcut(Qt::Key_Left, [this] { seekRelative(-5000); });
-        bind_shortcut(Qt::Key_Right, [this] { seekRelative(5000); });
-        bind_shortcut(Qt::Key_Comma, [this] { stepVideoFrame(true); });
-        bind_shortcut(Qt::Key_Period, [this] { stepVideoFrame(); });
-        bind_shortcut(Qt::Key_Up, [this]
+        bind_shortcut(QStringLiteral("seek_backward"), QStringLiteral("后退 5 秒"), Qt::Key_Left, [this] { seekRelative(-5000); });
+        bind_shortcut(QStringLiteral("seek_forward"), QStringLiteral("前进 5 秒"), Qt::Key_Right, [this] { seekRelative(5000); });
+        bind_shortcut(QStringLiteral("frame_backward"), QStringLiteral("上一帧"), Qt::Key_Comma, [this] { stepVideoFrame(true); });
+        bind_shortcut(QStringLiteral("frame_forward"), QStringLiteral("下一帧"), Qt::Key_Period, [this] { stepVideoFrame(); });
+        bind_shortcut(QStringLiteral("volume_up"), QStringLiteral("音量增加"), Qt::Key_Up, [this]
         {
             volume_slider_->setValue(std::min(1000, volume_slider_->value() + 50));
         });
-        bind_shortcut(Qt::Key_Down, [this]
+        bind_shortcut(QStringLiteral("volume_down"), QStringLiteral("音量降低"), Qt::Key_Down, [this]
         {
             volume_slider_->setValue(std::max(0, volume_slider_->value() - 50));
         });
-        bind_shortcut(Qt::Key_PageUp, [this] { playPrevious(); });
-        bind_shortcut(Qt::Key_PageDown, [this] { playNext(); });
-        bind_shortcut(Qt::CTRL | Qt::Key_Left, [this] { seekRelative(-30000); });
-        bind_shortcut(Qt::CTRL | Qt::Key_Right, [this] { seekRelative(30000); });
-        bind_shortcut(Qt::Key_F3, [this] { openFile(); });
-        bind_shortcut(Qt::Key_F5, [this] { openVideoSettings(); });
-        bind_shortcut(Qt::Key_F6, [this]
+        bind_shortcut(QStringLiteral("previous_item"), QStringLiteral("上一项"), Qt::Key_PageUp, [this] { playPrevious(); });
+        bind_shortcut(QStringLiteral("next_item"), QStringLiteral("下一项"), Qt::Key_PageDown, [this] { playNext(); });
+        bind_shortcut(QStringLiteral("seek_backward_large"), QStringLiteral("后退 30 秒"), Qt::CTRL | Qt::Key_Left, [this] { seekRelative(-30000); });
+        bind_shortcut(QStringLiteral("seek_forward_large"), QStringLiteral("前进 30 秒"), Qt::CTRL | Qt::Key_Right, [this] { seekRelative(30000); });
+        bind_shortcut(QStringLiteral("open_file"), QStringLiteral("打开文件"), Qt::Key_F3, [this] { openFile(); });
+        bind_shortcut(QStringLiteral("open_settings"), QStringLiteral("打开设置"), Qt::Key_F5, [this] { openVideoSettings(); });
+        bind_shortcut(QStringLiteral("toggle_playlist"), QStringLiteral("显示/隐藏播放列表"), Qt::Key_F6, [this]
         {
             if (playlist_visibility_action_)
                 playlist_visibility_action_->setChecked(!playlist_visibility_action_->isChecked());
         });
-        bind_shortcut(Qt::Key_X, [this]
+        bind_shortcut(QStringLiteral("speed_down"), QStringLiteral("降低播放速度"), Qt::Key_X, [this]
         {
             setPlaybackRate(std::max(0.25f, playback_rate_ - 0.25f));
         });
-        bind_shortcut(Qt::Key_C, [this]
+        bind_shortcut(QStringLiteral("speed_up"), QStringLiteral("提高播放速度"), Qt::Key_C, [this]
         {
             setPlaybackRate(std::min(4.0f, playback_rate_ + 0.25f));
         });
-        bind_shortcut(Qt::Key_Z, [this] { setPlaybackRate(1.0f); });
-        bind_shortcut(Qt::Key_K, [this] { takeScreenshot(); });
-        bind_shortcut(Qt::Key_M, [this]
+        bind_shortcut(QStringLiteral("speed_reset"), QStringLiteral("恢复正常速度"), Qt::Key_Z, [this] { setPlaybackRate(1.0f); });
+        bind_shortcut(QStringLiteral("screenshot"), QStringLiteral("截图"), Qt::Key_K, [this] { takeScreenshot(); });
+        bind_shortcut(QStringLiteral("mute"), QStringLiteral("静音切换"), Qt::Key_M, [this]
         {
             if (volume_slider_->value() == 0)
                 volume_slider_->setValue(muted_volume_);
@@ -1652,28 +1664,20 @@ void MainWindow::openVideoSettings()
 
     auto* shortcut_page = new QWidget(tabs);
     auto* shortcut_layout = new QVBoxLayout(shortcut_page);
-    auto* shortcut_list = new QListWidget(shortcut_page);
-    const QStringList shortcut_entries = {
-        QStringLiteral("Space    播放 / 暂停"),
-        QStringLiteral("← / →    后退 / 前进 5 秒"),
-        QStringLiteral("Ctrl+← / Ctrl+→    后退 / 前进 30 秒"),
-        QStringLiteral("PageUp / PageDown    上一项 / 下一项"),
-        QStringLiteral("↑ / ↓    音量"),
-        QStringLiteral("M    静音"),
-        QStringLiteral("F11    全屏"),
-        QStringLiteral(", / .    上一帧 / 下一帧"),
-        QStringLiteral("X / C / Z    减速 / 加速 / 正常速度"),
-        QStringLiteral("F3    打开文件"),
-        QStringLiteral("F5    视频设置"),
-        QStringLiteral("F6    播放列表显隐"),
-        QStringLiteral("K    截图")
-    };
-    shortcut_list->addItems(shortcut_entries);
-    shortcut_layout->addWidget(shortcut_list);
-    auto* shortcut_note = new QLabel(
-        QStringLiteral("当前显示默认快捷键。快捷键重映射和冲突检测尚未实现。"),
-        shortcut_page);
-    shortcut_layout->addWidget(shortcut_note);
+    auto* shortcut_form = new QFormLayout();
+    QHash<QString, QKeySequenceEdit*> shortcut_edits;
+    for (auto it = shortcuts_.cbegin(); it != shortcuts_.cend(); ++it)
+    {
+        auto* edit = new QKeySequenceEdit(it.value()->key(), shortcut_page);
+        shortcut_edits.insert(it.key(), edit);
+        shortcut_form->addRow(it.value()->property("commandLabel").toString(), edit);
+    }
+    auto* shortcut_form_widget = new QWidget(shortcut_page);
+    shortcut_form_widget->setLayout(shortcut_form);
+    auto* shortcut_scroll = new QScrollArea(shortcut_page);
+    shortcut_scroll->setWidgetResizable(true);
+    shortcut_scroll->setWidget(shortcut_form_widget);
+    shortcut_layout->addWidget(shortcut_scroll);
     tabs->addTab(shortcut_page, QStringLiteral("快捷键"));
 
     root->addWidget(tabs, 1);
@@ -1694,8 +1698,35 @@ void MainWindow::openVideoSettings()
         subtitle_size->setValue(0);
         subtitle_color->setCurrentIndex(0);
         subtitle_position->setValue(80);
+        for (auto it = shortcuts_.cbegin(); it != shortcuts_.cend(); ++it)
+        {
+            const QKeySequence default_sequence = QKeySequence::fromString(
+                it.value()->property("defaultSequence").toString());
+            shortcut_edits.value(it.key())->setKeySequence(default_sequence);
+        }
     });
-    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, [&, this]
+    {
+        QList<QPair<QString, QKeySequence>> candidates;
+        for (auto it = shortcut_edits.cbegin(); it != shortcut_edits.cend(); ++it)
+        {
+            const QKeySequence sequence = it.value()->keySequence();
+            if (sequence.isEmpty())
+                continue;
+            for (const auto& candidate : candidates)
+            {
+                if (candidate.second == sequence)
+                {
+                    QMessageBox::warning(&dialog, QStringLiteral("快捷键冲突"),
+                        QStringLiteral("快捷键与“%1”重复，请修改后再保存。")
+                            .arg(shortcuts_.value(candidate.first)->property("commandLabel").toString()));
+                    return;
+                }
+            }
+            candidates.append(qMakePair(it.key(), sequence));
+        }
+        dialog.accept();
+    });
     connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
     if (dialog.exec() != QDialog::Accepted)
         return;
@@ -1727,6 +1758,14 @@ void MainWindow::openVideoSettings()
 
     QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
     settings.setValue(QStringLiteral("Video/UI/FullscreenHideDelayMs"), fullscreen_hide_delay_ms_);
+    for (auto it = shortcuts_.begin(); it != shortcuts_.end(); ++it)
+    {
+        const QKeySequence sequence = shortcut_edits.value(it.key())->keySequence();
+        it.value()->setKey(sequence);
+        settings.setValue(
+            QStringLiteral("Video/Shortcuts/") + it.key(),
+            sequence.toString(QKeySequence::PortableText));
+    }
     settings.setValue(QStringLiteral("Video/UI/PlaylistVisible"), playlist_panel_visible_);
     settings.setValue(QStringLiteral("Video/Display/AspectRatio"), video_aspect_ratio_override_);
     settings.setValue(QStringLiteral("Video/Display/Stretch"), video_stretch_);
