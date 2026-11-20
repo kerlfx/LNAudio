@@ -1085,14 +1085,17 @@ MainWindow::MainWindow(
     {
         slider_dragging_ = false;
         viewing_historical_frame_ = false;
-        video_seek_pending_ = true;
         video_frame_history_.clear();
         video_frame_history_index_ = -1;
         pending_video_frame_valid_ = false;
         video_end_of_stream_ = false;
         if (duration_ms_ <= 0)
+        {
+            video_seek_pending_ = false;
             return;
+        }
 
+        video_seek_pending_ = true;
         video_timer_->start();
         const int64_t target = duration_ms_ * seek_slider_->value() / 1000;
         QMetaObject::invokeMethod(command_worker_, [this, target]
@@ -2297,7 +2300,14 @@ void MainWindow::togglePlayback()
         [this, should_pause, resume_from_history, resume_position]
     {
         if (!player_)
+        {
+            if (resume_from_history)
+                QMetaObject::invokeMethod(this, [this]
+                {
+                    video_seek_pending_ = false;
+                }, Qt::QueuedConnection);
             return;
+        }
         if (should_pause)
         {
             lnplayer_pause(player_);
@@ -2307,7 +2317,14 @@ void MainWindow::togglePlayback()
         {
             uint64_t operation_id = 0;
             if (lnplayer_seek(player_, resume_position, &operation_id) != LNPLAYER_RESULT_OK)
+            {
+                QMetaObject::invokeMethod(this, [this]
+                {
+                    video_seek_pending_ = false;
+                    requestVideoFrame();
+                }, Qt::QueuedConnection);
                 return;
+            }
         }
         lnplayer_play(player_);
         if (resume_from_history)
