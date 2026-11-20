@@ -608,6 +608,7 @@ public:
             track.channels = stream->codecpar->ch_layout.nb_channels;
             track.sample_rate = stream->codecpar->sample_rate;
             track.is_default = (stream->disposition & AV_DISPOSITION_DEFAULT) != 0;
+            track.is_selected = static_cast<int>(index) == audio_stream_index_;
 
             AVDictionaryEntry* title = av_dict_get(stream->metadata, "title", nullptr, 0);
             AVDictionaryEntry* language = av_dict_get(stream->metadata, "language", nullptr, 0);
