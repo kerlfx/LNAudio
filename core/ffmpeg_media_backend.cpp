@@ -868,6 +868,12 @@ public:
         return success();
     }
 
+    void set_subtitles_enabled(bool enabled) override
+    {
+        std::lock_guard<std::mutex> lock(demux_mutex_);
+        subtitles_enabled_ = enabled;
+    }
+
     void set_subtitle_offset_ms(int64_t offset_ms) override
     {
         std::lock_guard<std::mutex> lock(demux_mutex_);
@@ -1492,11 +1498,22 @@ private:
             output.subtitle_stride = bitmap_frame.stride;
         }
 
+        const bool render_subtitles = subtitles_enabled_;
         const bool render_ass = subtitle_filter_active_;
         const int64_t subtitle_offset_ms = subtitle_offset_ms_;
         const std::string subtitle_path = subtitle_filter_path_;
         const int subtitle_stream_ordinal = subtitle_filter_stream_ordinal_;
         demux_lock.unlock();
+
+        if (!render_subtitles)
+        {
+            output.subtitle_text.clear();
+            output.subtitle_bgra.clear();
+            output.subtitle_width = 0;
+            output.subtitle_height = 0;
+            output.subtitle_stride = 0;
+            return;
+        }
 
         if (render_ass)
         {
@@ -2375,6 +2392,7 @@ private:
     int stream_rotation_degrees_ = 0;
     int64_t subtitle_offset_ms_ = 0;
     int64_t start_time_ms_ = 0;
+    bool subtitles_enabled_ = true;
     bool opened_ = false;
     std::atomic<bool> playing_{false};
     bool audio_draining_ = false;

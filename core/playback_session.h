@@ -65,6 +65,7 @@ public:
     std::vector<MediaSubtitleTrackInfo> subtitle_tracks() const;
     SessionResult select_subtitle_track(int stream_index);
     SessionResult set_external_subtitle(const std::string& path);
+    void set_subtitles_enabled(bool enabled);
     void set_subtitle_offset_ms(int64_t offset_ms);
     void set_volume(float volume);
     void set_playback_rate(float rate);
@@ -87,6 +88,7 @@ private:
     std::string source_;
     float volume_ = 1.0f;
     float playback_rate_ = 1.0f;
+    bool subtitles_enabled_ = true;
     std::function<void()> playback_end_callback_;
     std::function<void(std::string)> playback_error_callback_;
 };

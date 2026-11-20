@@ -227,6 +227,11 @@ public:
         });
     }
 
+    void set_subtitles_enabled(bool enabled)
+    {
+        session_.set_subtitles_enabled(enabled);
+    }
+
     void set_subtitle_offset_ms(int64_t offset_ms)
     {
         session_.set_subtitle_offset_ms(offset_ms);
@@ -1107,6 +1112,14 @@ lnplayer_result_t lnplayer_set_external_subtitle(
     if (!path_utf8)
         return set_error(LNPLAYER_RESULT_INVALID_ARGUMENT, "External subtitle path is null.");
     return finish_result(player->controller->set_external_subtitle(path_utf8));
+}
+
+lnplayer_result_t lnplayer_set_subtitles_enabled(lnplayer_t* player, int enabled)
+{
+    if (!is_current_player(player))
+        return set_error(LNPLAYER_RESULT_INVALID_HANDLE, "Invalid Player handle.");
+    player->controller->set_subtitles_enabled(enabled != 0);
+    return finish_result(LNPLAYER_RESULT_OK);
 }
 
 lnplayer_result_t lnplayer_set_subtitle_offset(lnplayer_t* player, int64_t offset_ms)

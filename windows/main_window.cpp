@@ -508,6 +508,12 @@ MainWindow::MainWindow(
             else if (selected == subtitles_enabled)
             {
                 subtitles_enabled_ = subtitles_enabled->isChecked();
+                const bool enabled = subtitles_enabled_;
+                QMetaObject::invokeMethod(command_worker_, [this, enabled]
+                {
+                    if (player_)
+                        lnplayer_set_subtitles_enabled(player_, enabled ? 1 : 0);
+                }, Qt::QueuedConnection);
                 pending_video_frame_valid_ = false;
                 requestVideoFrame();
             }

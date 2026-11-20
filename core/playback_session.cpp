@@ -68,6 +68,7 @@ SessionResult PlaybackSession::set_video_device(void* device)
     backend_->set_video_device(video_device_);
     backend_->set_volume(volume_);
     backend_->set_playback_rate(playback_rate_);
+    backend_->set_subtitles_enabled(subtitles_enabled_);
     backend_->set_playback_end_callback(playback_end_callback_);
     backend_->set_playback_error_callback(playback_error_callback_);
 
@@ -176,6 +177,7 @@ SessionResult PlaybackSession::open(const std::string& source)
 #endif
     backend_->set_volume(volume_);
     backend_->set_playback_rate(playback_rate_);
+    backend_->set_subtitles_enabled(subtitles_enabled_);
     backend_->set_playback_end_callback(playback_end_callback_);
     backend_->set_playback_error_callback(playback_error_callback_);
 
@@ -379,6 +381,14 @@ SessionResult PlaybackSession::set_external_subtitle(const std::string& path)
     snapshot_.position_ms = backend_->position_ms();
     ++snapshot_.generation;
     return make_result(true);
+}
+
+void PlaybackSession::set_subtitles_enabled(bool enabled)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    subtitles_enabled_ = enabled;
+    if (backend_)
+        backend_->set_subtitles_enabled(enabled);
 }
 
 void PlaybackSession::set_subtitle_offset_ms(int64_t offset_ms)

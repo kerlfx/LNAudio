@@ -255,6 +255,10 @@ LNPLAYER_API lnplayer_result_t lnplayer_set_external_subtitle(
     lnplayer_t* player,
     const char* path_utf8);
 
+LNPLAYER_API lnplayer_result_t lnplayer_set_subtitles_enabled(
+    lnplayer_t* player,
+    int enabled);
+
 /* Subtitle offset in milliseconds; positive values delay subtitles. */
 LNPLAYER_API lnplayer_result_t lnplayer_set_subtitle_offset(
     lnplayer_t* player,
