@@ -79,7 +79,7 @@ private:
 
     void openFile();
     void loadExternalSubtitle();
-    void loadExternalSubtitlePath(const QString& path);
+    void loadExternalSubtitlePath(const QString& path, bool remember = true);
     QString subtitleAt(int64_t position_ms) const;
     void setSubtitleOffset(int64_t offset_ms);
     void selectAudioTrack(int stream_index);
