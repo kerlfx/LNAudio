@@ -117,6 +117,7 @@ private:
     void playNext();
     void refreshLibrary();
     void requestVideoFrame();
+    void scheduleVideoPresentation();
     void presentPendingVideoFrame();
     void togglePlayback();
     void seekRelative(int64_t offset_ms);
