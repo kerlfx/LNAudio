@@ -105,6 +105,7 @@ MainWindow::MainWindow(PlayerMode mode, const QString& initial_media, QWidget* p
                         status_label_->setText(
                             QStringLiteral("目录扫描完成，导入 %1 个音频文件").arg(imported_count));
                         statusBar()->showMessage(QStringLiteral("音乐库已更新"));
+                        refreshLibrary();
                     }
                     else
                     {
@@ -231,6 +232,8 @@ MainWindow::MainWindow(PlayerMode mode, const QString& initial_media, QWidget* p
             {
                 status_label_->setText(QStringLiteral("播放器已就绪"));
                 statusBar()->showMessage(QStringLiteral("就绪"));
+                if (mode_ == PlayerMode::Audio)
+                    refreshLibrary();
             }
             else
             {
