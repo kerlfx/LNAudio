@@ -17,7 +17,10 @@ int main(int argc, char* argv[])
         QStringLiteral("启动视频界面"));
     parser.addOption(audio_option);
     parser.addOption(video_option);
-    parser.addPositionalArgument(QStringLiteral("media"), QStringLiteral("要打开的媒体文件"));
+    parser.addPositionalArgument(
+        QStringLiteral("media"),
+        QStringLiteral("要打开的媒体文件"),
+        QStringLiteral("[media...]"));
 
     parser.process(application);
 
