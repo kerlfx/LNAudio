@@ -52,6 +52,7 @@ Windows 端同时提供音频和视频播放界面，两套 UI 属于同一个 L
 - 平台相关的音频输出、视频渲染、设备管理和系统媒体控制与共享播放逻辑分离。
 - UI 不直接承担音视频解码工作。
 - FFmpeg 负责媒体探测、解封装和解码；Qt 负责 Windows 界面及窗口交互，不另行建立与 Core 并行的媒体播放管线。
+- Core 管理视频帧队列与播放时钟调度；平台 Renderer 在专属渲染线程执行 GPU 呈现。视频帧交付不通过普通播放控制请求响应或主动事件回调逐帧传输。
 
 ### 3.4 Windows 进程与窗口模型
 
@@ -159,26 +160,51 @@ FFmpeg 负责媒体探测、解封装和解码。构建配置必须包含上述�
 
 ### 9.6 视频解码与渲染技术要求
 
+#### 9.6.1 通用要求
+
 - 视频解码采用硬件解码优先策略；当设备、驱动、媒体编码参数或运行环境不支持可用硬件解码路径时，允许回退到 FFmpeg 软件解码。
-- Windows 首期优先评估 FFmpeg D3D11VA，DXVA2 作为兼容性候选；QSV、CUDA 等作为后续可选能力，不要求首期分别建立独立解码管线。
-- Android 首期优先评估 FFmpeg MediaCodec 硬件解码集成，并明确解码输出与 Android Surface 的生命周期和资源交接方式。
-- 视频输出需要兼容 CPU 内存中的软件帧与平台硬件帧。硬件帧应尽可能直接交给 GPU 渲染，避免不必要的 GPU 到 CPU 下载及再次上传；无法零拷贝时允许必要的数据传输或软件解码回退。
-- 硬件帧的引用、所有权、同步、释放时机和队列背压必须明确，不能在渲染消费者仍使用资源时提前释放或复用。
+- Core 负责视频帧队列、帧引用生命周期、PTS 调度及与播放时钟的协调；平台 Renderer 负责取得待呈现帧并执行实际 GPU 绘制。
+- Video Frame Queue 必须有界。根据播放时钟和显示能力处理过期帧或背压，不能因解码速度高于显示速度而无限积压。
+- Renderer 采用 Pull 模型，在自己的渲染线程按显示节奏获取可呈现帧；FFmpeg 解码线程不直接调用 UI 或 GPU 呈现接口。
+- 正常音视频播放以音频时钟为主时钟，视频按 PTS 与音频时钟同步；无音频流时使用独立视频时钟。
+- Seek、切换媒体和关闭 Session 时必须清理或隔离旧时间线帧；暂停时保留最后一帧供静态显示。
+- 软件帧和硬件帧均需支持。硬件帧尽可能直接交给 GPU，避免不必要的 GPU→CPU 下载及 CPU→GPU 重传；无法直接互操作时允许必要的数据传输或软件解码回退。
+- 硬件帧的引用、所有权、同步、释放时机和队列背压必须明确；GPU 最后一次使用完成前不得释放底层帧资源或允许解码器复用。
 - FFmpeg 内部硬件解码资源和平台图形资源不通过通用 C ABI 暴露；平台专用资源交接由对应平台适配层负责。
-- 视频渲染在具备相应图形上下文的渲染线程执行，不在 Qt GUI 之外的任意 Asio worker 中直接操作 QWidget 或图形上下文；Android Native 渲染适配层需响应 Surface 创建、变化和销毁。
+- 视频渲染在专属渲染线程执行；Asio 共享线程池不承担持续 GPU 呈现循环，也不应长期等待 vsync 或 GPU 完成。
+
+#### 9.6.2 Windows：Qt Widgets + Win32 + D3D11
+
+- Qt 6 Widgets 负责播放器窗口、菜单、控制栏、布局和用户交互。
+- 视频显示区域使用原生 Win32 子窗口（HWND）承载 D3D11 Renderer；Qt 管理其位置、尺寸及生命周期。
+- D3D11 Renderer 在专属渲染线程管理 Swap Chain，执行视频纹理采样、颜色转换、缩放和 Present。
+- 首期优先采用 FFmpeg D3D11VA 硬件解码，DXVA2 作为兼容性候选。
+- Windows Video Output 平台模块优先创建并管理 D3D11 Device，并将同一设备关联到 FFmpeg AVHWDeviceContext 与 D3D11 Renderer，减少跨设备资源复制。实际设备创建顺序和 FFmpeg 接入方式以集成验证为准。
+- D3D11VA 硬件帧通过帧引用交给 Renderer；必须保证 GPU 最后一次读取完成后才释放对应帧引用，不能只传递裸纹理指针。
+- 窗口 resize 调整 Swap Chain，不重建 Player 或 Playback Session。
+- 首期不以 QOpenGLWidget 作为 D3D11VA 纹理的直接呈现路径，避免引入不必要的 D3D11/OpenGL 互操作复杂度。
+
+#### 9.6.3 Android：Kotlin + SurfaceView + MediaCodec
+
+- Kotlin UI 管理视频显示区域，首期优先评估 SurfaceView。
+- Surface 创建、尺寸变化和销毁由 Android UI 生命周期通知 Native 平台输出模块；Surface 失效后必须停止向其提交帧。
+- 首期优先评估 FFmpeg MediaCodec 硬件解码，但必须验证目标 FFmpeg 版本的 MediaCodec 输出模式、Surface 绑定能力、输出缓冲区释放及呈现时机控制。
+- 评估 MediaCodec 直接输出 Surface 与硬件帧交给 Native Renderer 两种路径。前者可减少应用层帧搬运；后者更容易统一 PTS 调度，但需要验证硬件帧与 Android 图形 API 的互操作。
+- 不预设所有 MediaCodec 输出都表现为普通 CPU 可读 AVFrame，也不预设 FFmpeg 自动处理任意 Surface 的绑定和显示时机。
+- 最终输出路径根据目标 Android 版本、FFmpeg 构建和设备验证结果确定；平台专用资源和 Surface 生命周期由 Android 适配层封装。
 
 ### 9.5 Qt Widgets 职责划分
 
 Windows 视频 UI 可按以下职责组织组件，具体文件和类名在实现阶段确定：
 
 - **VideoWindow**：窗口生命周期、整体布局及窗口模式管理。
-- **VideoSurface**：视频显示区域及画面交互。
+- **VideoSurface / VideoContainer**：视频显示区域及画面交互；内部承载原生 Win32 子窗口，作为 D3D11 Renderer 的显示目标。
 - **PlaybackControls**：播放控制、进度和音量等界面操作。
 - **VideoContextMenu**：右键菜单及子菜单。
 - **PlaylistPanel**：播放列表展示和操作。
 - **PlayerController**：键盘快捷键、鼠标操作到 Core 播放接口的控制映射。
 
-UI 通过 Core 对外接口执行播放操作，不直接访问 FFmpeg 上下文。视频帧的实际渲染路径和 Qt 图形资源对接方式待技术设计阶段确定。
+UI 通过 Core 对外接口执行播放操作，不直接访问 FFmpeg 上下文。Qt 管理视频区域的布局、尺寸和窗口生命周期；原生 Win32 子窗口承载 D3D11 Renderer。Qt GUI 线程不执行 FFmpeg 解码或 D3D11 GPU 呈现。
 
 ## 10. 当前明确不做的内容
 
@@ -219,9 +245,9 @@ UI 通过 Core 对外接口执行播放操作，不直接访问 FFmpeg 上下文
 - 主进程/启动器是否常驻，以及子进程创建和回收策略。
 - 文件管理器连续打开文件时的进程启动和请求分发方式。
 - 进程间通信方式及主进程是否负责窗口进程管理。
-- Windows D3D11VA/DXVA2 的实际支持范围、D3D 设备共享及 Qt 图形资源互操作方式。
-- Android MediaCodec 输出模式、Surface 生命周期与 Native 渲染资源管理。
-- 硬件帧队列容量、帧引用/释放契约、同步机制及无法零拷贝时的传输策略。
+- Windows D3D11VA/DXVA2 的实际支持范围、D3D11 Device 共享方式、D3D11 资源同步与 GPU 完成检测。
+- Android MediaCodec 的 Surface 绑定、输出缓冲区呈现时机及 Native Renderer 互操作路径。
+- 视频帧队列容量、帧引用/释放契约、PTS 调度与无法直接互操作时的传输策略。
 - 视频格式及容器支持范围。
 - 快进/快退步长、音量步长及快捷键自定义配置。
 - PotPlayer 风格界面的具体布局、菜单项目和控件细节。
