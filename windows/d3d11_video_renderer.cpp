@@ -177,6 +177,12 @@ public:
             create_render_target();
     }
 
+    void set_stretch(bool enabled)
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        stretch_ = enabled;
+    }
+
     bool present(const uint8_t* pixels, int width, int height, int stride)
     {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -228,11 +234,15 @@ public:
         if (target_width <= 0.0f || target_height <= 0.0f)
             return true;
 
-        const float scale = std::min(
+        const float scale = stretch_ ? 1.0f : std::min(
             target_width / static_cast<float>(width),
             target_height / static_cast<float>(height));
-        const float viewport_width = static_cast<float>(width) * scale;
-        const float viewport_height = static_cast<float>(height) * scale;
+        const float viewport_width = stretch_
+            ? target_width
+            : static_cast<float>(width) * scale;
+        const float viewport_height = stretch_
+            ? target_height
+            : static_cast<float>(height) * scale;
 
         D3D11_VIEWPORT viewport{};
         viewport.TopLeftX = (target_width - viewport_width) * 0.5f;
@@ -355,6 +365,7 @@ private:
     HWND window_ = nullptr;
     UINT texture_width_ = 0;
     UINT texture_height_ = 0;
+    bool stretch_ = false;
     ComPtr<ID3D11Device> device_;
     ComPtr<ID3D11DeviceContext> context_;
     ComPtr<IDXGISwapChain> swap_chain_;
@@ -385,6 +396,11 @@ bool D3D11VideoRenderer::initialize(HWND window)
 void D3D11VideoRenderer::resize(uint32_t width, uint32_t height)
 {
     impl_->resize(width, height);
+}
+
+void D3D11VideoRenderer::set_stretch(bool enabled)
+{
+    impl_->set_stretch(enabled);
 }
 
 bool D3D11VideoRenderer::present(const uint8_t* bgra, int width, int height, int stride)
