@@ -97,6 +97,7 @@ MainWindow::MainWindow(
     , video_timer_(new QTimer(this))
     , device_timer_(new QTimer(this))
     , fullscreen_hide_timer_(new QTimer(this))
+    , osd_timer_(new QTimer(this))
 {
     if (mode_ == PlayerMode::Video)
     {
@@ -211,6 +212,15 @@ MainWindow::MainWindow(
     if (mode_ == PlayerMode::Video)
     {
         video_surface_ = new VideoSurface(content);
+        osd_label_ = new QLabel(video_surface_);
+        osd_label_->setAlignment(Qt::AlignCenter);
+        osd_label_->setAttribute(Qt::WA_TransparentForMouseEvents);
+        osd_label_->setStyleSheet(QStringLiteral(
+            "QLabel { color: white; background: rgba(0, 0, 0, 185); "
+            "border-radius: 8px; padding: 10px 18px; font-size: 18px; }"));
+        osd_label_->hide();
+        osd_timer_->setSingleShot(true);
+        connect(osd_timer_, &QTimer::timeout, osd_label_, &QWidget::hide);
         {
             QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
             video_brightness_ = std::clamp(
@@ -1052,6 +1062,8 @@ MainWindow::MainWindow(
         }
         settings.sync();
 
+        showOsd(value == 0 ? QStringLiteral("静音")
+            : QStringLiteral("音量 %1%").arg(value / 10));
         QMetaObject::invokeMethod(command_worker_, [this, value]
         {
             if (player_)
@@ -1199,6 +1211,21 @@ MainWindow::~MainWindow()
     delete command_worker_;
 }
 
+void MainWindow::showOsd(const QString& message)
+{
+    if (!osd_label_ || !video_surface_ || message.isEmpty())
+        return;
+
+    osd_label_->setText(message);
+    osd_label_->adjustSize();
+    osd_label_->move(
+        (video_surface_->width() - osd_label_->width()) / 2,
+        (video_surface_->height() - osd_label_->height()) / 2);
+    osd_label_->raise();
+    osd_label_->show();
+    osd_timer_->start(1500);
+}
+
 void MainWindow::showFullscreenControls()
 {
     if (!isFullScreen() || !control_panel_)
@@ -1252,6 +1279,13 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event)
     {
         const bool is_control_widget = watched == control_panel_ ||
             (control_panel_ && control_panel_->isAncestorOf(qobject_cast<QWidget*>(watched)));
+        if (watched == video_surface_ && event->type() == QEvent::Resize && osd_label_ && osd_label_->isVisible())
+        {
+            osd_label_->adjustSize();
+            osd_label_->move(
+                (video_surface_->width() - osd_label_->width()) / 2,
+                (video_surface_->height() - osd_label_->height()) / 2);
+        }
         if (event->type() == QEvent::MouseMove)
         {
             if (is_control_widget)
@@ -2479,6 +2513,9 @@ void MainWindow::togglePlayback()
 
 void MainWindow::seekRelative(int64_t offset_ms)
 {
+    showOsd(offset_ms < 0
+        ? QStringLiteral("后退 %1 秒").arg(-offset_ms / 1000)
+        : QStringLiteral("前进 %1 秒").arg(offset_ms / 1000));
     if (duration_ms_ <= 0 || video_seek_pending_)
         return;
 
@@ -2541,6 +2578,7 @@ void MainWindow::takeScreenshot()
         QFileInfo(path).absolutePath());
     settings.sync();
     statusBar()->showMessage(QStringLiteral("截图已保存：%1").arg(path));
+    showOsd(QStringLiteral("截图已保存"));
 }
 
 void MainWindow::setPlaybackRate(float rate)
@@ -2556,6 +2594,7 @@ void MainWindow::setPlaybackRate(float rate)
         video_clock_anchor_position_ms_ = current_position_ms_;
     }
     playback_rate_ = rate;
+    showOsd(QStringLiteral("播放速度 %1x").arg(rate, 0, 'f', 2));
     QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
     settings.setValue(QStringLiteral("Video/PlaybackRate"), rate);
     settings.sync();
