@@ -157,6 +157,10 @@ public:
             return false;
         }
 
+        ComPtr<ID3D11Multithread> multithread;
+        if (SUCCEEDED(context_.As(&multithread)))
+            multithread->SetMultithreadProtected(TRUE);
+
         window_ = target;
         if (!create_render_target() || !create_pipeline())
         {
