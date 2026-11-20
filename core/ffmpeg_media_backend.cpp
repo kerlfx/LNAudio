@@ -959,6 +959,14 @@ private:
         }
 
         const AVStream* stream = format_context_->streams[video_stream_index_];
+        AVRational sample_aspect_ratio = video_frame_->sample_aspect_ratio;
+        if (sample_aspect_ratio.num <= 0 || sample_aspect_ratio.den <= 0)
+            sample_aspect_ratio = stream->sample_aspect_ratio;
+        output.display_aspect_ratio =
+            sample_aspect_ratio.num > 0 && sample_aspect_ratio.den > 0
+                ? static_cast<float>(width) * sample_aspect_ratio.num /
+                    (static_cast<float>(height) * sample_aspect_ratio.den)
+                : static_cast<float>(width) / static_cast<float>(height);
         const int64_t timestamp = video_frame_->best_effort_timestamp;
         output.pts_ms = timestamp == AV_NOPTS_VALUE
             ? position_ms_.load(std::memory_order_relaxed)
