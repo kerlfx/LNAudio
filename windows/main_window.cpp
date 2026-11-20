@@ -1640,11 +1640,37 @@ void MainWindow::showPlaybackInfo()
     const QString renderer_state = video_surface_ && video_surface_->has_renderer()
         ? QStringLiteral("D3D11 渲染器已初始化")
         : QStringLiteral("D3D11 渲染器不可用");
+    const double frame_rate = video_info_.frame_rate_den > 0
+        ? static_cast<double>(video_info_.frame_rate_num) / video_info_.frame_rate_den
+        : 0.0;
+    const QString metadata = QStringLiteral(
+        "容器：%1\n编码：%2（%3）\n解码器：%4\n帧率：%5\n码率：%6\n"
+        "像素格式：%7 / %8-bit\nSAR：%9:%10\n旋转：%11°\n"
+        "色彩：range=%12 primaries=%13 transfer=%14 matrix=%15")
+        .arg(QString::fromUtf8(video_info_.container_long_name))
+        .arg(QString::fromUtf8(video_info_.codec_name))
+        .arg(QString::fromUtf8(video_info_.profile))
+        .arg(QString::fromUtf8(video_info_.decoder_name))
+        .arg(frame_rate > 0.0
+            ? QString::number(frame_rate, 'f', 3) + QStringLiteral(" fps")
+            : QStringLiteral("未知"))
+        .arg(video_info_.bit_rate > 0
+            ? QString::number(video_info_.bit_rate / 1000) + QStringLiteral(" kbps")
+            : QStringLiteral("未知"))
+        .arg(QString::fromUtf8(video_info_.pixel_format))
+        .arg(video_info_.bit_depth)
+        .arg(video_info_.sample_aspect_ratio_num)
+        .arg(video_info_.sample_aspect_ratio_den)
+        .arg(video_info_.rotation_degrees)
+        .arg(video_info_.color_range)
+        .arg(video_info_.color_primaries)
+        .arg(video_info_.color_transfer)
+        .arg(video_info_.color_space);
 
     const QString details = QStringLiteral(
         "媒体：%1\n路径：%2\n状态：%3\n位置：%4 / %5\n"
         "视频：%6\n分辨率：%7\n音轨：%8\n播放速度：%9x\n音量：%10%\n"
-        "字幕偏移：%11 ms\n渲染：%12")
+        "字幕偏移：%11 ms\n渲染：%12\n\n%13")
         .arg(media_title_label_->text())
         .arg(media_path.isEmpty() ? QStringLiteral("无") : media_path)
         .arg(status_label_->text())
@@ -1656,7 +1682,8 @@ void MainWindow::showPlaybackInfo()
         .arg(playback_rate_, 0, 'f', 2)
         .arg(volume_slider_->value() / 10)
         .arg(subtitle_offset_ms_)
-        .arg(renderer_state);
+        .arg(renderer_state)
+        .arg(metadata);
     const bool fullscreen_before_dialog = isFullScreen();
     if (fullscreen_before_dialog)
         fullscreen_hide_timer_->stop();
@@ -2666,6 +2693,7 @@ void MainWindow::openPlaylistIndex(int index)
     is_playing_ = false;
     duration_ms_ = -1;
     current_position_ms_ = 0;
+    video_info_ = {};
     if (seek_slider_)
     {
         seek_slider_->setEnabled(false);
@@ -3881,6 +3909,22 @@ void MainWindow::handleCoreEvent(
         playlist_open_pending_ = false;
         if (result == LNPLAYER_RESULT_OK)
         {
+            video_info_ = {};
+            QMetaObject::invokeMethod(command_worker_, [this]
+            {
+                lnplayer_video_info_t info{};
+                info.struct_size = sizeof(info);
+                const lnplayer_result_t info_result = player_
+                    ? lnplayer_get_video_info(player_, &info)
+                    : LNPLAYER_RESULT_INVALID_HANDLE;
+                if (info_result == LNPLAYER_RESULT_OK)
+                {
+                    QMetaObject::invokeMethod(this, [this, info]
+                    {
+                        video_info_ = info;
+                    }, Qt::QueuedConnection);
+                }
+            }, Qt::QueuedConnection);
             status_label_->setText(QStringLiteral("媒体已打开"));
             statusBar()->showMessage(QStringLiteral("就绪"));
             seek_slider_->setEnabled(duration_ms > 0);
