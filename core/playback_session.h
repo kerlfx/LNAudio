@@ -64,6 +64,7 @@ public:
     SessionResult select_audio_track(int stream_index);
     std::vector<MediaSubtitleTrackInfo> subtitle_tracks() const;
     SessionResult select_subtitle_track(int stream_index);
+    SessionResult set_external_subtitle(const std::string& path);
     void set_subtitle_offset_ms(int64_t offset_ms);
     void set_volume(float volume);
     void set_playback_rate(float rate);

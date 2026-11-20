@@ -219,6 +219,14 @@ public:
         return session_.subtitle_tracks();
     }
 
+    lnplayer_result_t set_external_subtitle(const std::string& path)
+    {
+        return invoke_sync([this, path]
+        {
+            return session_.set_external_subtitle(path);
+        });
+    }
+
     void set_subtitle_offset_ms(int64_t offset_ms)
     {
         session_.set_subtitle_offset_ms(offset_ms);
@@ -1088,6 +1096,17 @@ lnplayer_result_t lnplayer_select_subtitle_track(lnplayer_t* player, int32_t str
     if (stream_index < -1)
         return set_error(LNPLAYER_RESULT_INVALID_ARGUMENT, "Subtitle stream index must be -1 or a valid stream index.");
     return finish_result(player->controller->select_subtitle_track(stream_index));
+}
+
+lnplayer_result_t lnplayer_set_external_subtitle(
+    lnplayer_t* player,
+    const char* path_utf8)
+{
+    if (!is_current_player(player))
+        return set_error(LNPLAYER_RESULT_INVALID_HANDLE, "Invalid Player handle.");
+    if (!path_utf8)
+        return set_error(LNPLAYER_RESULT_INVALID_ARGUMENT, "External subtitle path is null.");
+    return finish_result(player->controller->set_external_subtitle(path_utf8));
 }
 
 lnplayer_result_t lnplayer_set_subtitle_offset(lnplayer_t* player, int64_t offset_ms)

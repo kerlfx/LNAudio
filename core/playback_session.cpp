@@ -362,6 +362,25 @@ SessionResult PlaybackSession::select_subtitle_track(int stream_index)
     return make_result(true);
 }
 
+SessionResult PlaybackSession::set_external_subtitle(const std::string& path)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (!backend_ ||
+        (snapshot_.state != SessionState::Ready &&
+         snapshot_.state != SessionState::Playing &&
+         snapshot_.state != SessionState::Paused &&
+         snapshot_.state != SessionState::Ended))
+        return make_result(false, "External subtitles require an opened video.");
+
+    const MediaBackendResult result = backend_->set_external_subtitle(path);
+    if (!result.success)
+        return make_result(false, result.message);
+
+    snapshot_.position_ms = backend_->position_ms();
+    ++snapshot_.generation;
+    return make_result(true);
+}
+
 void PlaybackSession::set_subtitle_offset_ms(int64_t offset_ms)
 {
     std::lock_guard<std::mutex> lock(mutex_);
