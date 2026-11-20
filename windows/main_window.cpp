@@ -1043,6 +1043,8 @@ MainWindow::MainWindow(
 
     connect(play_button_, &QPushButton::clicked, this, [this]
     {
+        if (video_seek_pending_)
+            return;
         QMetaObject::invokeMethod(command_worker_, [this]
         {
             if (player_)
@@ -2283,6 +2285,8 @@ void MainWindow::presentPendingVideoFrame()
 }
 void MainWindow::togglePlayback()
 {
+    if (video_seek_pending_)
+        return;
     const bool should_pause = is_playing_;
     const bool resume_from_history = !should_pause && viewing_historical_frame_;
     const int64_t resume_position = current_position_ms_;
