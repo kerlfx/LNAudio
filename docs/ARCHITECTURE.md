@@ -120,19 +120,143 @@ SQLite 保存音乐条目、元数据、文件位置关联、目录配置、索�
 
 上述为逻辑职责边界，不要求每个模块立即拆成独立动态库或静态库。物理拆分应由依赖关系和构建需求决定。
 
-## 4. Player 对象模型
+## 4. Player 对象模型与生命周期
 
-初步建议采用以下关系：
+### 4.1 对象职责与所有权
 
-- Player Manager 管理多个 Player Instance。
-- 每个 Player Instance 代表一个独立播放器运行实例。
-- Player Instance 持有或协调 Playback Controller、当前 Playback Session、播放队列及事件出口。
-- Playback Session 封装一次媒体播放所需的媒体输入、FFmpeg 上下文、解码状态、时钟和缓冲资源。
-- 媒体切换时，旧会话资源应按明确的生命周期释放，新媒体建立新的会话资源。
-- 不同 Player Instance 不得共享同一套可变 FFmpeg 播放上下文。
-- 多个实例可以共享只读配置、不可变数据或 FFmpeg 库级公共资源，但不得因此共享媒体会话状态。
+建议采用以下所有权关系：
 
-建议初期一个 Player Instance 同时只运行一个当前 Playback Session。是否需要预加载会话、无缝切换或多路媒体会话，留待播放需求和性能设计阶段确定。
+- **Player Manager**：管理当前 Core Runtime 中创建的 Player Instance，负责实例创建、销毁和句柄登记。它不持有某个实例的媒体解码状态。
+- **Player Instance**：代表一个逻辑播放器，拥有独立的播放状态、Playback Controller、Playlist、当前 Playback Session 和事件出口。
+- **Playback Controller**：属于一个 Player Instance，串行协调该实例的播放命令和状态转换。它不直接承担 FFmpeg 解码工作。
+- **Playlist**：属于 Player Instance，保存队列条目、当前条目位置及播放顺序策略。播放列表条目是媒体引用/描述，不持有打开中的 FFmpeg 上下文。
+- **Playback Session**：属于 Player Instance，代表当前打开的一次媒体播放。持有媒体输入、FFmpeg format/codec 上下文、解码器、时钟、数据队列及会话级资源。
+- **Media Pipeline**：由 Playback Session 创建和管理，负责探测、解封装、解码和同步；平台输出通过抽象接口接入。
+
+Player Manager 与 Player Instance 是管理关系；Controller、Playlist 和 Session 是实例内部组成部分。不要把 Controller 或 Session 暴露成独立的顶层播放器实例。
+
+~~~mermaid
+classDiagram
+    class PlayerManager {
+        +createPlayer()
+        +destroyPlayer()
+    }
+    class PlayerInstance {
+        +id
+        +state
+    }
+    class PlaybackController {
+        +open()
+        +play()
+        +pause()
+        +stop()
+        +seek()
+    }
+    class Playlist {
+        +add()
+        +remove()
+        +move()
+        +select()
+    }
+    class PlaybackSession {
+        +open()
+        +start()
+        +close()
+    }
+    class MediaPipeline {
+        +demux()
+        +decode()
+        +flush()
+    }
+    PlayerManager "1" --> "0..*" PlayerInstance
+    PlayerInstance "1" *-- "1" PlaybackController
+    PlayerInstance "1" *-- "1" Playlist
+    PlayerInstance "1" *-- "0..1" PlaybackSession
+    PlaybackSession "1" *-- "1" MediaPipeline
+~~~
+
+### 4.2 实例数量与会话数量
+
+- 一个 Player Instance 同一时刻最多拥有一个当前活动 Playback Session。
+- 一个 Player Instance 可以在没有活动 Session 时存在，例如刚创建、尚未打开媒体或停止并关闭当前媒体之后。
+- 一个 Player Instance 可以持有多个 Playlist 条目，但队列中的其他条目不会因此提前创建 FFmpeg 上下文。
+- 切换到另一个媒体时，Controller 协调当前 Session 关闭，再为目标媒体建立新 Session。
+- 首期不设计同一 Player Instance 内多个独立媒体同时播放；若未来需要预加载，可增加独立的准备态资源，但不能与当前活动 Session 混淆。
+
+Windows 已确定一个窗口一个进程；建议每个 Windows 窗口进程创建一个 Player Instance。Core API 仍保留创建多个实例的能力，不把 Windows 的进程策略写死到共享 Core。Android 是否在单进程中创建多个实例，由 Android 产品行为决定。
+
+### 4.3 Player Instance 生命周期
+
+建议生命周期如下：
+
+~~~mermaid
+stateDiagram-v2
+    [*] --> Created
+    Created --> Idle: 初始化完成
+    Idle --> Opening: 打开媒体
+    Opening --> Ready: 探测及初始化成功
+    Opening --> Error: 打开失败
+    Ready --> Playing: 开始播放
+    Playing --> Paused: 暂停
+    Paused --> Playing: 恢复
+    Playing --> Seeking: 定位
+    Paused --> Seeking: 定位
+    Seeking --> Playing: 定位完成且原状态为播放
+    Seeking --> Paused: 定位完成且原状态为暂停
+    Playing --> Ended: 播放结束
+    Ended --> Playing: 从头重播
+    Ready --> Idle: 关闭媒体
+    Playing --> Idle: 停止并关闭媒体
+    Paused --> Idle: 停止并关闭媒体
+    Error --> Idle: 清理并返回空闲
+    Idle --> Closing: 销毁实例
+    Error --> Closing: 销毁实例
+    Closing --> [*]
+~~~
+
+说明：
+
+- Created/Idle 表示实例存在，但没有活动媒体会话。
+- Opening 表示正在创建会话、打开输入并探测媒体；此阶段可取消。
+- Ready 表示媒体已成功打开并完成播放所需初始化，尚未开始或当前未运行。
+- Playing/Paused 表示播放运行状态。
+- Seeking 是一次异步定位过程；定位完成后恢复到定位前的播放/暂停状态。
+- Ended 表示当前媒体自然播放结束，会话仍可保留以支持重播或读取最终状态。
+- Error 表示当前打开或播放操作失败；错误处理后允许清理并再次打开媒体。
+- Closing 表示实例正在销毁，不再接受新的播放命令。
+
+状态图是逻辑状态模型。具体实现可将 Seeking 等短暂操作表示为操作状态而非顶层枚举，但对外行为必须保持一致。
+
+### 4.4 命令语义
+
+| 命令 | 建议语义 |
+|---|---|
+| create | 创建空闲 Player Instance |
+| open(source) | 异步打开媒体；成功后进入 Ready，失败进入 Error |
+| play | 从 Ready/Paused 恢复播放；Ended 时按重播策略处理 |
+| pause | 暂停当前播放；没有活动会话时返回明确错误 |
+| stop | 停止当前播放并释放当前媒体会话，回到 Idle；播放列表保留 |
+| seek(position) | 发起异步定位；完成后恢复定位前的播放/暂停状态 |
+| close | 关闭当前媒体会话并回到 Idle；与销毁 Player Instance 不同 |
+| destroy | 停止接受命令，清理会话及实例资源并销毁实例 |
+
+所有命令的错误码、同步/异步返回和取消语义由 C ABI 专题进一步确定。命令不能因异步执行而丢失顺序；同一 Player Instance 的状态转换由其 Controller 统一协调。
+
+### 4.5 打开、切换与销毁顺序
+
+建议媒体打开流程：
+
+1. Controller 接收 open 命令并登记操作序号。
+2. 若存在旧 Session，先使其停止接收新工作并执行关闭。
+3. 创建新的 Playback Session。
+4. 打开媒体输入、读取媒体信息并初始化所需解码器和输出资源。
+5. 初始化成功后将新 Session 设为当前 Session，状态进入 Ready。
+6. 通过事件通知调用方打开完成及媒体信息。
+
+若打开失败，释放新 Session 已创建的资源并发出错误事件；不得留下半初始化的活动会话。
+
+销毁顺序应遵循资源依赖的逆序：停止命令入口 → 取消/中断媒体读取与后台任务 → 停止输出 → 等待相关工作退出 → 释放解码器和格式上下文 → 释放队列及时钟 → 注销事件出口 → 销毁实例。具体线程 join 和中断机制在媒体管线及线程专题确定。
+
 
 ## 5. Windows 运行模型
 
@@ -239,7 +363,7 @@ flowchart TD
 
 ## 10. 关键设计待决事项
 
-1. Player Manager、Player Instance、Playback Controller、Playback Session 的精确对象关系和生命周期。
+1. Player 生命周期状态与命令语义的最终确认，以及打开失败、取消和销毁时序。
 2. 一个 Player Instance 是否始终只允许一个活动 Playback Session，以及预加载/无缝切换策略。
 3. C ABI 的完整函数集合、句柄、错误码、内存所有权和回调约定。
 4. 播放命令执行器、媒体工作线程、线程池及队列模型。
@@ -254,7 +378,7 @@ flowchart TD
 
 ## 11. 后续设计顺序
 
-1. Player Core 对象模型与生命周期。
+1. 复核并冻结 Player Core 对象模型与生命周期。
 2. C ABI 接口和事件系统。
 3. FFmpeg 媒体管线与音视频同步。
 4. 音频输出和视频渲染适配。
