@@ -169,6 +169,13 @@ SessionResult PlaybackSession::close()
     return make_result(true);
 }
 
+void PlaybackSession::set_volume(float volume)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (backend_)
+        backend_->set_volume(volume);
+}
+
 SessionSnapshot PlaybackSession::snapshot() const
 {
     std::lock_guard<std::mutex> lock(mutex_);
