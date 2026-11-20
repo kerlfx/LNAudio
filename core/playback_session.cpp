@@ -49,6 +49,7 @@ SessionResult PlaybackSession::open(const std::string& source)
     }
 
     backend_->set_volume(volume_);
+    backend_->set_playback_rate(playback_rate_);
     backend_->set_playback_end_callback(playback_end_callback_);
     backend_->set_playback_error_callback(playback_error_callback_);
 
@@ -193,6 +194,14 @@ void PlaybackSession::set_volume(float volume)
     volume_ = volume;
     if (backend_)
         backend_->set_volume(volume_);
+}
+
+void PlaybackSession::set_playback_rate(float rate)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    playback_rate_ = rate;
+    if (backend_)
+        backend_->set_playback_rate(playback_rate_);
 }
 
 void PlaybackSession::set_playback_end_callback(std::function<void()> callback)
