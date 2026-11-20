@@ -388,11 +388,11 @@ Windows 应用使用单一 `LNPlayer.exe`，通过启动参数选择音频或视
 - Windows 优先尝试 D3D11VA，硬件帧暂时下载到系统内存，再上传至 Renderer；硬件初始化失败时回退软件解码。
 - Windows 原生 QWidget 子窗口 HWND、D3D11 Device/Swap Chain、纹理采样、原始比例、16:9、4:3、拉伸显示和窗口 resize；ResizeBuffers 失败及 DXGI device removed/reset 时尝试重建 Renderer。
 - Windows 专用 `lnplayer_windows.h` 视频帧 Pull 接口；视频帧传输不加入通用 `lnplayer.h`。
-- 统一按容器起始时间将音频/视频 PTS 归一化到从零开始的时间线；视频 PTS 等待、音频流主时钟的基础调度；音频位置在 PCM 写入后根据 WASAPI 当前待播放缓冲量回算，减少解码领先于扬声器实际播放造成的同步偏差；无音频视频使用独立时钟。
+- 统一按容器起始时间将音频/视频 PTS 归一化到从零开始的时间线；视频 PTS 等待、音频流主时钟的基础调度；音频位置在 PCM 写入后结合 WASAPI `IAudioClock` 硬件设备帧位置与当前待播放缓冲量映射到媒体时间线，硬件时钟查询失败时回退到缓冲量估算；无音频视频使用独立时钟。
 - 视频 Seek 后刷新解码器和 Packet Queue；暂停保留最后一帧。
 - 全屏、快捷键、右键菜单、截图和逐帧操作的基础实现；支持加载外挂 SRT 字幕并在视频帧上叠加显示。
 
-当前仍未完成：D3D11VA 与 Renderer 共享同一 Device 的零拷贝路径、精确 WASAPI 音频硬件时钟、独立 Core Video Frame Queue/显示 Scheduler、DXVA2 后备、多音轨选择、内嵌字幕解码、字幕样式/时间偏移、音频变速保音高、色彩空间/旋转元数据、滤镜和完整播放列表。当前 D3D11 Present 由 Windows 命令工作线程执行，窗口 resize 由 UI 线程执行并通过 Renderer 锁串行化；尚未验证实际设备和长时间播放稳定性。
+当前仍未完成：D3D11VA 与 Renderer 共享同一 Device 的零拷贝路径、独立 Core Video Frame Queue/显示 Scheduler、DXVA2 后备、多音轨选择、内嵌字幕解码、字幕样式/时间偏移、音频变速保音高、色彩空间/旋转元数据、滤镜和完整播放列表。当前 D3D11 Present 由 Windows 命令工作线程执行，窗口 resize 由 UI 线程执行并通过 Renderer 锁串行化；尚未验证实际设备和长时间播放稳定性。
 
 ## 6. Android 运行模型
 
