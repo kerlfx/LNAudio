@@ -416,12 +416,33 @@ public:
         if (FAILED(swap_chain_->GetBuffer(0, IID_PPV_ARGS(back_buffer.GetAddressOf()))))
             return false;
 
+        if (!hardware_output_texture_ ||
+            hardware_output_width_ != output_width ||
+            hardware_output_height_ != output_height)
+        {
+            hardware_output_texture_.Reset();
+            D3D11_TEXTURE2D_DESC output_texture_desc{};
+            output_texture_desc.Width = output_width;
+            output_texture_desc.Height = output_height;
+            output_texture_desc.MipLevels = 1;
+            output_texture_desc.ArraySize = 1;
+            output_texture_desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+            output_texture_desc.SampleDesc.Count = 1;
+            output_texture_desc.Usage = D3D11_USAGE_DEFAULT;
+            output_texture_desc.BindFlags = D3D11_BIND_RENDER_TARGET;
+            if (FAILED(device_->CreateTexture2D(
+                    &output_texture_desc, nullptr, hardware_output_texture_.GetAddressOf())))
+                return false;
+            hardware_output_width_ = output_width;
+            hardware_output_height_ = output_height;
+        }
+
         D3D11_VIDEO_PROCESSOR_OUTPUT_VIEW_DESC output_desc{};
         output_desc.ViewDimension = D3D11_VPOV_DIMENSION_TEXTURE2D;
         output_desc.Texture2D.MipSlice = 0;
         ComPtr<ID3D11VideoProcessorOutputView> output_view;
         if (FAILED(video_device_->CreateVideoProcessorOutputView(
-                back_buffer.Get(),
+                hardware_output_texture_.Get(),
                 video_processor_enumerator_.Get(),
                 &output_desc,
                 output_view.GetAddressOf())))
@@ -459,11 +480,54 @@ public:
         if (FAILED(blt_result))
             return false;
 
+        context_->CopyResource(back_buffer.Get(), hardware_output_texture_.Get());
         context_->End(completion_query.Get());
         context_->Flush();
         pending_hardware_frames_.push_back(
             PendingHardwareFrame{std::move(completion_query), std::move(frame_owner)});
         return SUCCEEDED(swap_chain_->Present(1, 0));
+    }
+
+    bool capture_bgra(std::vector<uint8_t>& pixels, int& width, int& height)
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (!device_ || !context_ || !hardware_output_texture_)
+            return false;
+
+        D3D11_TEXTURE2D_DESC source_desc{};
+        hardware_output_texture_->GetDesc(&source_desc);
+        D3D11_TEXTURE2D_DESC staging_desc{};
+        staging_desc.Width = source_desc.Width;
+        staging_desc.Height = source_desc.Height;
+        staging_desc.MipLevels = 1;
+        staging_desc.ArraySize = 1;
+        staging_desc.Format = source_desc.Format;
+        staging_desc.SampleDesc.Count = 1;
+        staging_desc.Usage = D3D11_USAGE_STAGING;
+        staging_desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+
+        ComPtr<ID3D11Texture2D> staging;
+        if (FAILED(device_->CreateTexture2D(
+                &staging_desc, nullptr, staging.GetAddressOf())))
+            return false;
+
+        context_->CopyResource(staging.Get(), hardware_output_texture_.Get());
+        D3D11_MAPPED_SUBRESOURCE mapped{};
+        if (FAILED(context_->Map(staging.Get(), 0, D3D11_MAP_READ, 0, &mapped)))
+            return false;
+
+        width = static_cast<int>(source_desc.Width);
+        height = static_cast<int>(source_desc.Height);
+        const size_t row_bytes = static_cast<size_t>(width) * 4;
+        pixels.resize(row_bytes * static_cast<size_t>(height));
+        for (int row = 0; row < height; ++row)
+            std::memcpy(
+                pixels.data() + static_cast<size_t>(row) * row_bytes,
+                static_cast<const uint8_t*>(mapped.pData) +
+                    static_cast<size_t>(row) * mapped.RowPitch,
+                row_bytes);
+        context_->Unmap(staging.Get(), 0);
+        return true;
     }
 
     void clear()
@@ -575,6 +639,9 @@ private:
             context_->ClearState();
         video_view_.Reset();
         video_texture_.Reset();
+        hardware_output_texture_.Reset();
+        hardware_output_width_ = 0;
+        hardware_output_height_ = 0;
         video_processor_.Reset();
         video_processor_enumerator_.Reset();
         video_context_.Reset();
@@ -613,6 +680,9 @@ private:
     ComPtr<IDXGISwapChain> swap_chain_;
     ComPtr<ID3D11RenderTargetView> render_target_;
     ComPtr<ID3D11Texture2D> video_texture_;
+    ComPtr<ID3D11Texture2D> hardware_output_texture_;
+    UINT hardware_output_width_ = 0;
+    UINT hardware_output_height_ = 0;
     ComPtr<ID3D11ShaderResourceView> video_view_;
     ComPtr<ID3D11VertexShader> vertex_shader_;
     ComPtr<ID3D11PixelShader> pixel_shader_;
@@ -666,6 +736,12 @@ bool D3D11VideoRenderer::present_hardware(
 {
     return impl_->present_hardware(
         texture, array_slice, format, width, height, std::move(frame_owner));
+}
+
+bool D3D11VideoRenderer::capture_bgra(
+    std::vector<uint8_t>& pixels, int& width, int& height)
+{
+    return impl_->capture_bgra(pixels, width, height);
 }
 
 void D3D11VideoRenderer::clear()
