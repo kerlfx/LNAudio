@@ -9,7 +9,7 @@
 #include <new>
 #include <string>
 
-struct lnplayer
+struct lnplayer_handle
 {
     explicit lnplayer(const lnplayer_config_t* config)
         : event_callback(config ? config->event_callback : nullptr)
