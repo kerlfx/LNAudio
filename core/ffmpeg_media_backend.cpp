@@ -1358,12 +1358,21 @@ private:
                                 static_cast<size_t>(target_x) * 4;
                             const unsigned int alpha = source_pixel[3];
                             const unsigned int inverse_alpha = 255 - alpha;
-                            for (int channel = 0; channel < 3; ++channel)
-                                target_pixel[channel] = static_cast<uint8_t>(
-                                    (source_pixel[channel] * alpha +
-                                     target_pixel[channel] * inverse_alpha) / 255);
-                            target_pixel[3] = static_cast<uint8_t>(
-                                alpha + (target_pixel[3] * inverse_alpha) / 255);
+                            const unsigned int destination_alpha = target_pixel[3];
+                            const unsigned int output_alpha =
+                                alpha + (destination_alpha * inverse_alpha) / 255;
+                            if (output_alpha > 0)
+                            {
+                                for (int channel = 0; channel < 3; ++channel)
+                                {
+                                    const unsigned int premultiplied =
+                                        source_pixel[channel] * alpha +
+                                        (target_pixel[channel] * destination_alpha * inverse_alpha) / 255;
+                                    target_pixel[channel] = static_cast<uint8_t>(
+                                        std::min(255u, (premultiplied + output_alpha / 2) / output_alpha));
+                                }
+                            }
+                            target_pixel[3] = static_cast<uint8_t>(output_alpha);
                         }
                     }
                 }
