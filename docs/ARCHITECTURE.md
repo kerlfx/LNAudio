@@ -392,7 +392,7 @@ Windows 应用使用单一 `LNPlayer.exe`，通过启动参数选择音频或视
 - 视频 Seek 后刷新解码器和 Packet Queue；暂停保留最后一帧。
 - 全屏、快捷键、右键菜单、截图和逐帧操作的基础实现；支持加载外挂 SRT 字幕并在视频帧上叠加显示。
 
-当前仍未完成：D3D11VA 与 Renderer 共享同一 Device 的零拷贝路径、独立 Core Video Frame Queue/显示 Scheduler、DXVA2 后备、多音轨选择、内嵌字幕解码、字幕样式/时间偏移、音频变速保音高、色彩空间/旋转元数据、滤镜和完整播放列表。当前 D3D11 Present 由 Windows 命令工作线程执行，窗口 resize 由 UI 线程执行并通过 Renderer 锁串行化；尚未验证实际设备和长时间播放稳定性。
+Windows 视频 Renderer 的 D3D11 Device 已通过 Windows C ABI 注入 FFmpeg D3D11VA，解码器优先在 Renderer 所属设备上创建硬件帧；当前仍通过 `av_hwframe_transfer_data` 转入 CPU 帧，尚未完成 D3D11 纹理直通和 GPU 视频处理器呈现，因此 GPU→CPU→GPU 拷贝仍存在。其他未完成项：独立 Core Video Frame Queue/显示 Scheduler、DXVA2 后备、多音轨选择、内嵌字幕解码、字幕样式/时间偏移、音频变速保音高、色彩空间/旋转元数据、滤镜和完整播放列表。当前 D3D11 Present 由 Windows 命令工作线程执行，窗口 resize 由 UI 线程执行并通过 Renderer 锁串行化；尚未验证实际设备和长时间播放稳定性。
 
 ## 6. Android 运行模型
 
