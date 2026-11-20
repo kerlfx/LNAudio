@@ -705,6 +705,8 @@ lnplayer_result_t lnplayer_library_add_directory(
         return set_error(LNPLAYER_RESULT_INVALID_ARGUMENT, "Library directory path is empty.");
 
     std::string error;
+    if (!player->runtime.open_music_library(error))
+        return set_error(LNPLAYER_RESULT_INTERNAL_ERROR, error.c_str());
     if (!player->runtime.music_library().add_directory(path_utf8, recursive != 0, error))
         return set_error(LNPLAYER_RESULT_INTERNAL_ERROR, error.c_str());
     return finish_result(LNPLAYER_RESULT_OK);
@@ -720,6 +722,8 @@ lnplayer_result_t lnplayer_library_remove_directory(
         return set_error(LNPLAYER_RESULT_INVALID_ARGUMENT, "Library directory path is empty.");
 
     std::string error;
+    if (!player->runtime.open_music_library(error))
+        return set_error(LNPLAYER_RESULT_INTERNAL_ERROR, error.c_str());
     if (!player->runtime.music_library().remove_directory(path_utf8, error))
         return set_error(LNPLAYER_RESULT_INTERNAL_ERROR, error.c_str());
     return finish_result(LNPLAYER_RESULT_OK);
@@ -739,6 +743,8 @@ lnplayer_result_t lnplayer_library_scan_directory(
     try
     {
         std::string error;
+        if (!player->runtime.open_music_library(error))
+            return set_error(LNPLAYER_RESULT_INTERNAL_ERROR, error.c_str());
         int count = 0;
         if (!player->runtime.music_library().scan_directory(
             path_utf8, recursive != 0, count, error))
@@ -768,6 +774,8 @@ lnplayer_result_t lnplayer_library_search_tracks(
     try
     {
         std::string error;
+        if (!player->runtime.open_music_library(error))
+            return set_error(LNPLAYER_RESULT_INTERNAL_ERROR, error.c_str());
         const auto tracks = player->runtime.music_library().search_tracks(
             query_utf8, limit, error);
         if (!error.empty())

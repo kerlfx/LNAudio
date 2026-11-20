@@ -22,6 +22,7 @@ public:
     asio::io_context& io_context();
     asio::thread_pool& thread_pool();
     bool running_in_io_thread() const;
+    bool open_music_library(std::string& error);
     MusicLibrary& music_library();
     void shutdown();
 
@@ -30,6 +31,8 @@ private:
     asio::executor_work_guard<asio::io_context::executor_type> work_guard_;
     asio::thread_pool thread_pool_;
     MusicLibrary music_library_;
+    std::mutex music_library_mutex_;
+    bool music_library_open_ = false;
     std::thread io_thread_;
 };
 

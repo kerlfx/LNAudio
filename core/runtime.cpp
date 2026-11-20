@@ -1,6 +1,5 @@
 #include "runtime.h"
 
-#include <stdexcept>
 #include <string>
 
 namespace lnplayer
@@ -10,10 +9,6 @@ Runtime::Runtime()
     : work_guard_(asio::make_work_guard(io_context_))
     , thread_pool_(2)
 {
-    std::string error;
-    if (!music_library_.open_default(error))
-        throw std::runtime_error("Unable to initialize music library: " + error);
-
     io_thread_ = std::thread([this]
     {
         io_context_.run();
@@ -54,6 +49,19 @@ asio::thread_pool& Runtime::thread_pool()
 bool Runtime::running_in_io_thread() const
 {
     return io_context_.get_executor().running_in_this_thread();
+}
+
+bool Runtime::open_music_library(std::string& error)
+{
+    std::lock_guard<std::mutex> lock(music_library_mutex_);
+    if (music_library_open_)
+        return true;
+
+    if (!music_library_.open_default(error))
+        return false;
+
+    music_library_open_ = true;
+    return true;
 }
 
 MusicLibrary& Runtime::music_library()
