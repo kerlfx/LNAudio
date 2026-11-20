@@ -108,6 +108,44 @@ bool test_concurrent_calls_and_destroy()
                "concurrent API calls return only success or invalid handle");
 }
 
+struct OpenCallbackState
+{
+    std::atomic<int> open_completed{0};
+};
+
+void open_event_callback(lnplayer_t*, const lnplayer_event_t* event, void* user_data)
+{
+    if (event->type == LNPLAYER_EVENT_OPEN_COMPLETED)
+        static_cast<OpenCallbackState*>(user_data)->open_completed.fetch_add(
+            1, std::memory_order_relaxed);
+}
+
+bool test_async_open_is_drained_before_destroy()
+{
+    OpenCallbackState callback_state;
+    lnplayer_config_t config{};
+    config.struct_size = sizeof(config);
+    config.event_callback = open_event_callback;
+    config.user_data = &callback_state;
+
+    lnplayer_t* player = nullptr;
+    if (!expect(lnplayer_create(&config, &player) == LNPLAYER_RESULT_OK,
+            "create Player for pending-open shutdown test"))
+        return false;
+
+    uint64_t operation_id = 0;
+    const lnplayer_result_t open_result =
+        lnplayer_open(player, "LNPlayer_missing_test_media_file.mkv", &operation_id);
+    const lnplayer_result_t destroy_result = lnplayer_destroy(player);
+
+    return expect(open_result == LNPLAYER_RESULT_OK && operation_id != 0,
+               "missing media open is accepted asynchronously") &&
+        expect(destroy_result == LNPLAYER_RESULT_OK,
+               "destroy completes while an async open was in flight") &&
+        expect(callback_state.open_completed.load(std::memory_order_relaxed) == 1,
+               "open completion callback is drained before Controller destruction");
+}
+
 bool test_create_after_destroy()
 {
     lnplayer_t* player = nullptr;
@@ -125,6 +163,8 @@ int main()
     if (!test_callback_reentrant_destroy())
         return 1;
     if (!test_concurrent_calls_and_destroy())
+        return 1;
+    if (!test_async_open_is_drained_before_destroy())
         return 1;
     if (!test_create_after_destroy())
         return 1;
