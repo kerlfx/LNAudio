@@ -1705,7 +1705,10 @@ void MainWindow::presentPendingVideoFrame()
 
     if (is_playing_)
     {
-        const int64_t clock_ms = current_position_ms_;
+        int64_t clock_ms = current_position_ms_;
+        if (video_clock_timer_.isValid())
+            clock_ms = video_clock_anchor_position_ms_ +
+                static_cast<int64_t>(video_clock_timer_.elapsed() * playback_rate_);
         if (pending_video_pts_ms_ > clock_ms + 8)
             return;
     }
@@ -2124,6 +2127,16 @@ void MainWindow::takeScreenshot()
 
 void MainWindow::setPlaybackRate(float rate)
 {
+    if (is_playing_ && video_clock_timer_.isValid())
+    {
+        video_clock_anchor_position_ms_ = video_clock_anchor_position_ms_ +
+            static_cast<int64_t>(video_clock_timer_.elapsed() * playback_rate_);
+        video_clock_timer_.restart();
+    }
+    else
+    {
+        video_clock_anchor_position_ms_ = current_position_ms_;
+    }
     playback_rate_ = rate;
     QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
     settings.setValue(QStringLiteral("Video/PlaybackRate"), rate);
@@ -2473,6 +2486,11 @@ void MainWindow::updatePlaybackState(
 
     const bool was_playing = is_playing_;
     is_playing_ = state == LNPLAYER_STATE_PLAYING;
+    video_clock_anchor_position_ms_ = position_ms;
+    if (is_playing_)
+        video_clock_timer_.restart();
+    else
+        video_clock_timer_.invalidate();
     if (mode_ == PlayerMode::Video && has_video_)
     {
         if (is_playing_)
