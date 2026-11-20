@@ -78,6 +78,8 @@ MainWindow::MainWindow(
     , stop_button_(new QPushButton(QStringLiteral("停止"), this))
     , command_worker_(new QObject())
     , command_thread_(new QThread(this))
+    , frame_worker_(mode == PlayerMode::Video ? new QObject() : nullptr)
+    , frame_thread_(mode == PlayerMode::Video ? new QThread(this) : nullptr)
     , library_worker_(mode == PlayerMode::Audio ? new QObject() : nullptr)
     , library_thread_(mode == PlayerMode::Audio ? new QThread(this) : nullptr)
     , snapshot_timer_(new QTimer(this))
@@ -801,6 +803,11 @@ MainWindow::MainWindow(
 
     command_worker_->moveToThread(command_thread_);
     command_thread_->start();
+    if (frame_worker_)
+    {
+        frame_worker_->moveToThread(frame_thread_);
+        frame_thread_->start();
+    }
     if (library_worker_)
     {
         library_worker_->moveToThread(library_thread_);
@@ -1047,6 +1054,13 @@ MainWindow::~MainWindow()
     snapshot_timer_->stop();
     video_timer_->stop();
     device_timer_->stop();
+
+    if (frame_thread_ && frame_thread_->isRunning())
+    {
+        frame_thread_->quit();
+        frame_thread_->wait();
+    }
+    delete frame_worker_;
 
     if (library_thread_ && library_thread_->isRunning())
     {
@@ -1524,12 +1538,12 @@ void MainWindow::refreshLibrary()
 
 void MainWindow::requestVideoFrame()
 {
-    if (mode_ != PlayerMode::Video || !has_video_ || video_frame_pending_ ||
+    if (mode_ != PlayerMode::Video || !frame_worker_ || !has_video_ || video_frame_pending_ ||
         video_seek_pending_ || video_end_of_stream_)
         return;
 
     video_frame_pending_ = true;
-    QMetaObject::invokeMethod(command_worker_, [this]
+    QMetaObject::invokeMethod(frame_worker_, [this]
     {
         if (!player_)
         {
