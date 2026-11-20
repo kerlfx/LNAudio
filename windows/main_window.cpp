@@ -14,6 +14,8 @@
 
 #include <QAbstractItemModel>
 #include <QAbstractItemView>
+#include <QAbstractSlider>
+#include <QAbstractSpinBox>
 #include <QByteArray>
 #include <QFont>
 #include <QFontComboBox>
@@ -929,8 +931,13 @@ MainWindow::MainWindow(
                 [action = std::move(action)]
             {
                 QWidget* focus = QApplication::focusWidget();
-                if (qobject_cast<QLineEdit*>(focus) ||
-                    qobject_cast<QAbstractItemView*>(focus))
+                if (QApplication::activePopupWidget() ||
+                    qobject_cast<QLineEdit*>(focus) ||
+                    qobject_cast<QAbstractItemView*>(focus) ||
+                    qobject_cast<QAbstractSlider*>(focus) ||
+                    qobject_cast<QAbstractSpinBox*>(focus) ||
+                    qobject_cast<QComboBox*>(focus) ||
+                    qobject_cast<QKeySequenceEdit*>(focus))
                     return;
                 action();
             });
