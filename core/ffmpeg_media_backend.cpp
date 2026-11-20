@@ -208,9 +208,12 @@ public:
 
         std::lock_guard<std::mutex> decode_lock(decode_mutex_);
 #ifdef _WIN32
-        const auto restore_playback = [this, resume_playback, &playback_lock]
+        bool seek_succeeded = false;
+        const auto restore_playback = [this, resume_playback, &playback_lock, &seek_succeeded]
         {
             playback_lock.lock();
+            if (seek_succeeded)
+                playback_flush_requested_ = true;
             if (resume_playback)
                 playback_active_ = true;
             playback_condition_.notify_all();
@@ -295,6 +298,7 @@ public:
             playback_start_finished_ = false;
             playback_start_success_ = false;
             playback_writing_ = false;
+            playback_flush_requested_ = false;
         }
 #endif
         std::lock_guard<std::mutex> decode_lock(decode_mutex_);
@@ -431,10 +435,22 @@ private:
                 std::unique_lock<std::mutex> lock(playback_mutex_);
                 playback_condition_.wait(lock, [this]
                 {
-                    return playback_stop_ || playback_active_;
+                    return playback_stop_ || playback_active_ || playback_flush_requested_;
                 });
                 if (playback_stop_)
                     break;
+                if (playback_flush_requested_)
+                {
+                    playback_flush_requested_ = false;
+                    lock.unlock();
+                    if (!output.flush())
+                    {
+                        std::lock_guard<std::mutex> state_lock(playback_mutex_);
+                        playback_active_ = false;
+                        playing_ = false;
+                    }
+                    continue;
+                }
             }
 
             AudioFrame frame;
@@ -593,6 +609,7 @@ private:
     bool playback_stop_ = false;
     bool playback_active_ = false;
     bool playback_writing_ = false;
+    bool playback_flush_requested_ = false;
     bool playback_start_finished_ = false;
     bool playback_start_success_ = false;
 #endif
