@@ -4967,34 +4967,46 @@ void MainWindow::handleCoreEvent(
 
 void MainWindow::refreshSnapshot()
 {
-    lnplayer_t* player = player_.load(std::memory_order_acquire);
-    if (!player)
+    if (snapshot_pending_)
         return;
+    snapshot_pending_ = true;
 
-    lnplayer_snapshot_t snapshot{};
-    snapshot.struct_size = sizeof(snapshot);
-    if (lnplayer_get_snapshot(player, &snapshot) != LNPLAYER_RESULT_OK)
-        return;
-
-    media_generation_ = std::max(media_generation_, snapshot.generation);
-    has_audio_ = (snapshot.reserved & LNPLAYER_MEDIA_HAS_AUDIO) != 0;
-    has_video_ = (snapshot.reserved & LNPLAYER_MEDIA_HAS_VIDEO) != 0;
-    updatePlaybackState(snapshot.state, snapshot.position_ms, snapshot.duration_ms);
-
-    if (mode_ == PlayerMode::Video && !has_video_ &&
-        !playlist_open_pending_ && !current_media_path_.isEmpty() && empty_state_label_)
+    postCommand([this]
     {
-        empty_state_label_->setText(QStringLiteral("当前媒体没有可播放的视频流"));
-        empty_state_label_->adjustSize();
-        empty_state_label_->move(
-            (video_surface_->width() - empty_state_label_->width()) / 2,
-            (video_surface_->height() - empty_state_label_->height()) / 2);
-        empty_state_label_->show();
-        empty_state_label_->raise();
-    }
-    if (has_video_ && !video_first_frame_received_ &&
-        !pending_video_frame_valid_ && !video_frame_pending_)
-        requestVideoFrame();
+        lnplayer_snapshot_t snapshot{};
+        snapshot.struct_size = sizeof(snapshot);
+        const lnplayer_t* player = player_.load(std::memory_order_acquire);
+        const lnplayer_result_t result = player
+            ? lnplayer_get_snapshot(const_cast<lnplayer_t*>(player), &snapshot)
+            : LNPLAYER_RESULT_INVALID_HANDLE;
+
+        QMetaObject::invokeMethod(this, [this, result, snapshot]
+        {
+            snapshot_pending_ = false;
+            if (result != LNPLAYER_RESULT_OK)
+                return;
+
+            media_generation_ = std::max(media_generation_, snapshot.generation);
+            has_audio_ = (snapshot.reserved & LNPLAYER_MEDIA_HAS_AUDIO) != 0;
+            has_video_ = (snapshot.reserved & LNPLAYER_MEDIA_HAS_VIDEO) != 0;
+            updatePlaybackState(snapshot.state, snapshot.position_ms, snapshot.duration_ms);
+
+            if (mode_ == PlayerMode::Video && !has_video_ &&
+                !playlist_open_pending_ && !current_media_path_.isEmpty() && empty_state_label_)
+            {
+                empty_state_label_->setText(QStringLiteral("当前媒体没有可播放的视频流"));
+                empty_state_label_->adjustSize();
+                empty_state_label_->move(
+                    (video_surface_->width() - empty_state_label_->width()) / 2,
+                    (video_surface_->height() - empty_state_label_->height()) / 2);
+                empty_state_label_->show();
+                empty_state_label_->raise();
+            }
+            if (has_video_ && !video_first_frame_received_ &&
+                !pending_video_frame_valid_ && !video_frame_pending_)
+                requestVideoFrame();
+        }, Qt::QueuedConnection);
+    });
 }
 
 void MainWindow::updatePlaybackState(
