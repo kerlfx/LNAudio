@@ -16,6 +16,7 @@ endif()
 add_subdirectory(core)
 
 if(WIN32)
+    enable_language(RC)
     add_subdirectory(windows)
 
     option(LNPLAYER_BUILD_TESTS "Build LNPlayer native tests" OFF)
