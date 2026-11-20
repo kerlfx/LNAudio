@@ -46,6 +46,7 @@
 #include <QStringDecoder>
 #include <QSlider>
 #include <QStatusBar>
+#include <QSettings>
 #include <QThread>
 #include <QTimer>
 #include <QUrl>
@@ -420,12 +421,14 @@ MainWindow::MainWindow(PlayerMode mode, const QString& initial_media, QWidget* p
             shuffle_enabled_ = enabled;
             resetShuffleOrder();
             shuffle_button->setText(enabled ? QStringLiteral("随机：开") : QStringLiteral("随机：关"));
+            saveVideoPlaylist();
         });
         connect(repeat_button, &QPushButton::clicked, this, [this, repeat_button]
         {
             cycleRepeatMode();
             repeat_button->setText(repeat_mode_ == 0 ? QStringLiteral("循环：关")
                 : repeat_mode_ == 1 ? QStringLiteral("循环：列表") : QStringLiteral("循环：单项"));
+            saveVideoPlaylist();
         });
         connect(playlist_widget_->model(), &QAbstractItemModel::rowsMoved, this,
             [this](const QModelIndex&, int, int, const QModelIndex&, int)
@@ -1015,10 +1018,13 @@ MainWindow::MainWindow(PlayerMode mode, const QString& initial_media, QWidget* p
 
     if (!initial_media.isEmpty())
         openFiles({QUrl::fromLocalFile(initial_media)});
+    else if (mode_ == PlayerMode::Video)
+        loadVideoPlaylist();
 }
 
 MainWindow::~MainWindow()
 {
+    saveVideoPlaylist();
     snapshot_timer_->stop();
     video_timer_->stop();
 
@@ -1090,6 +1096,7 @@ void MainWindow::openFiles(const QList<QUrl>& urls)
     playlist_index_ = 0;
     resetShuffleOrder();
     rebuildPlaylistWidget();
+    saveVideoPlaylist();
     openPlaylistIndex(0);
 }
 
@@ -1104,6 +1111,7 @@ void MainWindow::appendPlaylistFiles(const QList<QUrl>& urls)
     }
     resetShuffleOrder();
     rebuildPlaylistWidget();
+    saveVideoPlaylist();
     if (playlist_index_ < 0 && !playlist_.isEmpty())
     {
         playlist_index_ = 0;
@@ -1128,6 +1136,46 @@ void MainWindow::rebuildPlaylistWidget()
         playlist_widget_->setCurrentRow(playlist_index_);
         playing_playlist_item_ = playlist_widget_->item(playlist_index_);
     }
+}
+
+void MainWindow::loadVideoPlaylist()
+{
+    QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+    const QStringList files = settings.value(QStringLiteral("VideoPlaylist/Files")).toStringList();
+    playlist_.clear();
+    for (const QString& path : files)
+    {
+        if (QFileInfo::exists(path))
+            playlist_.append(QUrl::fromLocalFile(path));
+    }
+
+    playlist_index_ = playlist_.isEmpty()
+        ? -1
+        : std::clamp(settings.value(QStringLiteral("VideoPlaylist/CurrentIndex"), 0).toInt(),
+            0, playlist_.size() - 1);
+    shuffle_enabled_ = settings.value(QStringLiteral("VideoPlaylist/Shuffle"), false).toBool();
+    repeat_mode_ = std::clamp(
+        settings.value(QStringLiteral("VideoPlaylist/RepeatMode"), 0).toInt(), 0, 2);
+    resetShuffleOrder();
+    rebuildPlaylistWidget();
+    if (playlist_index_ >= 0)
+        openPlaylistIndex(playlist_index_);
+}
+
+void MainWindow::saveVideoPlaylist() const
+{
+    if (mode_ != PlayerMode::Video)
+        return;
+
+    QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+    QStringList files;
+    for (const QUrl& url : playlist_)
+        files.append(QFileInfo(url.toLocalFile()).absoluteFilePath());
+    settings.setValue(QStringLiteral("VideoPlaylist/Files"), files);
+    settings.setValue(QStringLiteral("VideoPlaylist/CurrentIndex"), playlist_index_);
+    settings.setValue(QStringLiteral("VideoPlaylist/Shuffle"), shuffle_enabled_);
+    settings.setValue(QStringLiteral("VideoPlaylist/RepeatMode"), repeat_mode_);
+    settings.sync();
 }
 
 void MainWindow::removeSelectedPlaylistItem()
@@ -1165,6 +1213,7 @@ void MainWindow::removeSelectedPlaylistItem()
             openPlaylistIndex(std::min(row, playlist_.size() - 1));
         }
     }
+    saveVideoPlaylist();
 }
 
 void MainWindow::moveSelectedPlaylistItem(int offset)
@@ -1184,18 +1233,23 @@ void MainWindow::moveSelectedPlaylistItem(int offset)
     resetShuffleOrder();
     rebuildPlaylistWidget();
     playlist_widget_->setCurrentRow(to);
+    saveVideoPlaylist();
 }
 
 void MainWindow::cycleRepeatMode()
 {
     repeat_mode_ = (repeat_mode_ + 1) % 3;
+    saveVideoPlaylist();
 }
 
 void MainWindow::resetShuffleOrder()
 {
     shuffle_order_.clear();
     if (!shuffle_enabled_)
+    {
+        saveVideoPlaylist();
         return;
+    }
 
     for (int index = 0; index < playlist_.size(); ++index)
         shuffle_order_.append(index);
@@ -1213,6 +1267,7 @@ void MainWindow::resetShuffleOrder()
         if (current > 0)
             shuffle_order_.swapItemsAt(0, current);
     }
+    saveVideoPlaylist();
 }
 
 int MainWindow::nextPlaylistIndex(bool manual) const
@@ -1244,6 +1299,7 @@ void MainWindow::openPlaylistIndex(int index)
         return;
 
     playlist_index_ = index;
+    saveVideoPlaylist();
     if (playlist_widget_)
     {
         playlist_widget_->setCurrentRow(index);

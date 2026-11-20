@@ -70,6 +70,8 @@ private:
     void openFiles(const QList<QUrl>& urls);
     void appendPlaylistFiles(const QList<QUrl>& urls);
     void rebuildPlaylistWidget();
+    void loadVideoPlaylist();
+    void saveVideoPlaylist() const;
     void removeSelectedPlaylistItem();
     void moveSelectedPlaylistItem(int offset);
     void cycleRepeatMode();
