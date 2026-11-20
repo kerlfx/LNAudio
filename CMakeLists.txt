@@ -18,6 +18,9 @@ add_subdirectory(core)
 if(WIN32)
     add_subdirectory(windows)
 
+    set(CMAKE_INSTALL_SYSTEM_RUNTIME_DESTINATION .)
+    include(InstallRequiredSystemLibraries)
+
     set(CPACK_PACKAGE_NAME "LNPlayer")
     set(CPACK_PACKAGE_VENDOR "LNPlayer")
     set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
