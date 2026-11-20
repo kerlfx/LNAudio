@@ -153,10 +153,12 @@ QImage VideoSurface::capture_frame() const
 
 void VideoSurface::set_interaction_callbacks(
     std::function<void()> double_click,
-    std::function<void(int)> wheel)
+    std::function<void(int)> wheel,
+    std::function<void()> middle_click)
 {
     double_click_callback_ = std::move(double_click);
     wheel_callback_ = std::move(wheel);
+    middle_click_callback_ = std::move(middle_click);
 }
 
 void VideoSurface::mouseDoubleClickEvent(QMouseEvent* event)
@@ -164,6 +166,17 @@ void VideoSurface::mouseDoubleClickEvent(QMouseEvent* event)
     if (event->button() == Qt::LeftButton && double_click_callback_)
         double_click_callback_();
     QWidget::mouseDoubleClickEvent(event);
+}
+
+void VideoSurface::mousePressEvent(QMouseEvent* event)
+{
+    if (event->button() == Qt::MiddleButton && middle_click_callback_)
+    {
+        middle_click_callback_();
+        event->accept();
+        return;
+    }
+    QWidget::mousePressEvent(event);
 }
 
 void VideoSurface::wheelEvent(QWheelEvent* event)
