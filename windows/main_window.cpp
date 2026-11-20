@@ -1736,7 +1736,7 @@ void MainWindow::savePlaybackPosition() const
         playlist_index_ < 0 || playlist_index_ >= playlist_.size())
         return;
 
-    const QString path = playlist_[playlist_index_].toLocalFile();
+    const QString path = current_media_path_;
     if (path.isEmpty())
         return;
 
@@ -1766,6 +1766,7 @@ void MainWindow::clearPlaylist()
     savePlaybackPosition();
     playlist_.clear();
     playlist_index_ = -1;
+    current_media_path_.clear();
     shuffle_order_.clear();
     playing_playlist_item_ = nullptr;
     playlist_open_pending_ = false;
@@ -2217,6 +2218,7 @@ void MainWindow::openPlaylistIndex(int index)
     const QString source = playlist_[index].toLocalFile();
     if (source.isEmpty())
         return;
+    current_media_path_ = QFileInfo(source).absoluteFilePath();
 
     subtitle_manager_.clear();
     loop_a_ms_ = -1;
