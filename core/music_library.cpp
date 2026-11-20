@@ -319,6 +319,55 @@ bool MusicLibrary::scan_directory(
                   return std::string(reinterpret_cast<const char*>(value.data()), value.size());
               }();
 
+        const auto size = entry.file_size();
+        const auto modified = entry.last_write_time();
+        const auto system_modified = std::chrono::time_point_cast<std::chrono::seconds>(
+            modified - std::filesystem::file_time_type::clock::now()
+            + std::chrono::system_clock::now());
+        const int64_t modified_time = system_modified.time_since_epoch().count();
+
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            sqlite3_stmt* unchanged = nullptr;
+            if (sqlite3_prepare_v2(
+                    database_,
+                    "SELECT file_size, modified_time FROM file_locations WHERE path=?;",
+                    -1,
+                    &unchanged,
+                    nullptr) == SQLITE_OK)
+            {
+                sqlite3_bind_text(
+                    unchanged, 1, utf8_path.c_str(),
+                    static_cast<int>(utf8_path.size()), SQLITE_TRANSIENT);
+                const bool same = sqlite3_step(unchanged) == SQLITE_ROW
+                    && sqlite3_column_int64(unchanged, 0) == static_cast<int64_t>(size)
+                    && sqlite3_column_int64(unchanged, 1) == modified_time;
+                sqlite3_finalize(unchanged);
+                if (same)
+                {
+                    sqlite3_stmt* touch = nullptr;
+                    if (sqlite3_prepare_v2(
+                            database_,
+                            "UPDATE file_locations SET is_available=1, last_seen_at=unixepoch() WHERE path=?;",
+                            -1,
+                            &touch,
+                            nullptr) == SQLITE_OK)
+                    {
+                        sqlite3_bind_text(
+                            touch, 1, utf8_path.c_str(),
+                            static_cast<int>(utf8_path.size()), SQLITE_TRANSIENT);
+                        sqlite3_step(touch);
+                        sqlite3_finalize(touch);
+                        return;
+                    }
+                }
+            }
+            else if (unchanged)
+            {
+                sqlite3_finalize(unchanged);
+            }
+        }
+
         std::ifstream file(file_path, std::ios::binary);
         if (!file)
             return;
@@ -388,13 +437,6 @@ bool MusicLibrary::scan_directory(
             ? -1
             : av_rescale_q(format->duration, AVRational{1, AV_TIME_BASE}, AVRational{1, 1000});
         avformat_close_input(&format);
-
-        const auto size = entry.file_size();
-        const auto modified = entry.last_write_time();
-        const auto system_modified = std::chrono::time_point_cast<std::chrono::seconds>(
-            modified - std::filesystem::file_time_type::clock::now()
-            + std::chrono::system_clock::now());
-        const int64_t modified_time = system_modified.time_since_epoch().count();
 
         int64_t track_id = 0;
         std::string import_error;
