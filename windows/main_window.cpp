@@ -1671,12 +1671,15 @@ void MainWindow::presentPendingVideoFrame()
         const int height = pending_hardware_height_;
         const uint64_t generation = pending_video_generation_;
         const int64_t pts_ms = pending_video_pts_ms_;
+        const QImage embedded_subtitle_bitmap = pending_embedded_subtitle_bitmap_;
+        const bool render_subtitles = subtitles_enabled_;
         pending_hardware_texture_ = nullptr;
         pending_video_frame_valid_ = false;
 
         QMetaObject::invokeMethod(command_worker_,
             [this, owner = std::move(owner), texture, array_slice, format,
-             width, height, generation, pts_ms, subtitle, overlay = std::move(overlay)]
+             width, height, generation, pts_ms, subtitle,
+             embedded_subtitle_bitmap, render_subtitles, overlay = std::move(overlay)]
         {
             lnplayer_snapshot_t snapshot{};
             snapshot.struct_size = sizeof(snapshot);
@@ -1719,10 +1722,10 @@ void MainWindow::presentPendingVideoFrame()
 
                 if (fallback_result == LNPLAYER_RESULT_OK && !fallback.image.isNull())
                 {
-                    if (subtitles_enabled_ && !pending_embedded_subtitle_bitmap_.isNull())
+                    if (render_subtitles && !embedded_subtitle_bitmap.isNull())
                     {
                         QPainter bitmap_painter(&fallback.image);
-                        bitmap_painter.drawImage(fallback.image.rect(), pending_embedded_subtitle_bitmap_);
+                        bitmap_painter.drawImage(fallback.image.rect(), embedded_subtitle_bitmap);
                     }
                     if (!subtitle.isEmpty())
                     {
