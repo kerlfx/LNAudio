@@ -73,6 +73,13 @@ public:
         video_stream_index_ = av_find_best_stream(
             format_context_, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
 
+        start_time_ms_ = format_context_->start_time == AV_NOPTS_VALUE
+            ? 0
+            : av_rescale_q(
+                format_context_->start_time,
+                AVRational{1, AV_TIME_BASE},
+                AVRational{1, 1000});
+
         info.has_audio = audio_stream_index_ >= 0;
         info.has_video = video_stream_index_ >= 0;
         info.duration_ms = format_context_->duration == AV_NOPTS_VALUE
@@ -317,7 +324,7 @@ public:
         };
 #endif
         const int64_t timestamp = av_rescale_q(
-            position_ms,
+            position_ms + start_time_ms_,
             AVRational{1, 1000},
             AVRational{1, AV_TIME_BASE});
         const int result = avformat_seek_file(
@@ -445,6 +452,7 @@ public:
 
         audio_stream_index_ = -1;
         video_stream_index_ = -1;
+        start_time_ms_ = 0;
         position_ms_.store(0, std::memory_order_relaxed);
         playback_ended_.store(false, std::memory_order_relaxed);
         playback_failed_.store(false, std::memory_order_relaxed);
@@ -887,7 +895,8 @@ private:
         const int64_t timestamp = video_frame_->best_effort_timestamp;
         output.pts_ms = timestamp == AV_NOPTS_VALUE
             ? position_ms_.load(std::memory_order_relaxed)
-            : av_rescale_q(timestamp, stream->time_base, AVRational{1, 1000});
+            : av_rescale_q(timestamp, stream->time_base, AVRational{1, 1000}) -
+                start_time_ms_;
         if (!audio_decoder_)
             position_ms_.store(output.pts_ms, std::memory_order_relaxed);
         if (source_frame == transfer_frame_)
@@ -1129,7 +1138,8 @@ private:
         const int64_t timestamp = audio_frame_->best_effort_timestamp;
         output.pts_ms = timestamp == AV_NOPTS_VALUE
             ? position_ms_.load(std::memory_order_relaxed)
-            : av_rescale_q(timestamp, stream->time_base, AVRational{1, 1000});
+            : av_rescale_q(timestamp, stream->time_base, AVRational{1, 1000}) -
+                start_time_ms_;
         position_ms_.store(output.pts_ms, std::memory_order_relaxed);
 
         av_frame_unref(audio_frame_);
@@ -1202,6 +1212,7 @@ private:
     size_t video_packet_queue_bytes_ = 0;
     int audio_stream_index_ = -1;
     int video_stream_index_ = -1;
+    int64_t start_time_ms_ = 0;
     bool opened_ = false;
     std::atomic<bool> playing_{false};
     bool audio_draining_ = false;
