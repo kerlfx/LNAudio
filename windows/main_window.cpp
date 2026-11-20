@@ -890,6 +890,8 @@ MainWindow::MainWindow(
         fullscreen_controls_visible_ = false;
         if (menuBar())
             menuBar()->hide();
+        if (statusBar())
+            statusBar()->hide();
         if (playlist_panel_)
             playlist_panel_->hide();
         setCursor(Qt::BlankCursor);
@@ -1346,6 +1348,8 @@ void MainWindow::showFullscreenControls()
     control_panel_->show();
     if (menuBar())
         menuBar()->show();
+    if (statusBar())
+        statusBar()->show();
     if (playlist_panel_)
         playlist_panel_->setVisible(playlist_panel_visible_);
     fullscreen_controls_visible_ = true;
@@ -1365,6 +1369,8 @@ void MainWindow::updateFullscreenUi()
             control_panel_->show();
         if (menuBar())
             menuBar()->show();
+        if (statusBar())
+            statusBar()->show();
         if (playlist_panel_)
             playlist_panel_->setVisible(playlist_panel_visible_);
         fullscreen_controls_visible_ = true;
@@ -1375,6 +1381,8 @@ void MainWindow::updateFullscreenUi()
         control_panel_->show();
     if (menuBar())
         menuBar()->show();
+    if (statusBar())
+        statusBar()->show();
     if (playlist_panel_)
         playlist_panel_->setVisible(playlist_panel_visible_);
     fullscreen_controls_visible_ = true;
