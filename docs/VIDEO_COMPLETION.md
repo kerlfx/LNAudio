@@ -871,3 +871,16 @@
 - `2f640acb9d0377f76cd8f9c4afb5c8c7c09b2e86`、`2348792f94ebc0f2575e1ff58b1d6ff33ebd50da`、`93cc9c1e3664001052dce1b3261034c19f456b54` — 当前用户文件关联注册和 CMake 脚本修正。
 - `b33ae37c40236af9be8deca9a43d21e991b3a109` — 卸载时只删除空的应用注册表父键，保留其他旧数据。
 - `844c22ebaaad210fb5e88465f687b661c6b1c17e`、`b8906d5d7f11a469aa908949195a04e6b8c3aead` — 默认应用设置页深链接。
+
+
+## Windows UI 完成门禁
+
+Windows UI 的正式完成条件统一由 [`docs/WINDOWS_UI_ACCEPTANCE.md`](WINDOWS_UI_ACCEPTANCE.md) 定义。该文件覆盖产品范围、Definition of Done、主窗口/时间轴/队列/菜单/鼠标/全屏/字幕/画面/设置/视觉验收矩阵、24 项 Windows 运行场景及交付门禁。
+
+当前判定：
+- [ ] Gate 1 — 交互功能完成：未通过；仍需按验收矩阵逐项核对实现，不能以已有控件或提交记录代替。
+- [ ] Gate 2 — 视觉与输入完成：未通过；图标、间距、尺寸、高 DPI、高对比度和完整输入设备行为仍需完善与验收。
+- [ ] Gate 3 — Windows 实机验收：未通过；当前没有本轮 Windows/MSVC/Qt 构建和完整运行场景记录。
+- [ ] Gate 4 — 文档与交付：未通过；待 Gate 1–3 完成后进行最终发布验收。
+
+本次只定义验收标准并更新文档，没有运行构建、CTest 或 CI。
