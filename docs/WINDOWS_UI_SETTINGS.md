@@ -1,23 +1,50 @@
 # Windows UI 与 INI 设置
 
-## 设置文件
+## 程序目录与数据布局
 
-Windows 版本统一使用 Qt `QSettings::IniFormat`，不再将新设置写入注册表。
+LNPlayer 优先采用便携式目录布局，配置和用户数据跟随程序目录：
 
-- 文件名：`settings.ini`
-- 目录：`QStandardPaths::AppConfigLocation`
-- Windows 上由 Qt 根据 `LNPlayer` organization/application identity 解析到当前用户的应用配置目录。
-- 设置窗口“常规”页显示实际文件路径，并提供“打开配置目录”。
-- 首次启动时读取旧版 `HKCU\\Software\\LNPlayer\\LNPlayer` 配置；只迁移 INI 中不存在的键，完成后写入 `Config/RegistryMigrationCompleted=true`。已有 INI 值优先，不覆盖用户在 INI 中的修改。
-- 播放列表、媒体书签、播放位置、音量、快捷键和媒体偏好继续使用原有键名，迁移时不改变数据模型。
+```text
+LNPlayer/
+├─ LNPlayer.exe
+├─ FFmpeg / Qt 运行库
+└─ Data/
+   ├─ settings.ini
+   ├─ Screenshots/
+   ├─ Cache/       # 需要缓存时按需创建
+   └─ Logs/        # 需要文件日志时按需创建
+```
+
+- 配置文件固定为 `Data/settings.ini`，使用 Qt `QSettings::IniFormat`。
+- `Data` 目录可写时，所有应用配置与应用数据优先写入该目录。
+- 如果程序安装在 `Program Files` 等不可写目录，Windows 会拒绝普通用户写入；此时才回退到当前用户的 Local App Data 下的 LNPlayer 数据目录。这是保证标准安装位置可运行所需的例外，不会为了方便而默认把数据散落到用户目录。
+- 设置窗口“常规”页展示实际 INI 路径，并提供打开配置目录入口。
+- 截图默认目录为数据目录下的 `Screenshots`；用户也可以在设置中指定其他目录。
+- 播放列表、最近播放、播放位置、书签、媒体偏好等目前集中存储在 INI 中，不额外创建数据库或散落文件。
+- 缓存、日志、缩略图等只有在相应功能真正实现后才按需创建子目录，不预先创建空目录。
+
+## 注册表与 Windows 集成
+
+- 正常运行时，播放器设置只读写 INI，不使用注册表保存应用偏好。
+- 仅保留一次性旧版本迁移：首次启动时尝试读取旧版 `HKCU\\Software\\LNPlayer\\LNPlayer`，只补入 INI 中不存在的键，然后记录迁移标记。后续启动不再读取注册表。
+- Windows 安装包只在**当前用户**范围注册文件类型和 ProgID，写入 `HKCU\\Software\\Classes` 与 `HKCU\\Software\\RegisteredApplications`，不写 HKLM，不影响其他 Windows 用户，也不要求管理员权限。
+- 卸载时只移除 LNPlayer 自己注册的 ProgID、OpenWith 项和 RegisteredApplications 项，不修改 Windows 当前默认应用选择。
+- Windows 10/11 不允许普通桌面程序静默接管用户默认应用。安装后用户仍需在 Windows“默认应用”设置中选择 LNPlayer；播放器设置页提供直达入口。
+- 便携版不主动修改系统文件关联；用户可在文件“打开方式”中选择 LNPlayer。
+
+## 支持的视频文件格式
+
+安装包注册以下扩展名为 LNPlayer 可打开的视频格式：
+
+`.mp4`、`.mkv`、`.mov`、`.avi`、`.webm`、`.wmv`、`.flv`、`.mpeg`、`.mpg`、`.m4v`、`.ts`、`.mts`、`.m2ts`、`.3gp`、`.3g2`、`.vob`、`.ogv`、`.mxf`、`.asf`、`.f4v`、`.divx`、`.mpe`、`.mpv`。
+
+这些格式应与打开文件、拖放和文件夹递归扫描使用的扩展名列表保持一致。注册“可打开”不代表每个文件内部编码均受支持，最终仍由 FFmpeg demuxer/decoder 能力决定。
 
 ## 设置面板
 
-播放器设置窗口目前包含：
-
 | 面板 | 内容 | 应用方式 |
 |---|---|---|
-| 常规 | INI 路径、打开配置目录 | 只读信息与目录入口 |
+| 常规 | INI 路径、打开配置目录、Windows 默认应用设置入口、支持格式说明 | 只读信息与系统设置入口 |
 | 播放 | 记住每个视频的播放位置、播放结束自动下一项、默认播放速度（0.25×–4×） | 保存后立即应用，并用于后续启动 |
 | 界面 | 全屏控制栏隐藏时间、OSD 时长/位置、播放列表侧栏、窗口置顶、中键行为、右键拖动手势 | 保存后立即应用 |
 | 视频 | 原始比例/16:9/4:3/拉伸、亮度、对比度、饱和度、色调、锐化、降噪、灰度 | 保存后立即应用 |
@@ -45,9 +72,12 @@ Windows 版本统一使用 Qt `QSettings::IniFormat`，不再将新设置写入�
 
 ## 当前限制与验收
 
-- 本轮完成源码层面的 INI 统一、旧注册表首次迁移、设置面板补齐和截图格式偏好。
-- 音量拖动期间采用 300 ms 防抖写入 INI，窗口关闭时同步保存最终音量，避免滑块每次 valueChanged 都触发磁盘写入。
-- 字幕启用状态现在持久化，并在 Player 初始化及设置窗口保存后同步到 Core。
-- 目前没有 Windows/MSVC/Qt 构建和运行验证；不能据此认定所有控件在真实窗口尺寸、不同 DPI 和多显示器环境下均已验收。
-- 画面滤镜设置保存与加载范围已经统一；降噪范围固定为 0–1，与当前 Core/Renderer 参数约定一致。
+- 源码已将设置文件位置切换到程序目录下的 `Data/settings.ini`，并在程序目录不可写时回退到当前用户 Local App Data。
+- 安装包文件关联已改为当前用户范围，不写 HKLM；Windows 默认应用选择仍由系统设置界面控制。
+- 旧版注册表迁移仅用于兼容升级，不作为新版本配置存储方式。
+- 仍需 Windows/MSVC/Qt 构建与实机验收：可写目录便携运行、Program Files 安装回退、升级迁移、卸载清理、Windows 10/11 默认应用选择，以及每种扩展名双击启动。
+- 本轮未运行 Windows 构建、CTest 或 CI。
+- 音量拖动期间采用 300 ms 防抖写入 INI，窗口关闭时同步保存最终值。
+- 字幕启用状态在 Player 初始化及设置窗口保存后同步到 Core。
+- 画面滤镜设置保存与加载范围已统一；降噪范围固定为 0–1。
 - 性能页目前是状态展示，不提供尚未实现的 GPU 使用率或丢帧统计开关。
