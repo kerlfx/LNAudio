@@ -19,6 +19,13 @@ set_target_properties(LNPlayerApp PROPERTIES
     OUTPUT_NAME "LNPlayer"
 )
 
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/LNPlayer.rc.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/LNPlayer.rc"
+    @ONLY
+)
+target_sources(LNPlayerApp PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/LNPlayer.rc")
+
 file(GLOB LNPLAYER_FFMPEG_DLLS CONFIGURE_DEPENDS
     "${LNPLAYER_FFMPEG_ROOT}/bin/*.dll"
 )
