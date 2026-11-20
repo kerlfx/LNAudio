@@ -462,9 +462,14 @@ private:
                     lock.unlock();
                     if (!output.flush())
                     {
-                        std::lock_guard<std::mutex> state_lock(playback_mutex_);
-                        playback_active_ = false;
-                        playing_ = false;
+                        {
+                            std::lock_guard<std::mutex> state_lock(playback_mutex_);
+                            playback_active_ = false;
+                            playing_ = false;
+                            playback_failed_.store(true, std::memory_order_relaxed);
+                        }
+                        if (playback_error_callback_)
+                            playback_error_callback_("WASAPI failed to flush its render buffer.");
                     }
                     continue;
                 }
