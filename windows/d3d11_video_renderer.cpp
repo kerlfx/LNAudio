@@ -486,7 +486,10 @@ public:
         const HRESULT blt_result = video_context_->VideoProcessorBlt(
             video_processor_.Get(), output_view.Get(), 0, 1, &stream);
         if (FAILED(blt_result))
+        {
+            recover_device_if_removed(lock);
             return false;
+        }
 
         context_->End(completion_query.Get());
         context_->Flush();
@@ -631,6 +634,18 @@ public:
     }
 
 private:
+    void recover_device_if_removed(std::unique_lock<std::mutex>& lock)
+    {
+        if (!device_ || SUCCEEDED(device_->GetDeviceRemovedReason()))
+            return;
+
+        const HWND target = window_;
+        release_resources();
+        lock.unlock();
+        if (target)
+            initialize(target);
+    }
+
     struct PendingHardwareFrame
     {
         ComPtr<ID3D11Query> completion;
