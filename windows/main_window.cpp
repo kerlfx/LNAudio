@@ -20,6 +20,14 @@
 #include <QCursor>
 #include <QDragEnterEvent>
 #include <QDir>
+#include <QDialog>
+#include <QDialogButtonBox>
+#include <QFormLayout>
+#include <QCheckBox>
+#include <QComboBox>
+#include <QDoubleSpinBox>
+#include <QSpinBox>
+#include <QTabWidget>
 #include <QDropEvent>
 #include <QEvent>
 #include <QFile>
@@ -98,6 +106,9 @@ MainWindow::MainWindow(
             0.25f, 4.0f);
         playlist_panel_visible_ = settings.value(
             QStringLiteral("Video/UI/PlaylistVisible"), true).toBool();
+        fullscreen_hide_delay_ms_ = std::clamp(
+            settings.value(QStringLiteral("Video/UI/FullscreenHideDelayMs"), 2000).toInt(),
+            0, 10000);
     }
     setAcceptDrops(true);
     resize(mode_ == PlayerMode::Video ? QSize(960, 600) : QSize(720, 480));
@@ -185,6 +196,8 @@ MainWindow::MainWindow(
             if (visible && isFullScreen())
                 showFullscreenControls();
         });
+        auto* settings_action = playlist_menu->addAction(QStringLiteral("视频设置..."));
+        connect(settings_action, &QAction::triggered, this, [this] { openVideoSettings(); });
         auto* clear_playlist_action = playlist_menu->addAction(QStringLiteral("清空播放列表"));
         connect(clear_playlist_action, &QAction::triggered, this, [this]
         {
@@ -796,7 +809,7 @@ MainWindow::MainWindow(
     setCentralWidget(content);
 
     fullscreen_hide_timer_->setSingleShot(true);
-    fullscreen_hide_timer_->setInterval(2000);
+    fullscreen_hide_timer_->setInterval(fullscreen_hide_delay_ms_);
     connect(fullscreen_hide_timer_, &QTimer::timeout, this, [this]
     {
         if (!isFullScreen() || !control_panel_)
@@ -870,6 +883,7 @@ MainWindow::MainWindow(
         bind_shortcut(Qt::CTRL | Qt::Key_Left, [this] { seekRelative(-30000); });
         bind_shortcut(Qt::CTRL | Qt::Key_Right, [this] { seekRelative(30000); });
         bind_shortcut(Qt::Key_F3, [this] { openFile(); });
+        bind_shortcut(Qt::Key_F5, [this] { openVideoSettings(); });
         bind_shortcut(Qt::Key_F6, [this]
         {
             if (playlist_visibility_action_)
@@ -1197,7 +1211,10 @@ void MainWindow::showFullscreenControls()
     if (playlist_panel_)
         playlist_panel_->setVisible(playlist_panel_visible_);
     fullscreen_controls_visible_ = true;
-    fullscreen_hide_timer_->start();
+    if (fullscreen_hide_delay_ms_ > 0)
+        fullscreen_hide_timer_->start(fullscreen_hide_delay_ms_);
+    else
+        fullscreen_hide_timer_->stop();
 }
 
 void MainWindow::updateFullscreenUi()
@@ -1223,7 +1240,10 @@ void MainWindow::updateFullscreenUi()
     if (playlist_panel_)
         playlist_panel_->setVisible(playlist_panel_visible_);
     fullscreen_controls_visible_ = true;
-    fullscreen_hide_timer_->start();
+    if (fullscreen_hide_delay_ms_ > 0)
+        fullscreen_hide_timer_->start(fullscreen_hide_delay_ms_);
+    else
+        fullscreen_hide_timer_->stop();
 }
 
 bool MainWindow::eventFilter(QObject* watched, QEvent* event)
@@ -1251,7 +1271,8 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event)
         }
         else if (event->type() == QEvent::Leave && is_control_widget)
         {
-            fullscreen_hide_timer_->start();
+            if (fullscreen_hide_delay_ms_ > 0)
+                fullscreen_hide_timer_->start(fullscreen_hide_delay_ms_);
         }
     }
     return QMainWindow::eventFilter(watched, event);
@@ -1444,6 +1465,150 @@ void MainWindow::clearPlaylist()
             lnplayer_close(player_);
     }, Qt::QueuedConnection);
     saveVideoPlaylist();
+}
+
+void MainWindow::openVideoSettings()
+{
+    if (mode_ != PlayerMode::Video)
+        return;
+
+    QDialog dialog(this);
+    dialog.setWindowTitle(QStringLiteral("LNPlayer 视频设置"));
+    dialog.setMinimumSize(560, 420);
+    auto* root = new QVBoxLayout(&dialog);
+    auto* tabs = new QTabWidget(&dialog);
+
+    auto* interface_page = new QWidget(tabs);
+    auto* interface_form = new QFormLayout(interface_page);
+    auto* hide_delay = new QSpinBox(interface_page);
+    hide_delay->setRange(0, 10);
+    hide_delay->setSuffix(QStringLiteral(" 秒"));
+    hide_delay->setSpecialValueText(QStringLiteral("关闭"));
+    hide_delay->setValue(fullscreen_hide_delay_ms_ / 1000);
+    auto* show_playlist = new QCheckBox(QStringLiteral("显示播放列表侧栏"), interface_page);
+    show_playlist->setChecked(playlist_panel_visible_);
+    interface_form->addRow(QStringLiteral("全屏控制栏自动隐藏"), hide_delay);
+    interface_form->addRow(show_playlist);
+    tabs->addTab(interface_page, QStringLiteral("界面"));
+
+    auto* video_page = new QWidget(tabs);
+    auto* video_form = new QFormLayout(video_page);
+    auto* aspect = new QComboBox(video_page);
+    aspect->addItem(QStringLiteral("原始比例"), 0);
+    aspect->addItem(QStringLiteral("16:9"), 1);
+    aspect->addItem(QStringLiteral("4:3"), 2);
+    aspect->addItem(QStringLiteral("拉伸填充"), 3);
+    const int aspect_index = video_stretch_ ? 3
+        : std::abs(video_aspect_ratio_override_ - 16.0f / 9.0f) < 0.001f ? 1
+        : std::abs(video_aspect_ratio_override_ - 4.0f / 3.0f) < 0.001f ? 2 : 0;
+    aspect->setCurrentIndex(aspect_index);
+
+    auto make_filter_spin = [&video_page](double value, double minimum, double maximum, double step)
+    {
+        auto* spin = new QDoubleSpinBox(video_page);
+        spin->setRange(minimum, maximum);
+        spin->setSingleStep(step);
+        spin->setDecimals(2);
+        spin->setValue(value);
+        return spin;
+    };
+    auto* brightness = make_filter_spin(video_brightness_, -1.0, 1.0, 0.05);
+    auto* contrast = make_filter_spin(video_contrast_, 0.0, 2.0, 0.05);
+    auto* saturation = make_filter_spin(video_saturation_, 0.0, 2.0, 0.05);
+    video_form->addRow(QStringLiteral("画面比例"), aspect);
+    video_form->addRow(QStringLiteral("亮度"), brightness);
+    video_form->addRow(QStringLiteral("对比度"), contrast);
+    video_form->addRow(QStringLiteral("饱和度"), saturation);
+    tabs->addTab(video_page, QStringLiteral("视频"));
+
+    auto* shortcut_page = new QWidget(tabs);
+    auto* shortcut_layout = new QVBoxLayout(shortcut_page);
+    auto* shortcut_list = new QListWidget(shortcut_page);
+    const QStringList shortcut_entries = {
+        QStringLiteral("Space    播放 / 暂停"),
+        QStringLiteral("← / →    后退 / 前进 5 秒"),
+        QStringLiteral("Ctrl+← / Ctrl+→    后退 / 前进 30 秒"),
+        QStringLiteral("PageUp / PageDown    上一项 / 下一项"),
+        QStringLiteral("↑ / ↓    音量"),
+        QStringLiteral("M    静音"),
+        QStringLiteral("F11    全屏"),
+        QStringLiteral(", / .    上一帧 / 下一帧"),
+        QStringLiteral("X / C / Z    减速 / 加速 / 正常速度"),
+        QStringLiteral("F3    打开文件"),
+        QStringLiteral("F5    视频设置"),
+        QStringLiteral("F6    播放列表显隐"),
+        QStringLiteral("K    截图")
+    };
+    shortcut_list->addItems(shortcut_entries);
+    shortcut_layout->addWidget(shortcut_list);
+    auto* shortcut_note = new QLabel(
+        QStringLiteral("当前显示默认快捷键。快捷键重映射和冲突检测尚未实现。"),
+        shortcut_page);
+    shortcut_layout->addWidget(shortcut_note);
+    tabs->addTab(shortcut_page, QStringLiteral("快捷键"));
+
+    root->addWidget(tabs, 1);
+    auto* buttons = new QDialogButtonBox(
+        QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+    auto* defaults = buttons->addButton(QStringLiteral("恢复默认"), QDialogButtonBox::ResetRole);
+    root->addWidget(buttons);
+
+    connect(defaults, &QPushButton::clicked, &dialog, [=]
+    {
+        hide_delay->setValue(2);
+        show_playlist->setChecked(true);
+        aspect->setCurrentIndex(0);
+        brightness->setValue(0.0);
+        contrast->setValue(1.0);
+        saturation->setValue(1.0);
+    });
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    if (dialog.exec() != QDialog::Accepted)
+        return;
+
+    fullscreen_hide_delay_ms_ = hide_delay->value() * 1000;
+    fullscreen_hide_timer_->setInterval(fullscreen_hide_delay_ms_);
+    playlist_panel_visible_ = show_playlist->isChecked();
+    if (playlist_visibility_action_)
+        playlist_visibility_action_->setChecked(playlist_panel_visible_);
+    if (playlist_panel_)
+        playlist_panel_->setVisible(playlist_panel_visible_);
+
+    const int selected_aspect = aspect->currentData().toInt();
+    video_stretch_ = selected_aspect == 3;
+    video_aspect_ratio_override_ = selected_aspect == 1 ? 16.0f / 9.0f
+        : selected_aspect == 2 ? 4.0f / 3.0f : 0.0f;
+    video_brightness_ = static_cast<float>(brightness->value());
+    video_contrast_ = static_cast<float>(contrast->value());
+    video_saturation_ = static_cast<float>(saturation->value());
+    video_surface_->set_aspect_ratio(video_aspect_ratio_override_);
+    video_surface_->set_stretch(video_stretch_);
+    video_surface_->set_video_filter(
+        video_brightness_, video_contrast_, video_saturation_,
+        video_hue_degrees_, video_sharpness_, video_denoise_, video_grayscale_);
+
+    QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+    settings.setValue(QStringLiteral("Video/UI/FullscreenHideDelayMs"), fullscreen_hide_delay_ms_);
+    settings.setValue(QStringLiteral("Video/UI/PlaylistVisible"), playlist_panel_visible_);
+    settings.setValue(QStringLiteral("Video/Display/AspectRatio"), video_aspect_ratio_override_);
+    settings.setValue(QStringLiteral("Video/Display/Stretch"), video_stretch_);
+    settings.setValue(QStringLiteral("Video/Filter/Brightness"), video_brightness_);
+    settings.setValue(QStringLiteral("Video/Filter/Contrast"), video_contrast_);
+    settings.setValue(QStringLiteral("Video/Filter/Saturation"), video_saturation_);
+    settings.sync();
+
+    if (isFullScreen())
+    {
+        showFullscreenControls();
+        if (fullscreen_hide_delay_ms_ == 0)
+        {
+            control_panel_->show();
+            menuBar()->show();
+        }
+    }
+    pending_video_frame_valid_ = false;
+    requestVideoFrame();
 }
 
 void MainWindow::removeSelectedPlaylistItem()
