@@ -121,7 +121,7 @@ MainWindow::MainWindow(
         subtitle_font_size_ = std::clamp(
             settings.value(QStringLiteral("Video/Subtitle/FontSize"), 0).toInt(), 0, 96);
         subtitle_vertical_position_ = std::clamp(
-            settings.value(QStringLiteral("Video/Subtitle/VerticalPosition"), 80).toInt(), 60, 95);
+            settings.value(QStringLiteral("Video/Subtitle/VerticalPosition"), 80).toInt(), 60, 80);
     }
     setAcceptDrops(true);
     resize(mode_ == PlayerMode::Video ? QSize(960, 600) : QSize(720, 480));
@@ -1700,7 +1700,7 @@ void MainWindow::openVideoSettings()
     int subtitle_color_index = subtitle_color->findData(subtitle_color_);
     subtitle_color->setCurrentIndex(subtitle_color_index >= 0 ? subtitle_color_index : 0);
     auto* subtitle_position = new QSpinBox(subtitle_page);
-    subtitle_position->setRange(60, 95);
+    subtitle_position->setRange(60, 80);
     subtitle_position->setSuffix(QStringLiteral(" %"));
     subtitle_position->setValue(subtitle_vertical_position_);
     subtitle_form->addRow(QStringLiteral("字体"), subtitle_font);
