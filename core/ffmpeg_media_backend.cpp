@@ -12,11 +12,13 @@ extern "C"
 #include <libavutil/error.h>
 #include <libavutil/mathematics.h>
 #include <libswresample/swresample.h>
+#include <libswscale/swscale.h>
 }
 
 #include <atomic>
 #include <cerrno>
 #include <condition_variable>
+#include <deque>
 #include <limits>
 #include <mutex>
 #include <string>
@@ -127,13 +129,61 @@ public:
             }
         }
 
+        if (info.has_video)
+        {
+            AVStream* stream = format_context_->streams[video_stream_index_];
+            const AVCodec* decoder = avcodec_find_decoder(stream->codecpar->codec_id);
+            if (!decoder)
+            {
+                close();
+                return failure("No FFmpeg decoder is available for the video stream.");
+            }
+
+            video_decoder_ = avcodec_alloc_context3(decoder);
+            if (!video_decoder_)
+            {
+                close();
+                return failure("Unable to allocate the video decoder.");
+            }
+
+            result = avcodec_parameters_to_context(video_decoder_, stream->codecpar);
+            if (result < 0)
+            {
+                const std::string message =
+                    "Unable to configure the video decoder: " + ffmpeg_error(result);
+                close();
+                return failure(message);
+            }
+
+            result = avcodec_open2(video_decoder_, decoder, nullptr);
+            if (result < 0)
+            {
+                const std::string message =
+                    "Unable to open the video decoder: " + ffmpeg_error(result);
+                close();
+                return failure(message);
+            }
+
+            video_packet_ = av_packet_alloc();
+            video_frame_ = av_frame_alloc();
+            if (!video_packet_ || !video_frame_)
+            {
+                close();
+                return failure("Unable to allocate FFmpeg video decode buffers.");
+            }
+        }
+
         opened_ = true;
         position_ms_.store(0, std::memory_order_relaxed);
         playback_ended_.store(false, std::memory_order_relaxed);
         playback_failed_.store(false, std::memory_order_relaxed);
         audio_draining_ = false;
         audio_packet_pending_ = false;
+        video_draining_ = false;
+        video_packet_pending_ = false;
+        demux_eof_ = false;
         resampler_drained_ = false;
+        clear_packet_queues();
         return success();
     }
 
@@ -249,10 +299,18 @@ public:
         avformat_flush(format_context_);
         if (audio_decoder_)
             avcodec_flush_buffers(audio_decoder_);
+        if (video_decoder_)
+            avcodec_flush_buffers(video_decoder_);
         if (audio_packet_)
             av_packet_unref(audio_packet_);
+        if (video_packet_)
+            av_packet_unref(video_packet_);
         audio_packet_pending_ = false;
         audio_draining_ = false;
+        video_packet_pending_ = false;
+        video_draining_ = false;
+        demux_eof_ = false;
+        clear_packet_queues();
         resampler_drained_ = false;
         if (resampler_)
         {
@@ -331,9 +389,15 @@ public:
 #endif
         std::lock_guard<std::mutex> decode_lock(decode_mutex_);
         swr_free(&resampler_);
+        sws_freeContext(video_scaler_);
+        video_scaler_ = nullptr;
+        av_frame_free(&video_frame_);
+        av_packet_free(&video_packet_);
+        avcodec_free_context(&video_decoder_);
         av_frame_free(&audio_frame_);
         av_packet_free(&audio_packet_);
         avcodec_free_context(&audio_decoder_);
+        clear_packet_queues();
         if (format_context_)
             avformat_close_input(&format_context_);
 
@@ -346,6 +410,9 @@ public:
         playing_ = false;
         audio_draining_ = false;
         audio_packet_pending_ = false;
+        video_draining_ = false;
+        video_packet_pending_ = false;
+        demux_eof_ = false;
         resampler_drained_ = false;
         return success();
     }
@@ -463,7 +530,7 @@ public:
                 continue;
             }
 
-            result = av_read_frame(format_context_, audio_packet_);
+            result = next_packet_for_stream(audio_stream_index_, audio_packet_);
             if (result == AVERROR_EOF)
             {
                 audio_draining_ = true;
@@ -472,17 +539,202 @@ public:
             if (result < 0)
                 return failure("Unable to read media packet: " + ffmpeg_error(result));
 
-            if (audio_packet_->stream_index != audio_stream_index_)
-            {
-                av_packet_unref(audio_packet_);
-                continue;
-            }
-
             audio_packet_pending_ = true;
         }
     }
 
+    MediaBackendResult read_video_frame(VideoFrame& output, bool& end_of_stream) override
+    {
+        std::lock_guard<std::mutex> decode_lock(decode_mutex_);
+        end_of_stream = false;
+        output.bgra.clear();
+
+        if (!opened_ || !video_decoder_ || !video_packet_ || !video_frame_)
+            return failure("No decodable video stream is open.");
+
+        for (;;)
+        {
+            int result = avcodec_receive_frame(video_decoder_, video_frame_);
+            if (result == 0)
+                return convert_video_frame(output);
+
+            if (result == AVERROR_EOF)
+            {
+                end_of_stream = true;
+                return success();
+            }
+
+            if (result != AVERROR(EAGAIN))
+                return failure("Video decoding failed: " + ffmpeg_error(result));
+
+            if (video_draining_)
+            {
+                result = avcodec_send_packet(video_decoder_, nullptr);
+                if (result == AVERROR_EOF)
+                {
+                    end_of_stream = true;
+                    return success();
+                }
+                if (result < 0 && result != AVERROR(EAGAIN))
+                    return failure("Unable to drain video decoder: " + ffmpeg_error(result));
+                if (result == 0)
+                    video_draining_ = false;
+                continue;
+            }
+
+            if (video_packet_pending_)
+            {
+                result = avcodec_send_packet(video_decoder_, video_packet_);
+                if (result == AVERROR(EAGAIN))
+                    continue;
+                if (result < 0)
+                    return failure("Unable to submit video packet: " + ffmpeg_error(result));
+                av_packet_unref(video_packet_);
+                video_packet_pending_ = false;
+                continue;
+            }
+
+            result = next_packet_for_stream(video_stream_index_, video_packet_);
+            if (result == AVERROR_EOF)
+            {
+                video_draining_ = true;
+                continue;
+            }
+            if (result < 0)
+                return failure("Unable to read media packet: " + ffmpeg_error(result));
+
+            video_packet_pending_ = true;
+        }
+    }
+
 private:
+    int next_packet_for_stream(int stream_index, AVPacket* output_packet)
+    {
+        std::deque<AVPacket*>& queue =
+            stream_index == audio_stream_index_ ? audio_packet_queue_ : video_packet_queue_;
+
+        if (!queue.empty())
+        {
+            AVPacket* queued = queue.front();
+            queue.pop_front();
+            av_packet_move_ref(output_packet, queued);
+            av_packet_free(&queued);
+            return 0;
+        }
+
+        for (;;)
+        {
+            AVPacket* packet = av_packet_alloc();
+            const int result = av_read_frame(format_context_, packet);
+            if (result < 0)
+            {
+                av_packet_free(&packet);
+                if (result == AVERROR_EOF)
+                    demux_eof_ = true;
+                return result;
+            }
+
+            if (packet->stream_index == stream_index)
+            {
+                av_packet_move_ref(output_packet, packet);
+                av_packet_free(&packet);
+                return 0;
+            }
+
+            std::deque<AVPacket*>* destination = nullptr;
+            if (packet->stream_index == audio_stream_index_)
+                destination = &audio_packet_queue_;
+            else if (packet->stream_index == video_stream_index_)
+                destination = &video_packet_queue_;
+
+            if (destination)
+            {
+                constexpr size_t kMaximumQueuedPackets = 512;
+                if (destination->size() >= kMaximumQueuedPackets)
+                {
+                    av_packet_free(&packet);
+                    return AVERROR(EAGAIN);
+                }
+                destination->push_back(packet);
+            }
+            else
+            {
+                av_packet_free(&packet);
+            }
+
+            if (demux_eof_)
+                return AVERROR_EOF;
+        }
+    }
+
+    void clear_packet_queues()
+    {
+        for (AVPacket* packet : audio_packet_queue_)
+            av_packet_free(&packet);
+        for (AVPacket* packet : video_packet_queue_)
+            av_packet_free(&packet);
+        audio_packet_queue_.clear();
+        video_packet_queue_.clear();
+    }
+
+    MediaBackendResult convert_video_frame(VideoFrame& output)
+    {
+        const int width = video_frame_->width;
+        const int height = video_frame_->height;
+        if (width <= 0 || height <= 0)
+        {
+            av_frame_unref(video_frame_);
+            return failure("Decoded video frame has invalid dimensions.");
+        }
+
+        video_scaler_ = sws_getCachedContext(
+            video_scaler_,
+            width,
+            height,
+            static_cast<AVPixelFormat>(video_frame_->format),
+            width,
+            height,
+            AV_PIX_FMT_BGRA,
+            SWS_BILINEAR,
+            nullptr,
+            nullptr,
+            nullptr);
+        if (!video_scaler_)
+        {
+            av_frame_unref(video_frame_);
+            return failure("Unable to initialize video pixel format conversion.");
+        }
+
+        output.width = width;
+        output.height = height;
+        output.stride = width * 4;
+        output.bgra.resize(static_cast<size_t>(output.stride) * height);
+        uint8_t* destination[] = {output.bgra.data()};
+        int destination_linesize[] = {output.stride};
+        const int rows = sws_scale(
+            video_scaler_,
+            video_frame_->data,
+            video_frame_->linesize,
+            0,
+            height,
+            destination,
+            destination_linesize);
+        if (rows != height)
+        {
+            output.bgra.clear();
+            av_frame_unref(video_frame_);
+            return failure("Unable to convert decoded video frame.");
+        }
+
+        const AVStream* stream = format_context_->streams[video_stream_index_];
+        const int64_t timestamp = video_frame_->best_effort_timestamp;
+        output.pts_ms = timestamp == AV_NOPTS_VALUE
+            ? position_ms_.load(std::memory_order_relaxed)
+            : av_rescale_q(timestamp, stream->time_base, AVRational{1, 1000});
+        av_frame_unref(video_frame_);
+        return success();
+    }
+
 #ifdef _WIN32
     void audio_playback_loop()
     {
@@ -721,6 +973,12 @@ private:
     AVPacket* audio_packet_ = nullptr;
     AVFrame* audio_frame_ = nullptr;
     SwrContext* resampler_ = nullptr;
+    AVCodecContext* video_decoder_ = nullptr;
+    AVPacket* video_packet_ = nullptr;
+    AVFrame* video_frame_ = nullptr;
+    SwsContext* video_scaler_ = nullptr;
+    std::deque<AVPacket*> audio_packet_queue_;
+    std::deque<AVPacket*> video_packet_queue_;
     int audio_stream_index_ = -1;
     int video_stream_index_ = -1;
     bool opened_ = false;
@@ -728,6 +986,9 @@ private:
     bool audio_draining_ = false;
     bool audio_packet_pending_ = false;
     bool resampler_drained_ = false;
+    bool video_draining_ = false;
+    bool video_packet_pending_ = false;
+    bool demux_eof_ = false;
 };
 
 }
