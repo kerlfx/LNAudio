@@ -567,6 +567,9 @@ MainWindow::MainWindow(
             QAction* subtitle_reset = subtitle_menu->addAction(QStringLiteral("重置字幕时间"));
             QAction* previous_frame = menu.addAction(QStringLiteral("上一帧"));
             QAction* next_frame = menu.addAction(QStringLiteral("下一帧"));
+            QAction* set_loop_a = menu.addAction(QStringLiteral("设置 A-B 循环起点"));
+            QAction* set_loop_b = menu.addAction(QStringLiteral("设置 A-B 循环终点"));
+            QAction* clear_loop = menu.addAction(QStringLiteral("清除 A-B 循环"));
             QMenu* speed_menu = menu.addMenu(QStringLiteral("播放速度"));
             const float speeds[] = {0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f};
             for (float speed : speeds)
@@ -759,6 +762,32 @@ MainWindow::MainWindow(
                 stepVideoFrame(true);
             else if (selected == next_frame)
                 stepVideoFrame();
+            else if (selected == set_loop_a)
+            {
+                loop_a_ms_ = current_position_ms_;
+                if (loop_b_ms_ <= loop_a_ms_)
+                    loop_b_ms_ = -1;
+                showOsd(QStringLiteral("A 点：%1").arg(format_position(loop_a_ms_)));
+            }
+            else if (selected == set_loop_b)
+            {
+                if (loop_a_ms_ < 0 || current_position_ms_ <= loop_a_ms_)
+                {
+                    statusBar()->showMessage(QStringLiteral("请先设置有效的 A 点"));
+                }
+                else
+                {
+                    loop_b_ms_ = current_position_ms_;
+                    showOsd(QStringLiteral("A-B 循环：%1 - %2")
+                        .arg(format_position(loop_a_ms_), format_position(loop_b_ms_)));
+                }
+            }
+            else if (selected == clear_loop)
+            {
+                loop_a_ms_ = -1;
+                loop_b_ms_ = -1;
+                showOsd(QStringLiteral("已清除 A-B 循环"));
+            }
             else if (selected && selected->parent() == speed_menu)
                 setPlaybackRate(selected->data().toFloat());
             else if (selected == fit || selected == ratio_16_9 ||
@@ -2049,6 +2078,8 @@ void MainWindow::openPlaylistIndex(int index)
         return;
 
     subtitle_manager_.clear();
+    loop_a_ms_ = -1;
+    loop_b_ms_ = -1;
     viewing_historical_frame_ = false;
     video_seek_pending_ = false;
     pending_embedded_subtitle_.clear();
@@ -3210,6 +3241,29 @@ void MainWindow::updatePlaybackState(
     else if (state != LNPLAYER_STATE_PAUSED)
         viewing_historical_frame_ = false;
     current_position_ms_ = position_ms;
+
+    if (mode_ == PlayerMode::Video && state == LNPLAYER_STATE_PLAYING &&
+        loop_a_ms_ >= 0 && loop_b_ms_ > loop_a_ms_ &&
+        position_ms >= loop_b_ms_ && !video_seek_pending_)
+    {
+        video_seek_pending_ = true;
+        const int64_t loop_target = loop_a_ms_;
+        QMetaObject::invokeMethod(command_worker_, [this, loop_target]
+        {
+            uint64_t operation_id = 0;
+            const lnplayer_result_t result = player_
+                ? lnplayer_seek(player_, loop_target, &operation_id)
+                : LNPLAYER_RESULT_INVALID_HANDLE;
+            if (result != LNPLAYER_RESULT_OK)
+            {
+                QMetaObject::invokeMethod(this, [this]
+                {
+                    video_seek_pending_ = false;
+                    statusBar()->showMessage(QStringLiteral("A-B 循环定位失败"));
+                }, Qt::QueuedConnection);
+            }
+        }, Qt::QueuedConnection);
+    }
 
     const bool was_playing = is_playing_;
     is_playing_ = state == LNPLAYER_STATE_PLAYING;
