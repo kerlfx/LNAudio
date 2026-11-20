@@ -403,7 +403,7 @@ public:
                 read.frame.ycbcr_matrix,
                 read.frame.ycbcr_full_range
             };
-            callback(&frame, user_data);
+            invoke_callback(callback, &frame, user_data);
         }
 
         return LNPLAYER_RESULT_OK;
@@ -575,7 +575,7 @@ private:
         event.position_ms = snapshot.position_ms;
         event.duration_ms = snapshot.duration_ms;
         event.message = message;
-        callback_(owner_, &event, user_data_);
+        invoke_callback(callback_, owner_, &event, user_data_);
     }
 
     lnplayer::Runtime& runtime_;
@@ -632,6 +632,18 @@ lnplayer_result_t set_error(lnplayer_result_t result, const char* message)
 {
     g_last_error = message;
     return result;
+}
+
+template<typename Callback, typename... Args>
+void invoke_callback(Callback callback, Args&&... args) noexcept
+{
+    try
+    {
+        callback(std::forward<Args>(args)...);
+    }
+    catch (...)
+    {
+    }
 }
 
 lnplayer_result_t finish_result(lnplayer_result_t result)
@@ -907,7 +919,7 @@ lnplayer_result_t lnplayer_library_search_tracks(
                 track.artist.c_str(),
                 track.album.c_str()
             };
-            callback(&item, user_data);
+            invoke_callback(callback, &item, user_data);
         }
 
         return finish_result(LNPLAYER_RESULT_OK);
@@ -995,7 +1007,7 @@ lnplayer_result_t lnplayer_windows_convert_video_frame(
         frame.display_aspect_ratio = display_aspect_ratio;
         frame.ycbcr_matrix = ycbcr_matrix;
         frame.ycbcr_full_range = ycbcr_full_range;
-        callback(&frame, user_data);
+        invoke_callback(callback, &frame, user_data);
         g_last_error.clear();
         return LNPLAYER_RESULT_OK;
     }
@@ -1106,7 +1118,7 @@ lnplayer_result_t lnplayer_enumerate_audio_tracks(
                 track.language.c_str(),
                 track.codec.c_str()
             };
-            callback(&item, user_data);
+            invoke_callback(callback, &item, user_data);
         }
         return finish_result(LNPLAYER_RESULT_OK);
     }
@@ -1151,7 +1163,7 @@ lnplayer_result_t lnplayer_enumerate_subtitle_tracks(
                 track.language.c_str(),
                 track.codec.c_str()
             };
-            callback(&item, user_data);
+            invoke_callback(callback, &item, user_data);
         }
         return finish_result(LNPLAYER_RESULT_OK);
     }
