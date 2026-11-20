@@ -57,6 +57,7 @@ private:
     void removeSelectedPlaylistItem();
     void moveSelectedPlaylistItem(int offset);
     void cycleRepeatMode();
+    void resetShuffleOrder();
     int nextPlaylistIndex(bool manual) const;
     void openPlaylistIndex(int index);
     void playPrevious();
@@ -130,6 +131,7 @@ private:
     bool playlist_open_pending_ = false;
     bool shuffle_enabled_ = false;
     int repeat_mode_ = 0;
+    QList<int> shuffle_order_;
 };
 
 #endif
