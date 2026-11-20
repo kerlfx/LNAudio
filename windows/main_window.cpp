@@ -1105,12 +1105,7 @@ MainWindow::MainWindow(
                 uint64_t operation_id = 0;
                 lnplayer_seek(player_, target, &operation_id);
             }
-            QMetaObject::invokeMethod(this, [this]
-            {
-                video_seek_pending_ = false;
-                video_end_of_stream_ = false;
-                requestVideoFrame();
-            }, Qt::QueuedConnection);
+
         }, Qt::QueuedConnection);
     });
 
@@ -2327,15 +2322,6 @@ void MainWindow::togglePlayback()
             }
         }
         lnplayer_play(player_);
-        if (resume_from_history)
-        {
-            QMetaObject::invokeMethod(this, [this]
-            {
-                video_seek_pending_ = false;
-                video_end_of_stream_ = false;
-                requestVideoFrame();
-            }, Qt::QueuedConnection);
-        }
     }, Qt::QueuedConnection);
 }
 
@@ -2360,12 +2346,7 @@ void MainWindow::seekRelative(int64_t offset_ms)
             uint64_t operation_id = 0;
             lnplayer_seek(player_, target, &operation_id);
         }
-        QMetaObject::invokeMethod(this, [this]
-        {
-            video_seek_pending_ = false;
-            video_end_of_stream_ = false;
-            requestVideoFrame();
-        }, Qt::QueuedConnection);
+
     }, Qt::QueuedConnection);
 }
 
@@ -2642,8 +2623,9 @@ void MainWindow::handleCoreEvent(
         break;
 
     case LNPLAYER_EVENT_SEEK_COMPLETED:
-        if (result == LNPLAYER_RESULT_OK && mode_ == PlayerMode::Video)
+        if (mode_ == PlayerMode::Video)
         {
+            video_seek_pending_ = false;
             pending_video_frame_valid_ = false;
             pending_hardware_frame_owner_.reset();
             pending_hardware_texture_ = nullptr;
