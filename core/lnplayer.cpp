@@ -133,6 +133,7 @@ public:
         {
             asio::post(runtime_.io_context(), [this, id, position_ms]
             {
+                update_state(LNPLAYER_STATE_SEEKING);
                 asio::post(worker_strand_, [this, id, position_ms]
                 {
                     lnplayer::SessionResult result;
@@ -248,7 +249,9 @@ public:
     {
         const lnplayer::SessionSnapshot session_snapshot = session_.snapshot();
         std::lock_guard<std::mutex> lock(snapshot_mutex_);
-        output->state = convert_state(session_snapshot.state);
+        output->state = snapshot_.state == LNPLAYER_STATE_SEEKING
+            ? LNPLAYER_STATE_SEEKING
+            : convert_state(session_snapshot.state);
         output->position_ms = session_snapshot.position_ms;
         output->duration_ms = session_snapshot.duration_ms;
         output->volume = snapshot_.volume;
