@@ -314,6 +314,18 @@ flowchart TD
     I --> K["独立 Playback Session / FFmpeg"]
 ~~~
 
+### 5.3 Windows 首期工程实现
+
+Windows 应用使用单一 `LNPlayer.exe`，通过启动参数选择音频或视频界面（`--audio` / `--video`）。每次进程启动只创建一个主窗口和一个 Core Runtime；不在同一进程内创建第二个 Player。
+
+当前基础工程包含：
+- Qt 6 Widgets 应用入口和音频/视频窗口模式骨架。
+- 文件选择和拖放入口；当前只接收并显示所选文件路径，尚未接入播放。
+- Core 内部 Runtime 骨架：一个独立单线程运行的 `asio::io_context`，以及一套共享 `asio::thread_pool`。
+- Core 与 Qt UI 分别构建；Windows UI 通过链接 Core DLL 使用公开 C ABI。
+
+当前尚未实现媒体打开、解码、音频设备输出、D3D11 Renderer、播放控制 C ABI、每窗口独立子进程启动和文件打开 IPC。不得将窗口骨架视为已具备播放能力。
+
 ### 5.2 尚未确定
 
 - 是否存在常驻主进程/启动器。
