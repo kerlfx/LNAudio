@@ -3863,7 +3863,9 @@ void MainWindow::updatePlaybackState(
                 QMetaObject::invokeMethod(this, [this]
                 {
                     video_seek_pending_ = false;
-                    statusBar()->showMessage(QStringLiteral("A-B 循环定位失败"));
+                    loop_a_ms_ = -1;
+                    loop_b_ms_ = -1;
+                    statusBar()->showMessage(QStringLiteral("A-B 循环定位失败，已关闭区间循环"));
                 }, Qt::QueuedConnection);
             }
         }, Qt::QueuedConnection);
