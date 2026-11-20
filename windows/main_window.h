@@ -82,6 +82,7 @@ private:
     void loadExternalSubtitlePath(const QString& path);
     QString subtitleAt(int64_t position_ms) const;
     void setSubtitleOffset(int64_t offset_ms);
+    void selectAudioTrack(int stream_index);
     void openFiles(const QList<QUrl>& urls);
     void appendPlaylistFiles(const QList<QUrl>& urls);
     void rebuildPlaylistWidget();
