@@ -161,3 +161,32 @@
 - [ ] 需要使用带 SAR 的 90°/270° 旋转样本验证显示尺寸和截图。
 
 提交：`17944b0df908ca0ff3a689f32032d67f93f5218d`。
+
+### 2026-11-21 — Windows 构建、安装与生命周期测试
+
+- [x] Windows 安装树部署 LNPlayerApp、Core DLL 和 FFmpeg DLL。
+- [x] 使用 Qt 的部署脚本收集 Qt runtime 与 plugins。
+- [x] 增加 MSVC runtime 安装规则。
+- [x] 增加 NSIS CPack 配置、开始菜单视频模式快捷方式、视频文件 Open With / RegisteredApplications 注册。
+- [x] 卸载时只清理 LNPlayer 自身注册项，不覆盖用户默认应用选择，也不删除 Windows 共享注册表根键。
+- [x] 新增可选的 C ABI 生命周期测试：回调内重入 destroy、并发 API 调用与 destroy、销毁后重新创建。
+- [ ] 仍需在 Windows MSVC/Qt 环境配置、编译和运行测试，并实际生成 NSIS 安装包验证注册表及卸载行为。
+
+构建测试：
+- 配置时启用 `-DLNPLAYER_BUILD_TESTS=ON`。
+- 构建 `LNPlayerLifecycleTests` 后手动运行 CTest；不会自动触发 CI。
+
+相关提交：
+- `4530386c0aa8c46761f63b13ff2b277615779607` — Windows CPack/NSIS 初始配置。
+- `5d0cbcf60210fa3e26d9005fe8e9a3ebbcaf6269` — Qt 与 FFmpeg runtime 部署。
+- `a368f4e8a8b39a41187082f83a0ea440bf06cbe4` — 可选测试构建入口。
+- `95eb54e1e6e3d3a15bcabf609dd1a25c0f1b46d7` — C ABI 生命周期测试。
+- `f5e4c84fdf7d2b4fb159ab948352b1d5418ea4f5` — HDR peak luminance 传入 shader 并用于基础 tone mapping。
+
+### 2026-11-21 — HDR tone mapping 参数链
+
+- [x] 修复 MainWindow 已传递三参数但 VideoSurface / D3D11VideoRenderer 仍只有双参数声明的接口不一致。
+- [x] 将 MaxCLL / Mastering peak 传递到 D3D11 pixel shader。
+- [x] PQ EOTF 使用 10000 nit 标准量纲。
+- [x] 使用 peak-aware extended Reinhard 基础曲线处理 HDR 到 SDR。
+- [ ] PQ/HLG 色彩测试图、不同 MaxCLL/MaxFALL 内容和实际显示器输出仍需验证；当前属于基础映射，不等于完整 HDR10+ 动态元数据或显示器 HDR 输出支持。
