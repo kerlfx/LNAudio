@@ -523,6 +523,9 @@ public:
     {
         std::lock_guard<std::mutex> lock(audio_decode_mutex_);
         playback_rate_.store(rate, std::memory_order_relaxed);
+#ifdef _WIN32
+        audio_clock_valid_.store(false, std::memory_order_relaxed);
+#endif
         swr_free(&resampler_);
         resampler_drained_ = false;
     }
