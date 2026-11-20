@@ -116,6 +116,7 @@ private:
     void presentPendingVideoFrame();
     void togglePlayback();
     void seekRelative(int64_t offset_ms);
+    void seekToPosition(int64_t position_ms, const QString& message);
     void takeScreenshot();
     void stepVideoFrame(bool backwards = false);
     void presentHistoricalVideoFrame();
