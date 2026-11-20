@@ -44,6 +44,7 @@ public:
     virtual MediaBackendResult read_audio_frame(AudioFrame& frame, bool& end_of_stream) = 0;
     virtual int64_t position_ms() const = 0;
     virtual bool playback_ended() const = 0;
+    virtual void set_volume(float volume) = 0;
 };
 
 using MediaBackendFactory = std::unique_ptr<MediaBackend> (*)();
