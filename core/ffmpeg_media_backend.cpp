@@ -934,6 +934,10 @@ public:
         output.subtitle_height = 0;
         output.subtitle_stride = 0;
         output.rotation_degrees = 0;
+        output.hdr_transfer = 0;
+        output.color_primaries = 0;
+        output.ycbcr_matrix = 0;
+        output.ycbcr_full_range = 0;
 
         if (!opened_ || !video_decoder_ || !video_packet_ || !video_frame_)
             return failure("No decodable video stream is open.");
