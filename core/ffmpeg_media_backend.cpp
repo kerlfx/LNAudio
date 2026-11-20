@@ -14,6 +14,7 @@ extern "C"
 #include <libswresample/swresample.h>
 }
 
+#include <atomic>
 #include <condition_variable>
 #include <limits>
 #include <mutex>
@@ -204,6 +205,15 @@ public:
 #endif
 
         std::lock_guard<std::mutex> decode_lock(decode_mutex_);
+#ifdef _WIN32
+        const auto restore_playback = [this, resume_playback, &playback_lock]
+        {
+            playback_lock.lock();
+            if (resume_playback)
+                playback_active_ = true;
+            playback_condition_.notify_all();
+        };
+#endif
         const int64_t timestamp = av_rescale_q(
             position_ms,
             AVRational{1, 1000},
@@ -216,7 +226,12 @@ public:
             std::numeric_limits<int64_t>::max(),
             AVSEEK_FLAG_BACKWARD);
         if (result < 0)
+        {
+#ifdef _WIN32
+            restore_playback();
+#endif
             return failure("Unable to seek media source: " + ffmpeg_error(result));
+        }
 
         avformat_flush(format_context_);
         if (audio_decoder_)
@@ -225,19 +240,20 @@ public:
             av_packet_unref(audio_packet_);
         audio_packet_pending_ = false;
         audio_draining_ = false;
-        audio_decoder_eof_ = false;
         if (resampler_)
         {
             swr_close(resampler_);
             const int resampler_result = swr_init(resampler_);
             if (resampler_result < 0)
+            {
+#ifdef _WIN32
+                restore_playback();
+#endif
                 return failure("Unable to reset audio resampler: " + ffmpeg_error(resampler_result));
+            }
         }
 #ifdef _WIN32
-        playback_lock.lock();
-        if (resume_playback)
-            playback_active_ = true;
-        playback_condition_.notify_all();
+        restore_playback();
 #endif
         return success();
     }
@@ -550,7 +566,7 @@ private:
     int audio_stream_index_ = -1;
     int video_stream_index_ = -1;
     bool opened_ = false;
-    bool playing_ = false;
+    std::atomic<bool> playing_{false};
     bool audio_draining_ = false;
     bool audio_packet_pending_ = false;
 };
