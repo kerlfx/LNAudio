@@ -52,6 +52,12 @@ private:
     void loadExternalSubtitle();
     QString subtitleAt(int64_t position_ms) const;
     void openFiles(const QList<QUrl>& urls);
+    void appendPlaylistFiles(const QList<QUrl>& urls);
+    void rebuildPlaylistWidget();
+    void removeSelectedPlaylistItem();
+    void moveSelectedPlaylistItem(int offset);
+    void cycleRepeatMode();
+    int nextPlaylistIndex(bool manual) const;
     void openPlaylistIndex(int index);
     void playPrevious();
     void playNext();
@@ -122,6 +128,8 @@ private:
     QList<QUrl> playlist_;
     int playlist_index_ = -1;
     bool playlist_open_pending_ = false;
+    bool shuffle_enabled_ = false;
+    int repeat_mode_ = 0;
 };
 
 #endif
