@@ -1053,6 +1053,10 @@ MainWindow::MainWindow(
                 settings.setValue(QStringLiteral("Video/Filter/Brightness"), video_brightness_);
                 settings.setValue(QStringLiteral("Video/Filter/Contrast"), video_contrast_);
                 settings.setValue(QStringLiteral("Video/Filter/Saturation"), video_saturation_);
+    settings.setValue(QStringLiteral("Video/Filter/Hue"), video_hue_degrees_);
+    settings.setValue(QStringLiteral("Video/Filter/Sharpness"), video_sharpness_);
+    settings.setValue(QStringLiteral("Video/Filter/Denoise"), video_denoise_);
+    settings.setValue(QStringLiteral("Video/Filter/Grayscale"), video_grayscale_);
                 settings.setValue(QStringLiteral("Video/Filter/HueDegrees"), video_hue_degrees_);
                 settings.setValue(QStringLiteral("Video/Filter/Sharpness"), video_sharpness_);
                 settings.setValue(QStringLiteral("Video/Filter/Denoise"), video_denoise_);
@@ -2097,10 +2101,23 @@ void MainWindow::openVideoSettings()
     auto* brightness = make_filter_spin(video_brightness_, -1.0, 1.0, 0.05);
     auto* contrast = make_filter_spin(video_contrast_, 0.0, 2.0, 0.05);
     auto* saturation = make_filter_spin(video_saturation_, 0.0, 2.0, 0.05);
+    auto* hue = new QSpinBox(video_page);
+    hue->setRange(-180, 180);
+    hue->setSingleStep(5);
+    hue->setSuffix(QStringLiteral("°"));
+    hue->setValue(video_hue_degrees_);
+    auto* sharpness = make_filter_spin(video_sharpness_, 0.0, 2.0, 0.05);
+    auto* denoise = make_filter_spin(video_denoise_, 0.0, 2.0, 0.05);
+    auto* grayscale = new QCheckBox(QStringLiteral("灰度画面"), video_page);
+    grayscale->setChecked(video_grayscale_);
     video_form->addRow(QStringLiteral("画面比例"), aspect);
     video_form->addRow(QStringLiteral("亮度"), brightness);
     video_form->addRow(QStringLiteral("对比度"), contrast);
     video_form->addRow(QStringLiteral("饱和度"), saturation);
+    video_form->addRow(QStringLiteral("色调"), hue);
+    video_form->addRow(QStringLiteral("锐化"), sharpness);
+    video_form->addRow(QStringLiteral("降噪"), denoise);
+    video_form->addRow(grayscale);
     tabs->addTab(video_page, QStringLiteral("视频"));
 
     auto* subtitle_page = new QWidget(tabs);
@@ -2190,6 +2207,10 @@ void MainWindow::openVideoSettings()
         brightness->setValue(0.0);
         contrast->setValue(1.0);
         saturation->setValue(1.0);
+        hue->setValue(0);
+        sharpness->setValue(0.0);
+        denoise->setValue(0.0);
+        grayscale->setChecked(false);
         auto_match_subtitle->setChecked(true);
         subtitle_offset->setValue(0);
         subtitle_font->setCurrentFont(QFont(QStringLiteral("Segoe UI")));
@@ -2259,6 +2280,10 @@ void MainWindow::openVideoSettings()
     video_brightness_ = static_cast<float>(brightness->value());
     video_contrast_ = static_cast<float>(contrast->value());
     video_saturation_ = static_cast<float>(saturation->value());
+    video_hue_degrees_ = hue->value();
+    video_sharpness_ = static_cast<float>(sharpness->value());
+    video_denoise_ = static_cast<float>(denoise->value());
+    video_grayscale_ = grayscale->isChecked();
     auto_match_subtitle_ = auto_match_subtitle->isChecked();
     subtitle_offset_ms_ = subtitle_offset->value();
     subtitle_font_family_ = subtitle_font->currentFont().family();
