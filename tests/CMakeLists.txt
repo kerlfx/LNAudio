@@ -46,9 +46,6 @@ target_link_libraries(LNPlayerSubtitleTests
 
 add_test(NAME LNPlayer.Subtitles COMMAND LNPlayerSubtitleTests)
 
-add_custom_command(TARGET LNPlayerSubtitleTests POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "$<TARGET_FILE:Qt6::Core>"
-        "$<TARGET_FILE_DIR:LNPlayerSubtitleTests>"
-    VERBATIM
+set_tests_properties(LNPlayer.Subtitles PROPERTIES
+    ENVIRONMENT_MODIFICATION "PATH=path_list_prepend:$<TARGET_FILE_DIR:Qt6::Core>"
 )
