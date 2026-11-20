@@ -26,7 +26,12 @@ SessionResult PlaybackSession::open(const std::string& source)
 
     if (backend_)
     {
-        backend_->close();
+        const MediaBackendResult close_result = backend_->close();
+        if (!close_result.success)
+        {
+            snapshot_.state = SessionState::Error;
+            return make_result(false, close_result.message);
+        }
         backend_.reset();
     }
 
@@ -153,6 +158,7 @@ SessionResult PlaybackSession::close()
         backend_.reset();
     }
 
+    ++snapshot_.generation;
     reset_media_state();
     return make_result(true);
 }
