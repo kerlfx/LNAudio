@@ -325,6 +325,13 @@ public:
         color_primaries_ = color_primaries;
     }
 
+    void set_video_color_space(int ycbcr_matrix, int full_range)
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        ycbcr_matrix_ = ycbcr_matrix;
+        ycbcr_full_range_ = full_range;
+    }
+
     bool present(const uint8_t* pixels, int width, int height, int stride)
     {
         std::unique_lock<std::mutex> lock(mutex_);
@@ -596,6 +603,15 @@ public:
         D3D11_VIDEO_PROCESSOR_STREAM stream{};
         stream.Enable = TRUE;
         stream.pInputSurface = input_view.Get();
+        D3D11_VIDEO_PROCESSOR_COLOR_SPACE color_space{};
+        color_space.RGB_Range = 0;
+        color_space.YCbCr_Matrix = ycbcr_matrix_;
+        color_space.YCbCr_xvYCC = 0;
+        color_space.Nominal_Range = ycbcr_full_range_
+            ? D3D11_VIDEO_PROCESSOR_NOMINAL_RANGE_0_255
+            : D3D11_VIDEO_PROCESSOR_NOMINAL_RANGE_16_235;
+        video_context_->VideoProcessorSetStreamColorSpace(
+            video_processor_.Get(), 0, &color_space);
         const HRESULT blt_result = video_context_->VideoProcessorBlt(
             video_processor_.Get(), output_view.Get(), 0, 1, &stream);
         if (FAILED(blt_result))
@@ -946,6 +962,8 @@ private:
     bool grayscale_ = false;
     int hdr_transfer_ = 0;
     int color_primaries_ = 0;
+    int ycbcr_matrix_ = 0;
+    int ycbcr_full_range_ = 0;
     ComPtr<ID3D11Device> device_;
     ComPtr<ID3D11DeviceContext> context_;
     ComPtr<ID3D11VideoDevice> video_device_;
@@ -1023,6 +1041,11 @@ void D3D11VideoRenderer::set_video_filter(
 void D3D11VideoRenderer::set_hdr_metadata(int transfer, int color_primaries)
 {
     impl_->set_hdr_metadata(transfer, color_primaries);
+}
+
+void D3D11VideoRenderer::set_video_color_space(int ycbcr_matrix, int full_range)
+{
+    impl_->set_video_color_space(ycbcr_matrix, full_range);
 }
 
 bool D3D11VideoRenderer::present(const uint8_t* bgra, int width, int height, int stride)

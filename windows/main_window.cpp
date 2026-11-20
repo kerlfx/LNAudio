@@ -70,6 +70,7 @@ public:
         float brightness, float contrast, float saturation, float hue_degrees,
         float sharpness, float denoise, bool grayscale);
     void set_hdr_metadata(int transfer, int color_primaries);
+    void set_video_color_space(int ycbcr_matrix, int full_range);
     bool present_frame_threadsafe(const QImage& frame);
     bool present_hardware_frame(
         void* texture, uint32_t array_slice, uint32_t format,
@@ -190,6 +191,12 @@ void VideoSurface::set_hdr_metadata(int transfer, int color_primaries)
 {
     if (renderer_)
         renderer_->set_hdr_metadata(transfer, color_primaries);
+}
+
+void VideoSurface::set_video_color_space(int ycbcr_matrix, int full_range)
+{
+    if (renderer_)
+        renderer_->set_video_color_space(ycbcr_matrix, full_range);
 }
 
 bool VideoSurface::present_frame_threadsafe(const QImage& frame)
@@ -1784,6 +1791,8 @@ void MainWindow::requestVideoFrame()
             float display_aspect_ratio = 0.0f;
             int hdr_transfer = 0;
             int color_primaries = 0;
+            int ycbcr_matrix = 0;
+            int ycbcr_full_range = 0;
             QString subtitle;
             QImage subtitle_bitmap;
         } context;
@@ -1799,6 +1808,8 @@ void MainWindow::requestVideoFrame()
                 context->display_aspect_ratio = frame->display_aspect_ratio;
                 context->hdr_transfer = frame->hdr_transfer;
                 context->color_primaries = frame->color_primaries;
+                context->ycbcr_matrix = frame->ycbcr_matrix;
+                context->ycbcr_full_range = frame->ycbcr_full_range;
                 context->subtitle = QString::fromUtf8(
                     frame->subtitle_utf8 ? frame->subtitle_utf8 : "");
                 if (frame->subtitle_bgra && frame->subtitle_width > 0 &&
@@ -1852,13 +1863,15 @@ void MainWindow::requestVideoFrame()
         const float display_aspect_ratio = context.display_aspect_ratio;
         const int hdr_transfer = context.hdr_transfer;
         const int color_primaries = context.color_primaries;
+        const int ycbcr_matrix = context.ycbcr_matrix;
+        const int ycbcr_full_range = context.ycbcr_full_range;
         const QString embedded_subtitle = context.subtitle;
         const QImage embedded_subtitle_bitmap = context.subtitle_bitmap;
         QMetaObject::invokeMethod(this,
             [this, result, end_of_stream, image, hardware_owner, hardware_texture,
              hardware_array_slice, hardware_format, hardware_width, hardware_height,
              pts_ms, generation, display_aspect_ratio, hdr_transfer, color_primaries,
-             embedded_subtitle, embedded_subtitle_bitmap]
+             ycbcr_matrix, ycbcr_full_range, embedded_subtitle, embedded_subtitle_bitmap]
         {
             video_frame_pending_ = false;
             if (result != LNPLAYER_RESULT_OK)
@@ -1881,6 +1894,7 @@ void MainWindow::requestVideoFrame()
                 if (video_surface_)
                 {
                     video_surface_->set_hdr_metadata(hdr_transfer, color_primaries);
+                    video_surface_->set_video_color_space(ycbcr_matrix, ycbcr_full_range);
                     video_surface_->set_source_aspect_ratio(display_aspect_ratio);
                 }
                 pending_video_frame_ = image;
@@ -1982,6 +1996,8 @@ void MainWindow::presentPendingVideoFrame()
         history_entry.hardware_height = pending_hardware_height_;
         history_entry.hdr_transfer = hdr_transfer;
         history_entry.color_primaries = color_primaries;
+        history_entry.ycbcr_matrix = ycbcr_matrix;
+        history_entry.ycbcr_full_range = ycbcr_full_range;
         history_entry.embedded_subtitle = pending_embedded_subtitle_;
         history_entry.embedded_subtitle_bitmap = pending_embedded_subtitle_bitmap_;
         history_entry.pts_ms = pending_video_pts_ms_;
@@ -2109,6 +2125,8 @@ void MainWindow::presentPendingVideoFrame()
     history_entry.image = frame;
     history_entry.hdr_transfer = hdr_transfer;
     history_entry.color_primaries = color_primaries;
+    history_entry.ycbcr_matrix = ycbcr_matrix;
+    history_entry.ycbcr_full_range = ycbcr_full_range;
     history_entry.embedded_subtitle = pending_embedded_subtitle_;
     history_entry.embedded_subtitle_bitmap = pending_embedded_subtitle_bitmap_;
     history_entry.pts_ms = pending_video_pts_ms_;
@@ -2298,7 +2316,10 @@ void MainWindow::presentHistoricalVideoFrame()
 
     const VideoFrameHistoryEntry entry = video_frame_history_[video_frame_history_index_];
     if (video_surface_)
+    {
         video_surface_->set_hdr_metadata(entry.hdr_transfer, entry.color_primaries);
+        video_surface_->set_video_color_space(entry.ycbcr_matrix, entry.ycbcr_full_range);
+    }
     QImage frame = entry.image;
     if (subtitles_enabled_ && !entry.embedded_subtitle_bitmap.isNull() && !entry.hardware_owner)
     {
