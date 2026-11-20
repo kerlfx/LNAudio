@@ -1715,7 +1715,8 @@ void MainWindow::openVideoSettings()
                 continue;
             for (const auto& candidate : candidates)
             {
-                if (candidate.second == sequence)
+                if (candidate.second.matches(sequence) != QKeySequence::NoMatch ||
+                    sequence.matches(candidate.second) != QKeySequence::NoMatch)
                 {
                     QMessageBox::warning(&dialog, QStringLiteral("快捷键冲突"),
                         QStringLiteral("快捷键与“%1”重复，请修改后再保存。")
