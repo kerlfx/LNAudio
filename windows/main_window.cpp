@@ -76,15 +76,22 @@ MainWindow::MainWindow(PlayerMode mode, const QString& initial_media, QWidget* p
             if (directory.isEmpty())
                 return;
 
+            lnplayer_t* player_handle = nullptr;
+            QMetaObject::invokeMethod(command_worker_, [this, &player_handle]
+            {
+                player_handle = player_;
+            }, Qt::BlockingQueuedConnection);
+
+            if (!player_handle)
+                return;
+
             const QByteArray path_utf8 = directory.toUtf8();
             status_label_->setText(QStringLiteral("正在扫描音乐目录..."));
-            QMetaObject::invokeMethod(library_worker_, [this, path_utf8]
+            QMetaObject::invokeMethod(library_worker_, [this, path_utf8, player_handle]
             {
                 int imported_count = 0;
-                const lnplayer_result_t result = player_
-                    ? lnplayer_library_scan_directory(
-                        player_, path_utf8.constData(), 1, &imported_count)
-                    : LNPLAYER_RESULT_INVALID_HANDLE;
+                const lnplayer_result_t result = lnplayer_library_scan_directory(
+                    player_handle, path_utf8.constData(), 1, &imported_count);
 
                 QMetaObject::invokeMethod(this, [this, result, imported_count]
                 {
