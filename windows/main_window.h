@@ -80,6 +80,7 @@ private:
     void removeSelectedPlaylistItem();
     void clearPlaylist();
     void openVideoSettings();
+    void showOsd(const QString& message);
     void moveSelectedPlaylistItem(int offset);
     void cycleRepeatMode();
     void resetShuffleOrder();
@@ -118,6 +119,7 @@ private:
     QListWidget* playlist_widget_ = nullptr;
     VideoSurface* video_surface_ = nullptr;
     QWidget* control_panel_ = nullptr;
+    QLabel* osd_label_ = nullptr;
     QWidget* playlist_panel_ = nullptr;
     QAction* playlist_visibility_action_ = nullptr;
     QSlider* seek_slider_;
@@ -137,6 +139,7 @@ private:
     QTimer* video_timer_;
     QTimer* device_timer_;
     QTimer* fullscreen_hide_timer_;
+    QTimer* osd_timer_;
     lnplayer_t* player_ = nullptr;
     void* video_device_identity_ = nullptr;
     int64_t duration_ms_ = -1;
