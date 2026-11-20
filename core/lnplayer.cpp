@@ -56,6 +56,25 @@ public:
             {
             }
         });
+        session_.set_playback_error_callback([this](std::string message)
+        {
+            try
+            {
+                asio::post(runtime_.io_context(), [this, message = std::move(message)]
+                {
+                    const lnplayer::SessionSnapshot snapshot = session_.snapshot();
+                    publish_snapshot(snapshot);
+                    emit(
+                        LNPLAYER_EVENT_ERROR,
+                        LNPLAYER_RESULT_INTERNAL_ERROR,
+                        0,
+                        message.c_str());
+                });
+            }
+            catch (...)
+            {
+            }
+        });
     }
 
     lnplayer_result_t open(const char* source, uint64_t* operation_id)
