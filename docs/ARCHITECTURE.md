@@ -839,18 +839,47 @@ Windows Qt 与 Android JNI 共用同一套 C ABI 语义：
 
 ## 11. 后续设计顺序
 
-1. 复核并冻结 Player Core 对象模型与生命周期。
-2. 根据 C ABI 契约设计并审查公共头文件 `core/include/lnplayer.h`。
-3. 定义 Video Frame、Frame Queue、帧引用和时间线代次规则。
-4. 实现平台 Video Output 抽象与 Renderer 帧获取接口。
-5. Windows D3D11 Renderer：先显示测试纹理，再验证 D3D11VA 设备共享和硬件帧呈现。
-6. PTS Scheduler、音频主时钟同步、Seek/Pause/Resize 和软件解码回退。
-7. Android MediaCodec + SurfaceView 输出模式验证与平台实现。
-8. 音频输出适配。
-9. Asio 异步服务、共享线程池、任务并发与资源所有权。
-10. 音乐库、SQLite 和文件扫描架构。
-11. Windows 多进程启动与文件请求分发。
-12. Windows/Android 平台 UI 与系统集成。
-13. 工程目录、依赖管理和构建配置。
+当前采用 **Windows 完整版本优先** 的实施策略。Android UI、JNI 和 Android 平台输出暂不进入实现阶段；Core 继续保持平台无关，Windows 专有实现通过平台适配层隔离。
 
-每完成一个专题，应同步更新本文和需求基线，并明确区分已确认决策与待验证方案。
+1. **Core Runtime 与命令生命周期**
+   - 重构 PlaybackController，使 `io_context` 只负责命令排序、任务分发、结果回收和事件通知。
+   - 实际媒体操作提交到共享 Standalone Asio `thread_pool`。
+   - 将 PlaybackSession 接入 Controller，落实 operation_id、generation、命令顺序和取消语义。
+   - 建立可靠的 in-flight task 生命周期管理和 destroy 屏障，确保没有后台任务或事件回调访问已释放对象。
+2. **Windows 媒体依赖与 FFmpeg Backend**
+   - 确定 Windows FFmpeg SDK 的版本、构建配置、动态链接及许可证分发策略。
+   - 实现媒体探测、流选择、解封装、音视频解码、Seek、Flush 和中断关闭。
+   - 通过明确的 CMake 配置定位依赖，不在源码中硬编码开发机路径。
+3. **Windows 音频播放链路**
+   - 实现音频解码、重采样/格式转换、音频缓冲和音频主时钟。
+   - 实现 Windows Audio Output、设备枚举/切换、音量和静音。
+   - 完成音频播放、暂停、停止、Seek、结束、错误恢复和长时间播放。
+4. **Windows 音频 UI 与音乐库**
+   - 完成音频 UI 和 Core C ABI 的完整连接。
+   - 实现直接播放、音乐目录导入、扫描、文件变化监控和手动刷新。
+   - 实现 SQLite 音乐库、元数据、文件位置关联、重复内容识别和最近播放记录。
+   - 实现音乐浏览/搜索、播放列表、随机/循环、封面/歌词、均衡器和音频设备选择。
+5. **Windows 视频解码与 D3D11 输出**
+   - 实现有界视频帧队列、帧引用和时间线 generation。
+   - 实现 D3D11 Renderer、Swap Chain、颜色转换、缩放和窗口尺寸变化。
+   - 接入 FFmpeg D3D11VA 硬件解码，并实现软件解码回退。
+   - 完成音视频时钟同步、Seek/暂停/恢复、丢帧和资源释放。
+6. **Windows 视频 UI 与高级功能**
+   - 完成 PotPlayer 风格的视频窗口、播放控制、播放列表和右键菜单。
+   - 实现快捷键、鼠标操作、全屏、画面比例、播放速度和音量控制。
+   - 实现多音轨、内嵌/外挂字幕、逐帧播放、截图。
+   - 按需求优先级完成滤镜、字幕样式和高级解码/渲染设置。
+7. **Windows 多进程与文件打开流程**
+   - 完成一个窗口对应一个独立播放器子进程。
+   - 完成音频/视频模式启动、文件管理器打开文件、连续打开新窗口和进程间请求分发。
+   - 保证关闭单个窗口只销毁对应 Player 和进程资源。
+8. **Windows 系统集成与交付**
+   - 实现系统媒体按键、任务栏/系统媒体控制和后台音频播放。
+   - 完成设置持久化、Qt/FFmpeg 运行库部署、安装包和卸载流程。
+   - 完成 Windows 完整功能、稳定性、兼容性和多窗口资源使用审查。
+9. **Android 平台实现（Windows 完整版本完成后）**
+   - 实现 Kotlin UI、JNI Bridge、Android 音频输出和后台播放集成。
+   - 实现 Android 视频 Surface 生命周期、MediaCodec 硬件解码及对应回退路径。
+   - 复用已稳定的 Core 播放、音乐库和媒体处理逻辑。
+
+每完成一个专题，应同步更新需求与架构文档，并明确区分已实现、已确认但未实现、待验证和不在当前范围的内容。不得为了赶进度将未实现能力标记为完成。
