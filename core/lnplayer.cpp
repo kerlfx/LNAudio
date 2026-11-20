@@ -225,8 +225,9 @@ public:
         output->generation = session_snapshot.generation;
     }
 
+#ifdef _WIN32
     lnplayer_result_t read_video_frame(
-        lnplayer_video_frame_callback_t callback,
+        lnplayer_windows_video_frame_callback_t callback,
         void* user_data,
         int* end_of_stream)
     {
@@ -289,6 +290,7 @@ public:
 
         return finish_result(LNPLAYER_RESULT_OK);
     }
+#endif
 
     void set_volume(uint32_t volume)
     {
@@ -725,6 +727,7 @@ lnplayer_result_t lnplayer_library_search_tracks(
     }
 }
 
+#ifdef _WIN32
 lnplayer_result_t lnplayer_windows_read_video_frame(
     lnplayer_t* player,
     lnplayer_windows_video_frame_callback_t callback,
@@ -749,6 +752,7 @@ lnplayer_result_t lnplayer_windows_read_video_frame(
         return set_error(LNPLAYER_RESULT_INTERNAL_ERROR, "Unexpected error while reading a video frame.");
     }
 }
+#endif
 
 lnplayer_result_t lnplayer_get_snapshot(
     lnplayer_t* player,
