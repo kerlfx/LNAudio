@@ -769,9 +769,12 @@ MainWindow::MainWindow(
                 {
                     if (player_)
                         lnplayer_set_subtitle_offset(player_, subtitle_offset_ms);
+                    QMetaObject::invokeMethod(this, [this]
+                    {
+                        pending_video_frame_valid_ = false;
+                        requestVideoFrame();
+                    }, Qt::QueuedConnection);
                 }, Qt::QueuedConnection);
-                pending_video_frame_valid_ = false;
-                requestVideoFrame();
                 statusBar()->showMessage(QStringLiteral("字幕时间偏移：%1 ms").arg(subtitle_offset_ms_));
             }
             else if (selected == previous_frame)
