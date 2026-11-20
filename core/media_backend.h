@@ -47,6 +47,8 @@ public:
     virtual bool playback_ended() const = 0;
     virtual void set_volume(float volume) = 0;
     virtual void set_playback_end_callback(std::function<void()> callback) = 0;
+    virtual bool playback_failed() const = 0;
+    virtual void set_playback_error_callback(std::function<void(std::string)> callback) = 0;
 };
 
 using MediaBackendFactory = std::unique_ptr<MediaBackend> (*)();
