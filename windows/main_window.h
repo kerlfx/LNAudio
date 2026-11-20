@@ -211,6 +211,7 @@ private:
     SubtitleManager subtitle_manager_;
     QList<QUrl> playlist_;
     int playlist_index_ = -1;
+    QString current_media_path_;
     QListWidgetItem* playing_playlist_item_ = nullptr;
     bool playlist_open_pending_ = false;
     bool subtitles_enabled_ = true;
