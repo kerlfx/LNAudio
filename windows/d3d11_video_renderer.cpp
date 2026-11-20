@@ -476,7 +476,8 @@ public:
         };
 
         const float black[] = {0.0f, 0.0f, 0.0f, 1.0f};
-        context_->ClearRenderTargetView(render_target_.Get(), black);
+        context_->OMSetRenderTargets(0, nullptr, nullptr);
+        context_->ClearRenderTargetView(hardware_output_render_target_.Get(), black);
         video_context_->VideoProcessorSetOutputTargetRect(
             video_processor_.Get(), TRUE, &target_rect);
         D3D11_VIDEO_PROCESSOR_STREAM stream{};
