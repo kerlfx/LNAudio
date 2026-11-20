@@ -292,10 +292,10 @@ public:
 #ifdef _WIN32
     lnplayer_result_t set_video_device(void* device)
     {
-        const lnplayer::SessionResult result = session_.set_video_device(device);
-        if (!result.success)
-            return set_error(LNPLAYER_RESULT_INTERNAL_ERROR, result.message.c_str());
-        return LNPLAYER_RESULT_OK;
+        return invoke_sync([this, device]
+        {
+            return session_.set_video_device(device);
+        });
     }
 
     lnplayer_result_t read_video_frame(
