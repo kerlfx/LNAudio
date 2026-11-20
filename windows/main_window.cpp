@@ -7,6 +7,7 @@
 #include "lnplayer_windows.h"
 
 #include <algorithm>
+#include <cmath>
 #include <functional>
 #include <utility>
 
