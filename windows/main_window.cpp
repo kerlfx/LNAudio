@@ -4744,7 +4744,7 @@ void MainWindow::presentHistoricalVideoFrame()
     {
         const QSize overlay_size = video_surface_->size();
         postBackground([this, entry, overlay_size, subtitle, render_subtitles,
-            font_family, subtitle_color, font_size, vertical_position, media_path]
+            font_family, subtitle_color, font_size, vertical_position]
         {
             QImage overlay(overlay_size, QImage::Format_ARGB32);
             overlay.fill(Qt::transparent);
@@ -4754,7 +4754,7 @@ void MainWindow::presentHistoricalVideoFrame()
             draw_subtitle_text(
                 overlay, subtitle, font_family, subtitle_color, font_size, vertical_position);
 
-            postCommand([this, entry, overlay = std::move(overlay), media_path]() mutable
+            postCommand([this, entry, overlay = std::move(overlay)]() mutable
             {
                 lnplayer_t* player = player_.load(std::memory_order_acquire);
                 lnplayer_snapshot_t snapshot{};
@@ -4771,12 +4771,10 @@ void MainWindow::presentHistoricalVideoFrame()
                         entry.hardware_height,
                         entry.hardware_owner,
                         overlay);
-                QMetaObject::invokeMethod(this, [this, presented, current, media_path]
+                QMetaObject::invokeMethod(this, [this, presented, current]
                 {
                     video_frame_pending_ = false;
-                    if (!current && current_media_path_ != media_path)
-                        return;
-                    if (!presented)
+                    if (current && !presented)
                         status_label_->setText(
                             QStringLiteral("无法重新呈现历史硬件视频帧"));
                 }, Qt::QueuedConnection);
