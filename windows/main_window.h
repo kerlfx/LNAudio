@@ -12,19 +12,17 @@
 #include <QHash>
 #include <QSet>
 
-#include <asio.hpp>
-
 #include <vector>
 #include <deque>
 #include <memory>
 #include <atomic>
 #include <cstdint>
-#include <thread>
 #include <utility>
 
 #include "lnplayer.h"
 #include "subtitle_manager.h"
 #include "video_surface.h"
+#include "ui_task_runtime.h"
 
 class QAction;
 class QLabel;
@@ -140,44 +138,53 @@ private:
     void showFullscreenControls();
     void updateFullscreenUi();
 
+    template <typename Executor, typename Handler>
+    void postTask(const Executor& executor, Handler&& handler)
+    {
+        const auto tracker = task_tracker_;
+        if (!tracker->try_begin())
+            return;
+
+        asio::post(UiTaskRuntime::instance().io_context(),
+            [executor, tracker, task = std::forward<Handler>(handler)]() mutable
+            {
+                asio::post(executor, [tracker, task = std::move(task)]() mutable
+                {
+                    struct Completion
+                    {
+                        std::shared_ptr<UiTaskTracker> tracker;
+                        ~Completion()
+                        {
+                            tracker->finish();
+                        }
+                    } completion{tracker};
+                    task();
+                });
+            });
+    }
+
     template <typename Handler>
     void postCommand(Handler&& handler)
     {
-        asio::post(ui_io_context_,
-            [this, task = std::forward<Handler>(handler)]() mutable
-            {
-                asio::post(command_executor_, std::move(task));
-            });
+        postTask(command_executor_, std::forward<Handler>(handler));
     }
 
     template <typename Handler>
     void postFrame(Handler&& handler)
     {
-        asio::post(ui_io_context_,
-            [this, task = std::forward<Handler>(handler)]() mutable
-            {
-                asio::post(frame_executor_, std::move(task));
-            });
+        postTask(frame_executor_, std::forward<Handler>(handler));
     }
 
     template <typename Handler>
     void postLibrary(Handler&& handler)
     {
-        asio::post(ui_io_context_,
-            [this, task = std::forward<Handler>(handler)]() mutable
-            {
-                asio::post(library_executor_, std::move(task));
-            });
+        postTask(library_executor_, std::forward<Handler>(handler));
     }
 
     template <typename Handler>
     void postBackground(Handler&& handler)
     {
-        asio::post(ui_io_context_,
-            [this, task = std::forward<Handler>(handler)]() mutable
-            {
-                asio::post(ui_thread_pool_, std::move(task));
-            });
+        postTask(background_executor_, std::forward<Handler>(handler));
     }
 
     PlayerMode mode_;
@@ -203,13 +210,11 @@ private:
     QPushButton* stop_button_;
     QPushButton* shuffle_button_ = nullptr;
     QPushButton* repeat_button_ = nullptr;
-    asio::io_context ui_io_context_;
-    asio::executor_work_guard<asio::io_context::executor_type> ui_io_work_guard_;
-    asio::thread_pool ui_thread_pool_;
+    std::shared_ptr<UiTaskTracker> task_tracker_;
+    asio::thread_pool::executor_type background_executor_;
     asio::strand<asio::thread_pool::executor_type> command_executor_;
     asio::strand<asio::thread_pool::executor_type> frame_executor_;
     asio::strand<asio::thread_pool::executor_type> library_executor_;
-    std::thread ui_io_thread_;
     QTimer* snapshot_timer_;
     QTimer* video_timer_;
     QTimer* device_timer_;
