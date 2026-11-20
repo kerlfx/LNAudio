@@ -38,6 +38,7 @@ struct VideoFrame
     int height = 0;
     int stride = 0;
     int64_t pts_ms = 0;
+    uint64_t generation = 0;
 };
 
 class MediaBackend
