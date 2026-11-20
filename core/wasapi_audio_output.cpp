@@ -226,7 +226,7 @@ bool WasapiAudioOutput::write(const float* samples, uint32_t frames)
     uint32_t written = 0;
     while (written < frames)
     {
-        const DWORD wait_result = WaitForSingleObject(audio_event_, INFINITE);
+        const DWORD wait_result = WaitForSingleObject(audio_event_, 1000);
         if (wait_result != WAIT_OBJECT_0)
             return false;
 
