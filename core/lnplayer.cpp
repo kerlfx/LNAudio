@@ -1213,6 +1213,7 @@ lnplayer_result_t lnplayer_get_video_info(
         info->color_transfer = source.color_transfer;
         info->color_space = source.color_space;
         info->bit_depth = source.bit_depth;
+        info->hardware_decoding = source.hardware_decoding ? 1 : 0;
         const auto copy_text = [](char* destination, size_t capacity, const std::string& value)
         {
             if (capacity == 0)
