@@ -9,6 +9,7 @@ extern "C"
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
 #include <libavutil/channel_layout.h>
+#include <libavutil/display.h>
 #include <libavutil/error.h>
 #include <libavutil/hwcontext.h>
 #include <libavutil/hwcontext_d3d11va.h>
@@ -78,6 +79,9 @@ public:
             format_context_, AVMEDIA_TYPE_AUDIO, -1, -1, nullptr, 0);
         video_stream_index_ = av_find_best_stream(
             format_context_, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
+        stream_rotation_degrees_ = video_stream_index_ >= 0
+            ? get_stream_rotation_degrees(format_context_->streams[video_stream_index_])
+            : 0;
 
         start_time_ms_ = format_context_->start_time == AV_NOPTS_VALUE
             ? 0
@@ -548,6 +552,7 @@ public:
         audio_stream_index_ = -1;
         video_stream_index_ = -1;
         subtitle_stream_index_ = -1;
+        stream_rotation_degrees_ = 0;
         start_time_ms_ = 0;
         position_ms_.store(0, std::memory_order_relaxed);
         {
@@ -991,6 +996,97 @@ private:
         std::string text;
     };
 
+    static int normalize_rotation(double angle)
+    {
+        if (!std::isfinite(angle))
+            return 0;
+        int degrees = static_cast<int>(std::lround(angle / 90.0)) * 90;
+        degrees %= 360;
+        if (degrees < 0)
+            degrees += 360;
+        return degrees;
+    }
+
+    static int get_stream_rotation_degrees(const AVStream* stream)
+    {
+        size_t side_data_size = 0;
+        uint8_t* matrix = av_stream_get_side_data(
+            stream, AV_PKT_DATA_DISPLAYMATRIX, &side_data_size);
+        if (matrix && side_data_size >= sizeof(int32_t) * 9)
+            return normalize_rotation(-av_display_rotation_get(
+                reinterpret_cast<const int32_t*>(matrix)));
+
+        AVDictionaryEntry* rotate = av_dict_get(stream->metadata, "rotate", nullptr, 0);
+        if (rotate)
+            return normalize_rotation(std::strtod(rotate->value, nullptr));
+        return 0;
+    }
+
+    int get_frame_rotation_degrees(const AVFrame* frame) const
+    {
+        const AVFrameSideData* side_data = av_frame_get_side_data(
+            frame, AV_FRAME_DATA_DISPLAYMATRIX);
+        if (side_data && side_data->size >= sizeof(int32_t) * 9)
+            return normalize_rotation(-av_display_rotation_get(
+                reinterpret_cast<const int32_t*>(side_data->data)));
+        return stream_rotation_degrees_;
+    }
+
+    static void rotate_bgra(VideoFrame& frame, int degrees)
+    {
+        if (degrees == 0 || frame.bgra.empty())
+            return;
+
+        const int source_width = frame.width;
+        const int source_height = frame.height;
+        const int source_stride = frame.stride;
+        const int target_width = degrees == 180 ? source_width : source_height;
+        const int target_height = degrees == 180 ? source_height : source_width;
+        const int target_stride = target_width * 4;
+        std::vector<uint8_t> rotated(static_cast<size_t>(target_stride) * target_height);
+
+        for (int y = 0; y < source_height; ++y)
+        {
+            const uint8_t* source_row = frame.bgra.data() +
+                static_cast<size_t>(y) * source_stride;
+            for (int x = 0; x < source_width; ++x)
+            {
+                int target_x = x;
+                int target_y = y;
+                if (degrees == 90)
+                {
+                    target_x = source_height - 1 - y;
+                    target_y = x;
+                }
+                else if (degrees == 180)
+                {
+                    target_x = source_width - 1 - x;
+                    target_y = source_height - 1 - y;
+                }
+                else if (degrees == 270)
+                {
+                    target_x = y;
+                    target_y = source_width - 1 - x;
+                }
+
+                const uint8_t* source_pixel = source_row + static_cast<size_t>(x) * 4;
+                uint8_t* target_pixel = rotated.data() +
+                    static_cast<size_t>(target_y) * target_stride +
+                    static_cast<size_t>(target_x) * 4;
+                std::copy_n(source_pixel, 4, target_pixel);
+            }
+        }
+
+        frame.bgra = std::move(rotated);
+        frame.width = target_width;
+        frame.height = target_height;
+        frame.stride = target_stride;
+        if (degrees == 90 || degrees == 270)
+            frame.display_aspect_ratio = frame.display_aspect_ratio > 0.0f
+                ? 1.0f / frame.display_aspect_ratio
+                : static_cast<float>(target_width) / target_height;
+    }
+
     bool create_subtitle_decoder(int stream_index, AVCodecContext** output_decoder)
     {
         *output_decoder = nullptr;
@@ -1332,8 +1428,10 @@ private:
     MediaBackendResult convert_video_frame(VideoFrame& output)
     {
         AVFrame* source_frame = video_frame_;
+        const int frame_rotation = get_frame_rotation_degrees(video_frame_);
 #ifdef _WIN32
-        if (video_frame_->format == AV_PIX_FMT_D3D11 && video_device_shared_)
+        if (video_frame_->format == AV_PIX_FMT_D3D11 &&
+            video_device_shared_ && frame_rotation == 0)
         {
             AVFrame* retained_frame = av_frame_clone(video_frame_);
             if (!retained_frame)
@@ -1474,6 +1572,7 @@ private:
                 ? static_cast<float>(width) * sample_aspect_ratio.num /
                     (static_cast<float>(height) * sample_aspect_ratio.den)
                 : static_cast<float>(width) / static_cast<float>(height);
+        rotate_bgra(output, frame_rotation);
         const int64_t timestamp = video_frame_->best_effort_timestamp;
         output.pts_ms = timestamp == AV_NOPTS_VALUE
             ? position_ms_.load(std::memory_order_relaxed)
@@ -1898,6 +1997,7 @@ private:
     int audio_stream_index_ = -1;
     int video_stream_index_ = -1;
     int subtitle_stream_index_ = -1;
+    int stream_rotation_degrees_ = 0;
     int64_t start_time_ms_ = 0;
     bool opened_ = false;
     std::atomic<bool> playing_{false};
