@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cmath>
 #include <functional>
+#include <future>
 #include <iterator>
 #include <memory>
 #include <utility>
@@ -80,7 +81,6 @@
 #include <QStandardPaths>
 #include <QSettings>
 #include <QSignalBlocker>
-#include <QThread>
 #include <QTimer>
 #include <QUrl>
 #include <QVariant>
@@ -369,12 +369,11 @@ MainWindow::MainWindow(
     , play_button_(new QPushButton(QStringLiteral("播放"), this))
     , pause_button_(new QPushButton(QStringLiteral("暂停"), this))
     , stop_button_(new QPushButton(QStringLiteral("停止"), this))
-    , command_worker_(new QObject())
-    , command_thread_(new QThread(this))
-    , frame_worker_(mode == PlayerMode::Video ? new QObject() : nullptr)
-    , frame_thread_(mode == PlayerMode::Video ? new QThread(this) : nullptr)
-    , library_worker_(new QObject())
-    , library_thread_(new QThread(this))
+    , ui_io_work_guard_(asio::make_work_guard(ui_io_context_))
+    , ui_thread_pool_(2)
+    , command_executor_(asio::make_strand(ui_thread_pool_))
+    , frame_executor_(asio::make_strand(ui_thread_pool_))
+    , library_executor_(asio::make_strand(ui_thread_pool_))
     , snapshot_timer_(new QTimer(this))
     , video_timer_(new QTimer(this))
     , device_timer_(new QTimer(this))
@@ -568,18 +567,14 @@ MainWindow::MainWindow(
             if (directory.isEmpty())
                 return;
 
-            lnplayer_t* player_handle = nullptr;
-            QMetaObject::invokeMethod(command_worker_, [this, &player_handle]
-            {
-                player_handle = player_;
-            }, Qt::BlockingQueuedConnection);
+            lnplayer_t* player_handle = player_.load(std::memory_order_acquire);
 
             if (!player_handle)
                 return;
 
             const QByteArray path_utf8 = directory.toUtf8();
             status_label_->setText(QStringLiteral("正在扫描音乐目录..."));
-            QMetaObject::invokeMethod(library_worker_, [this, path_utf8, player_handle]
+            postLibrary([this, path_utf8, player_handle]
             {
                 int imported_count = 0;
                 const lnplayer_result_t result = lnplayer_library_scan_directory(
@@ -599,7 +594,7 @@ MainWindow::MainWindow(
                         status_label_->setText(QStringLiteral("音乐目录扫描失败"));
                     }
                 }, Qt::QueuedConnection);
-            }, Qt::QueuedConnection);
+            });
         });
     }
 
@@ -615,11 +610,11 @@ MainWindow::MainWindow(
         auto* stop_action = playback_menu->addAction(QStringLiteral("停止"));
         connect(stop_action, &QAction::triggered, this, [this]
         {
-            QMetaObject::invokeMethod(command_worker_, [this]
+            postCommand([this]
             {
                 if (player_)
                     lnplayer_stop(player_);
-            }, Qt::QueuedConnection);
+            });
         });
         playback_menu->addSeparator();
         auto* previous_action = playback_menu->addAction(QStringLiteral("上一项"));
@@ -886,11 +881,11 @@ MainWindow::MainWindow(
             QSettings settings(settings_file_path(), QSettings::IniFormat);
             settings.setValue(QStringLiteral("Video/Subtitle/Enabled"), enabled);
             settings.sync();
-            QMetaObject::invokeMethod(command_worker_, [this, enabled]
+            postCommand([this, enabled]
             {
                 if (player_)
                     lnplayer_set_subtitles_enabled(player_, enabled ? 1 : 0);
-            }, Qt::QueuedConnection);
+            });
             pending_video_frame_valid_ = false;
             requestVideoFrame();
             showOsd(enabled ? QStringLiteral("字幕已启用") : QStringLiteral("字幕已关闭"));
@@ -1388,11 +1383,11 @@ MainWindow::MainWindow(
                 showOsd(QStringLiteral("画面缩放 100%"));
             }
             else if (selected == stop)
-                QMetaObject::invokeMethod(command_worker_, [this]
+                postCommand([this]
                 {
                     if (player_)
                         lnplayer_stop(player_);
-                }, Qt::QueuedConnection);
+                });
             else if (selected == fullscreen)
             {
                 if (isFullScreen())
@@ -1415,11 +1410,11 @@ MainWindow::MainWindow(
             {
                 subtitles_enabled_ = subtitles_enabled->isChecked();
                 const bool enabled = subtitles_enabled_;
-                QMetaObject::invokeMethod(command_worker_, [this, enabled]
+                postCommand([this, enabled]
                 {
                     if (player_)
                         lnplayer_set_subtitles_enabled(player_, enabled ? 1 : 0);
-                }, Qt::QueuedConnection);
+                });
                 pending_video_frame_valid_ = false;
                 requestVideoFrame();
             }
@@ -1776,18 +1771,10 @@ MainWindow::MainWindow(
     }
     statusBar()->showMessage(QStringLiteral("正在初始化播放器"));
 
-    command_worker_->moveToThread(command_thread_);
-    command_thread_->start();
-    if (frame_worker_)
+    ui_io_thread_ = std::thread([this]
     {
-        frame_worker_->moveToThread(frame_thread_);
-        frame_thread_->start();
-    }
-    if (library_worker_)
-    {
-        library_worker_->moveToThread(library_thread_);
-        library_thread_->start();
-    }
+        ui_io_context_.run();
+    });
 
     const uint32_t initial_volume = static_cast<uint32_t>(volume_slider_->value());
     const float initial_playback_rate = playback_rate_;
@@ -1797,9 +1784,7 @@ MainWindow::MainWindow(
         ? video_surface_->native_device()
         : nullptr;
     video_device_identity_ = initial_video_device;
-    QMetaObject::invokeMethod(
-        command_worker_,
-        [this, initial_volume, initial_playback_rate, initial_subtitle_offset_ms, initial_subtitles_enabled, initial_video_device]
+    postCommand([this, initial_volume, initial_playback_rate, initial_subtitle_offset_ms, initial_subtitles_enabled, initial_video_device]
     {
         lnplayer_config_t config{};
         config.struct_size = sizeof(config);
@@ -1880,35 +1865,35 @@ MainWindow::MainWindow(
                 statusBar()->showMessage(QStringLiteral("Core 初始化失败"));
             }
         }, Qt::QueuedConnection);
-    }, Qt::QueuedConnection);
+    });
 
     connect(play_button_, &QPushButton::clicked, this, [this]
     {
         if (video_seek_pending_)
             return;
-        QMetaObject::invokeMethod(command_worker_, [this]
+        postCommand([this]
         {
             if (player_)
                 lnplayer_play(player_);
-        }, Qt::QueuedConnection);
+        });
     });
 
     connect(pause_button_, &QPushButton::clicked, this, [this]
     {
-        QMetaObject::invokeMethod(command_worker_, [this]
+        postCommand([this]
         {
             if (player_)
                 lnplayer_pause(player_);
-        }, Qt::QueuedConnection);
+        });
     });
 
     connect(stop_button_, &QPushButton::clicked, this, [this]
     {
-        QMetaObject::invokeMethod(command_worker_, [this]
+        postCommand([this]
         {
             if (player_)
                 lnplayer_stop(player_);
-        }, Qt::QueuedConnection);
+        });
     });
 
     volume_settings_timer_->setSingleShot(true);
@@ -1929,11 +1914,11 @@ MainWindow::MainWindow(
 
         showOsd(value == 0 ? QStringLiteral("静音")
             : QStringLiteral("音量 %1%").arg(value / 10));
-        QMetaObject::invokeMethod(command_worker_, [this, value]
+        postCommand([this, value]
         {
             if (player_)
                 lnplayer_set_volume(player_, static_cast<uint32_t>(value));
-        }, Qt::QueuedConnection);
+        });
     });
 
     connect(seek_slider_, &QSlider::sliderPressed, this, [this]
@@ -1960,7 +1945,7 @@ MainWindow::MainWindow(
         seek_slider_->setEnabled(false);
         video_timer_->start();
         const int64_t target = duration_ms_ * seek_slider_->value() / 1000;
-        QMetaObject::invokeMethod(command_worker_, [this, target]
+        postCommand([this, target]
         {
             uint64_t operation_id = 0;
             const lnplayer_result_t result = player_
@@ -1975,7 +1960,7 @@ MainWindow::MainWindow(
                     requestVideoFrame();
                 }, Qt::QueuedConnection);
             }
-        }, Qt::QueuedConnection);
+        });
     });
 
     snapshot_timer_->setInterval(250);
@@ -2001,7 +1986,7 @@ MainWindow::MainWindow(
         if (current_device != video_device_identity_)
         {
             video_device_identity_ = current_device;
-            QMetaObject::invokeMethod(command_worker_, [this, current_device]
+            postCommand([this, current_device]
             {
                 if (player_)
                 {
@@ -2014,7 +1999,7 @@ MainWindow::MainWindow(
                 {
                     static_cast<ID3D11Device*>(current_device)->Release();
                 }
-            }, Qt::QueuedConnection);
+            });
         }
         else if (current_device)
         {
@@ -2059,37 +2044,22 @@ MainWindow::~MainWindow()
     video_timer_->stop();
     device_timer_->stop();
 
-    if (frame_thread_ && frame_thread_->isRunning())
+    std::promise<void> io_barrier;
+    std::future<void> io_barrier_future = io_barrier.get_future();
+    asio::post(ui_io_context_, [&io_barrier]
     {
-        frame_thread_->quit();
-        frame_thread_->wait();
-    }
-    delete frame_worker_;
+        io_barrier.set_value();
+    });
+    io_barrier_future.wait();
+    ui_io_work_guard_.reset();
+    if (ui_io_thread_.joinable())
+        ui_io_thread_.join();
 
-    if (library_thread_ && library_thread_->isRunning())
-    {
-        QMetaObject::invokeMethod(library_worker_, [] {}, Qt::BlockingQueuedConnection);
-        library_thread_->quit();
-        library_thread_->wait();
-    }
-    delete library_worker_;
-
-    if (command_thread_->isRunning())
-    {
-        QMetaObject::invokeMethod(command_worker_, [this]
-        {
-            if (player_)
-            {
-                lnplayer_destroy(player_);
-                player_ = nullptr;
-            }
-        }, Qt::BlockingQueuedConnection);
-
-        command_thread_->quit();
-        command_thread_->wait();
-    }
-
-    delete command_worker_;
+    // The dispatcher has submitted every accepted task. Drain the shared pool
+    // before destroying the Player handle used by those tasks.
+    ui_thread_pool_.join();
+    if (lnplayer_t* player = player_.exchange(nullptr, std::memory_order_acq_rel))
+        lnplayer_destroy(player);
 }
 
 void MainWindow::showPlaybackInfo()
@@ -2489,7 +2459,7 @@ void MainWindow::schedulePlaylistMetadataProbe(const QString& path)
 
     playlist_probe_pending_.insert(path);
     const QByteArray path_utf8 = path.toUtf8();
-    QMetaObject::invokeMethod(library_worker_, [this, path, path_utf8]
+    postLibrary([this, path, path_utf8]
     {
         lnplayer_video_info_t info{};
         info.struct_size = sizeof(info);
@@ -2506,7 +2476,7 @@ void MainWindow::schedulePlaylistMetadataProbe(const QString& path)
             }
             updatePlaylistItemMetadata(path);
         }, Qt::QueuedConnection);
-    }, Qt::QueuedConnection);
+    });
 }
 
 void MainWindow::updatePlaylistItemMetadata(const QString& path)
@@ -2688,11 +2658,11 @@ void MainWindow::clearPlaylist()
     status_label_->setText(QStringLiteral("播放列表已清空"));
     statusBar()->showMessage(QStringLiteral("播放列表已清空"));
 
-    QMetaObject::invokeMethod(command_worker_, [this]
+    postCommand([this]
     {
         if (player_)
             lnplayer_close(player_);
-    }, Qt::QueuedConnection);
+    });
     saveVideoPlaylist();
 }
 
@@ -3317,11 +3287,11 @@ void MainWindow::openVideoSettings()
     settings.sync();
 
     setSubtitleOffset(subtitle_offset_ms_);
-    QMetaObject::invokeMethod(command_worker_, [this, enabled = subtitles_enabled_]
+    postCommand([this, enabled = subtitles_enabled_]
     {
         if (player_)
             lnplayer_set_subtitles_enabled(player_, enabled ? 1 : 0);
-    }, Qt::QueuedConnection);
+    });
     pending_video_frame_valid_ = false;
     requestVideoFrame();
     if (isFullScreen())
@@ -3548,7 +3518,7 @@ void MainWindow::openPlaylistIndex(int index)
     playlist_open_pending_ = true;
 
     const QByteArray source_utf8 = source.toUtf8();
-    QMetaObject::invokeMethod(command_worker_, [this, source_utf8]
+    postCommand([this, source_utf8]
     {
         if (!player_)
             return;
@@ -3567,7 +3537,7 @@ void MainWindow::openPlaylistIndex(int index)
                 status_label_->setText(QStringLiteral("媒体打开请求失败"));
             }, Qt::QueuedConnection);
         }
-    }, Qt::QueuedConnection);
+    });
 }
 
 void MainWindow::playPrevious()
@@ -3613,7 +3583,7 @@ void MainWindow::loadExternalSubtitlePath(const QString& path, bool remember)
 {
     const QByteArray path_utf8 = path.toUtf8();
     const QString media_path = current_media_path_;
-    QMetaObject::invokeMethod(command_worker_, [this, path, path_utf8, media_path, remember]
+    postCommand([this, path, path_utf8, media_path, remember]
     {
         const lnplayer_result_t result = player_
             ? lnplayer_set_external_subtitle(player_, path_utf8.constData())
@@ -3655,13 +3625,13 @@ void MainWindow::loadExternalSubtitlePath(const QString& path, bool remember)
             pending_video_frame_valid_ = false;
             requestVideoFrame();
         }, Qt::QueuedConnection);
-    }, Qt::QueuedConnection);
+    });
 }
 
 void MainWindow::selectSubtitleTrack(int stream_index)
 {
     const QString media_path = current_media_path_;
-    QMetaObject::invokeMethod(command_worker_, [this, stream_index, media_path]
+    postCommand([this, stream_index, media_path]
     {
         if (!player_)
             return;
@@ -3711,13 +3681,13 @@ void MainWindow::selectSubtitleTrack(int stream_index)
                 statusBar()->showMessage(QStringLiteral("内嵌字幕切换失败"));
             }
         }, Qt::QueuedConnection);
-    }, Qt::QueuedConnection);
+    });
 }
 
 void MainWindow::selectAudioTrack(int stream_index)
 {
     const QString media_path = current_media_path_;
-    QMetaObject::invokeMethod(command_worker_, [this, stream_index, media_path]
+    postCommand([this, stream_index, media_path]
     {
         if (!player_)
             return;
@@ -3763,7 +3733,7 @@ void MainWindow::selectAudioTrack(int stream_index)
                 statusBar()->showMessage(QStringLiteral("音轨切换失败"));
             }
         }, Qt::QueuedConnection);
-    }, Qt::QueuedConnection);
+    });
 }
 
 void MainWindow::setSubtitleOffset(int64_t offset_ms)
@@ -3774,7 +3744,7 @@ void MainWindow::setSubtitleOffset(int64_t offset_ms)
     settings.sync();
 
     const int64_t applied_offset = subtitle_offset_ms_;
-    QMetaObject::invokeMethod(command_worker_, [this, applied_offset]
+    postCommand([this, applied_offset]
     {
         if (player_)
             lnplayer_set_subtitle_offset(player_, applied_offset);
@@ -3784,7 +3754,7 @@ void MainWindow::setSubtitleOffset(int64_t offset_ms)
             requestVideoFrame();
             showOsd(QStringLiteral("字幕偏移：%1 ms").arg(applied_offset));
         }, Qt::QueuedConnection);
-    }, Qt::QueuedConnection);
+    });
 }
 
 QString MainWindow::subtitleAt(int64_t position_ms) const
@@ -3795,18 +3765,14 @@ QString MainWindow::subtitleAt(int64_t position_ms) const
 
 void MainWindow::refreshLibrary()
 {
-    lnplayer_t* player_handle = nullptr;
-    QMetaObject::invokeMethod(command_worker_, [this, &player_handle]
-    {
-        player_handle = player_;
-    }, Qt::BlockingQueuedConnection);
+    lnplayer_t* player_handle = player_.load(std::memory_order_acquire);
     if (!player_handle)
         return;
 
     const QByteArray query_utf8 = library_search_->text().toUtf8();
     library_list_->clear();
 
-    QMetaObject::invokeMethod(library_worker_, [this, player_handle, query_utf8]
+    postLibrary([this, player_handle, query_utf8]
     {
         struct SearchContext
         {
@@ -3839,17 +3805,17 @@ void MainWindow::refreshLibrary()
             if (result != LNPLAYER_RESULT_OK)
                 status_label_->setText(QStringLiteral("音乐库查询失败"));
         }, Qt::QueuedConnection);
-    }, Qt::QueuedConnection);
+    });
 }
 
 void MainWindow::requestVideoFrame()
 {
-    if (mode_ != PlayerMode::Video || !frame_worker_ || !has_video_ || video_frame_pending_ ||
+    if (mode_ != PlayerMode::Video || !has_video_ || video_frame_pending_ ||
         video_seek_pending_ || video_end_of_stream_)
         return;
 
     video_frame_pending_ = true;
-    QMetaObject::invokeMethod(frame_worker_, [this]
+    postFrame([this]
     {
         if (!player_)
         {
@@ -4035,7 +4001,7 @@ void MainWindow::requestVideoFrame()
                 requestVideoFrame();
             }
         }, Qt::QueuedConnection);
-    }, Qt::QueuedConnection);
+    });
 }
 
 void MainWindow::presentPendingVideoFrame()
@@ -4160,8 +4126,7 @@ void MainWindow::presentPendingVideoFrame()
         pending_hardware_texture_ = nullptr;
         pending_video_frame_valid_ = false;
 
-        QMetaObject::invokeMethod(frame_worker_,
-            [this, owner = std::move(owner), texture, array_slice, format,
+        postFrame([this, owner = std::move(owner), texture, array_slice, format,
              width, height, generation, pts_ms, subtitle,
              embedded_subtitle_bitmap, render_subtitles,
              ycbcr_matrix, ycbcr_full_range, overlay = std::move(overlay)]
@@ -4257,7 +4222,7 @@ void MainWindow::presentPendingVideoFrame()
                     }, Qt::QueuedConnection);
                 }
             }
-        }, Qt::QueuedConnection);
+        });
         return;
     }
 
@@ -4327,7 +4292,7 @@ void MainWindow::presentPendingVideoFrame()
     last_video_frame_ = frame;
     if (video_surface_->has_renderer())
     {
-        QMetaObject::invokeMethod(command_worker_, [this, frame]
+        postCommand([this, frame]
         {
             if (video_surface_ && !video_surface_->present_frame_threadsafe(frame))
             {
@@ -4337,7 +4302,7 @@ void MainWindow::presentPendingVideoFrame()
                         video_surface_->set_frame(frame);
                 }, Qt::QueuedConnection);
             }
-        }, Qt::QueuedConnection);
+        });
     }
     else
     {
@@ -4365,8 +4330,7 @@ void MainWindow::togglePlayback()
         video_timer_->start();
     }
 
-    QMetaObject::invokeMethod(command_worker_,
-        [this, should_pause, resume_from_history, resume_position]
+    postCommand([this, should_pause, resume_from_history, resume_position]
     {
         if (!player_)
         {
@@ -4398,7 +4362,7 @@ void MainWindow::togglePlayback()
             }
         }
         lnplayer_play(player_);
-    }, Qt::QueuedConnection);
+    });
 }
 
 void MainWindow::seekRelative(int64_t offset_ms)
@@ -4428,7 +4392,7 @@ void MainWindow::seekToPosition(int64_t position_ms, const QString& message)
     const int64_t target = duration_ms_ > 0
         ? std::clamp<int64_t>(position_ms, 0, duration_ms_)
         : std::max<int64_t>(0, position_ms);
-    QMetaObject::invokeMethod(command_worker_, [this, target]
+    postCommand([this, target]
     {
         uint64_t operation_id = 0;
         const lnplayer_result_t result = player_
@@ -4443,7 +4407,7 @@ void MainWindow::seekToPosition(int64_t position_ms, const QString& message)
                 requestVideoFrame();
             }, Qt::QueuedConnection);
         }
-    }, Qt::QueuedConnection);
+    });
 }
 
 void MainWindow::takeScreenshot()
@@ -4526,11 +4490,11 @@ void MainWindow::setPlaybackRate(float rate)
     settings.setValue(QStringLiteral("Video/PlaybackRate"), rate);
     settings.sync();
 
-    QMetaObject::invokeMethod(command_worker_, [this, rate]
+    postCommand([this, rate]
     {
         if (player_)
             lnplayer_set_playback_rate(player_, rate);
-    }, Qt::QueuedConnection);
+    });
 }
 
 void MainWindow::stepVideoFrame(bool backwards)
@@ -4540,11 +4504,11 @@ void MainWindow::stepVideoFrame(bool backwards)
 
     if (is_playing_)
     {
-        QMetaObject::invokeMethod(command_worker_, [this]
+        postCommand([this]
         {
             if (player_)
                 lnplayer_pause(player_);
-        }, Qt::QueuedConnection);
+        });
         is_playing_ = false;
         video_timer_->stop();
     }
@@ -4672,8 +4636,7 @@ void MainWindow::presentHistoricalVideoFrame()
                 subtitle);
         }
 
-        QMetaObject::invokeMethod(command_worker_,
-            [this, entry, overlay = std::move(overlay)]() mutable
+        postCommand([this, entry, overlay = std::move(overlay)]() mutable
         {
             lnplayer_snapshot_t snapshot{};
             snapshot.struct_size = sizeof(snapshot);
@@ -4696,7 +4659,7 @@ void MainWindow::presentHistoricalVideoFrame()
                     status_label_->setText(QStringLiteral("无法重新呈现历史硬件视频帧"));
                 }, Qt::QueuedConnection);
             }
-        }, Qt::QueuedConnection);
+        });
         return;
     }
 
@@ -4755,7 +4718,7 @@ void MainWindow::handleCoreEvent(
         if (result == LNPLAYER_RESULT_OK)
         {
             video_info_ = {};
-            QMetaObject::invokeMethod(command_worker_, [this]
+            postCommand([this]
             {
                 lnplayer_video_info_t info{};
                 info.struct_size = sizeof(info);
@@ -4769,7 +4732,7 @@ void MainWindow::handleCoreEvent(
                         video_info_ = info;
                     }, Qt::QueuedConnection);
                 }
-            }, Qt::QueuedConnection);
+            });
             status_label_->setText(QStringLiteral("媒体已打开"));
             statusBar()->showMessage(QStringLiteral("就绪"));
             seek_slider_->setEnabled(duration_ms > 0);
@@ -4785,7 +4748,7 @@ void MainWindow::handleCoreEvent(
                 {
                     video_seek_pending_ = true;
                     seek_slider_->setEnabled(false);
-                    QMetaObject::invokeMethod(command_worker_, [this, restore_position]
+                    postCommand([this, restore_position]
                     {
                         uint64_t operation_id = 0;
                         const lnplayer_result_t seek_result = player_
@@ -4799,7 +4762,7 @@ void MainWindow::handleCoreEvent(
                                 statusBar()->showMessage(QStringLiteral("恢复播放位置失败"));
                             }, Qt::QueuedConnection);
                         }
-                    }, Qt::QueuedConnection);
+                    });
                 }
             }
             if (playlist_index_ >= 0 && playlist_index_ < playlist_.size())
@@ -4939,7 +4902,7 @@ void MainWindow::handleCoreEvent(
 
 void MainWindow::refreshSnapshot()
 {
-    QMetaObject::invokeMethod(command_worker_, [this]
+    postCommand([this]
     {
         if (!player_)
             return;
@@ -4977,7 +4940,7 @@ void MainWindow::refreshSnapshot()
                 !pending_video_frame_valid_ && !video_frame_pending_)
                 requestVideoFrame();
         }, Qt::QueuedConnection);
-    }, Qt::QueuedConnection);
+    });
 }
 
 void MainWindow::updatePlaybackState(
@@ -5000,7 +4963,7 @@ void MainWindow::updatePlaybackState(
     {
         video_seek_pending_ = true;
         const int64_t loop_target = loop_a_ms_;
-        QMetaObject::invokeMethod(command_worker_, [this, loop_target]
+        postCommand([this, loop_target]
         {
             uint64_t operation_id = 0;
             const lnplayer_result_t result = player_
@@ -5016,7 +4979,7 @@ void MainWindow::updatePlaybackState(
                     statusBar()->showMessage(QStringLiteral("A-B 循环定位失败，已关闭区间循环"));
                 }, Qt::QueuedConnection);
             }
-        }, Qt::QueuedConnection);
+        });
     }
 
     const bool was_playing = is_playing_;
