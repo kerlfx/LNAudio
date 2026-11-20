@@ -133,6 +133,7 @@ public:
         playback_failed_.store(false, std::memory_order_relaxed);
         audio_draining_ = false;
         audio_packet_pending_ = false;
+        resampler_drained_ = false;
         return success();
     }
 
@@ -252,6 +253,7 @@ public:
             av_packet_unref(audio_packet_);
         audio_packet_pending_ = false;
         audio_draining_ = false;
+        resampler_drained_ = false;
         if (resampler_)
         {
             swr_close(resampler_);
@@ -344,6 +346,7 @@ public:
         playing_ = false;
         audio_draining_ = false;
         audio_packet_pending_ = false;
+        resampler_drained_ = false;
         return success();
     }
 
@@ -394,6 +397,38 @@ public:
 
             if (result == AVERROR_EOF)
             {
+                if (resampler_ && !resampler_drained_)
+                {
+                    const int capacity = static_cast<int>(
+                        swr_get_delay(resampler_, output_sample_rate_));
+                    if (capacity > 0)
+                    {
+                        output.samples.resize(
+                            static_cast<size_t>(capacity) * kOutputChannels);
+                        uint8_t* destination[] = {
+                            reinterpret_cast<uint8_t*>(output.samples.data())
+                        };
+                        const int converted = swr_convert(
+                            resampler_, destination, capacity, nullptr, 0);
+                        if (converted < 0)
+                        {
+                            output.samples.clear();
+                            return failure(
+                                "Unable to drain audio resampler: " + ffmpeg_error(converted));
+                        }
+                        output.samples.resize(
+                            static_cast<size_t>(converted) * kOutputChannels);
+                        if (converted > 0)
+                        {
+                            output.sample_rate = output_sample_rate_;
+                            output.channels = kOutputChannels;
+                            output.pts_ms = position_ms_.load(std::memory_order_relaxed);
+                            return success();
+                        }
+                    }
+                    resampler_drained_ = true;
+                }
+
                 end_of_stream = true;
                 return success();
             }
@@ -692,6 +727,7 @@ private:
     std::atomic<bool> playing_{false};
     bool audio_draining_ = false;
     bool audio_packet_pending_ = false;
+    bool resampler_drained_ = false;
 };
 
 }
