@@ -306,6 +306,20 @@ Player 销毁是生命周期屏障，不是普通的异步播放命令。销毁�
 
 当前实现状态：ABI v1 头文件、唯一实例生命周期、Playback Controller 命令入口、异步 open/seek 完成事件、同步完成型接口等待、线程安全一致快照、音量设置和线程局部错误读取已建立。Controller 通过独立 `io_context` 线程协调命令；同步接口检测并拒绝在事件线程自等待。当前尚未接入 FFmpeg/音频输出后端：open/seek 会被接受并以 `NOT_IMPLEMENTED` 完成事件结束；play/pause 在无有效播放状态时返回 `INVALID_STATE`，需要媒体后端的操作不会伪报成功。stop/close 可清理空闲或打开失败后的逻辑状态。当前 Controller 的媒体工作仍是后端接入前的控制面骨架，尚未向共享 `thread_pool` 分发实际解码或 I/O 任务。
 
+### 4.7 MediaBackend 与 PlaybackSession
+
+Core 内部媒体会话采用两层结构：
+
+- `MediaBackend` 是媒体处理后端接口，负责媒体源打开、播放控制、定位、停止和关闭。接口只暴露 Core 自己定义的 `MediaInfo` 与结果类型，不暴露 FFmpeg 类型。
+- `PlaybackSession` 管理一次媒体会话及其后端实例，维护会话状态、媒体代次、时长和音视频流存在标记。
+- `PlaybackSession` 不负责线程调度。Controller 将其操作提交到共享线程池，并在任务完成后把结果投递回 `io_context`。
+- 同一个 Session 对同一个 Backend 的调用必须串行化；不能并发操作同一个 FFmpeg `AVFormatContext` 或解码器上下文。不同媒体阶段可在明确的资源边界上并行。
+- 打开新媒体时递增 generation。旧 generation 的迟到结果不得更新当前 Player 状态。
+- `MediaBackend` 的同步接口允许后端在调用线程执行阻塞式 FFmpeg API；因此调用必须发生在线程池，而不是 `io_context` worker 或 UI 线程。
+- `MediaBackendFactory` 用于创建具体后端。FFmpeg 版本、依赖获取和链接方式确定后，再提供 FFmpeg 实现；平台音频/视频输出不属于 MediaBackend 的职责。
+
+当前代码已建立 `core/media_backend.h`、`core/playback_session.h/.cpp` 的接口和会话状态管理。具体 FFmpeg 后端及 Controller 到 Session 的任务调度接入仍待实现。
+
 ## 5. Windows 运行模型
 
 ### 5.1 进程与窗口
