@@ -267,6 +267,11 @@ public:
         return session_.subtitle_tracks();
     }
 
+    std::vector<lnplayer::MediaChapterInfo> chapters() const
+    {
+        return session_.chapters();
+    }
+
     lnplayer_result_t set_external_subtitle(const std::string& path)
     {
         return invoke_sync([this, path]
@@ -1405,6 +1410,39 @@ lnplayer_result_t lnplayer_enumerate_subtitle_tracks(
     catch (...)
     {
         return set_error(LNPLAYER_RESULT_INTERNAL_ERROR, "Unable to enumerate embedded subtitle tracks.");
+    }
+}
+
+lnplayer_result_t lnplayer_enumerate_chapters(
+    lnplayer_t* player,
+    lnplayer_chapter_callback_t callback,
+    void* user_data)
+{
+    PlayerAccess access(player);
+    if (!access)
+        return set_error(LNPLAYER_RESULT_INVALID_HANDLE, "Invalid Player handle.");
+    if (!callback)
+        return set_error(LNPLAYER_RESULT_INVALID_ARGUMENT, "Chapter callback is null.");
+
+    try
+    {
+        const auto chapters = player->controller->chapters();
+        for (const auto& chapter : chapters)
+        {
+            const lnplayer_chapter_info_t item{
+                sizeof(lnplayer_chapter_info_t),
+                chapter.index,
+                chapter.start_ms,
+                chapter.end_ms,
+                chapter.title.c_str()
+            };
+            invoke_callback(callback, &item, user_data);
+        }
+        return finish_result(LNPLAYER_RESULT_OK);
+    }
+    catch (...)
+    {
+        return set_error(LNPLAYER_RESULT_INTERNAL_ERROR, "Unable to enumerate media chapters.");
     }
 }
 
