@@ -88,27 +88,31 @@ namespace
 
 QString application_data_directory()
 {
-    const QString application_directory = QCoreApplication::applicationDirPath();
-    const QString portable_directory = QDir(application_directory).filePath(
-        QStringLiteral("Data"));
-    if (QDir().mkpath(portable_directory))
+    static const QString directory = []
     {
-        QFile write_probe(QDir(portable_directory).filePath(
-            QStringLiteral(".write_test")));
-        if (write_probe.open(QIODevice::WriteOnly | QIODevice::Truncate))
+        const QString application_directory = QCoreApplication::applicationDirPath();
+        const QString portable_directory = QDir(application_directory).filePath(
+            QStringLiteral("Data"));
+        if (QDir().mkpath(portable_directory))
         {
-            write_probe.close();
-            QFile::remove(write_probe.fileName());
-            return portable_directory;
+            QFile write_probe(QDir(portable_directory).filePath(
+                QStringLiteral(".write_test")));
+            if (write_probe.open(QIODevice::WriteOnly | QIODevice::Truncate))
+            {
+                write_probe.close();
+                QFile::remove(write_probe.fileName());
+                return portable_directory;
+            }
         }
-    }
 
-    const QString local_directory = QStandardPaths::writableLocation(
-        QStandardPaths::AppLocalDataLocation);
-    const QString fallback_directory = QDir(local_directory).filePath(
-        QStringLiteral("Data"));
-    QDir().mkpath(fallback_directory);
-    return fallback_directory;
+        const QString local_directory = QStandardPaths::writableLocation(
+            QStandardPaths::AppLocalDataLocation);
+        const QString fallback_directory = QDir(local_directory).filePath(
+            QStringLiteral("Data"));
+        QDir().mkpath(fallback_directory);
+        return fallback_directory;
+    }();
+    return directory;
 }
 
 QString settings_file_path()
