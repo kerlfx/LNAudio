@@ -1772,25 +1772,6 @@ void MainWindow::presentPendingVideoFrame()
             QPainter bitmap_painter(&overlay);
             bitmap_painter.drawImage(target, pending_embedded_subtitle_bitmap_);
         }
-        if (subtitles_enabled_ && !entry.embedded_subtitle_bitmap.isNull())
-        {
-            const float aspect = static_cast<float>(entry.embedded_subtitle_bitmap.width()) /
-                entry.embedded_subtitle_bitmap.height();
-            int target_width = overlay.width();
-            int target_height = static_cast<int>(target_width / aspect);
-            if (target_height > overlay.height())
-            {
-                target_height = overlay.height();
-                target_width = static_cast<int>(target_height * aspect);
-            }
-            const QRect target(
-                (overlay.width() - target_width) / 2,
-                (overlay.height() - target_height) / 2,
-                target_width,
-                target_height);
-            QPainter bitmap_painter(&overlay);
-            bitmap_painter.drawImage(target, entry.embedded_subtitle_bitmap);
-        }
         if (!subtitle.isEmpty())
         {
             QPainter painter(&overlay);
@@ -2141,10 +2122,11 @@ void MainWindow::presentHistoricalVideoFrame()
         return;
 
     const VideoFrameHistoryEntry entry = video_frame_history_[video_frame_history_index_];
+    QImage frame = entry.image;
     if (subtitles_enabled_ && !entry.embedded_subtitle_bitmap.isNull() && !entry.hardware_owner)
     {
-        QPainter bitmap_painter(&entry.image);
-        bitmap_painter.drawImage(entry.image.rect(), entry.embedded_subtitle_bitmap);
+        QPainter bitmap_painter(&frame);
+        bitmap_painter.drawImage(frame.rect(), entry.embedded_subtitle_bitmap);
     }
     QString subtitle = subtitleAt(entry.pts_ms);
     if (subtitles_enabled_ && !entry.embedded_subtitle.isEmpty())
@@ -2157,6 +2139,25 @@ void MainWindow::presentHistoricalVideoFrame()
     {
         QImage overlay(video_surface_->size(), QImage::Format_ARGB32);
         overlay.fill(Qt::transparent);
+        if (subtitles_enabled_ && !entry.embedded_subtitle_bitmap.isNull())
+        {
+            const float aspect = static_cast<float>(entry.embedded_subtitle_bitmap.width()) /
+                entry.embedded_subtitle_bitmap.height();
+            int target_width = overlay.width();
+            int target_height = static_cast<int>(target_width / aspect);
+            if (target_height > overlay.height())
+            {
+                target_height = overlay.height();
+                target_width = static_cast<int>(target_height * aspect);
+            }
+            const QRect target(
+                (overlay.width() - target_width) / 2,
+                (overlay.height() - target_height) / 2,
+                target_width,
+                target_height);
+            QPainter bitmap_painter(&overlay);
+            bitmap_painter.drawImage(target, entry.embedded_subtitle_bitmap);
+        }
         if (!subtitle.isEmpty())
         {
             QPainter painter(&overlay);
@@ -2215,7 +2216,6 @@ void MainWindow::presentHistoricalVideoFrame()
         return;
     }
 
-    QImage frame = entry.image;
     if (!subtitle.isEmpty())
     {
         QPainter painter(&frame);
