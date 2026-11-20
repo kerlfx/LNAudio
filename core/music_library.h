@@ -36,6 +36,7 @@ public:
 
     bool add_directory(const std::string& path, bool recursive, std::string& error);
     bool remove_directory(const std::string& path, std::string& error);
+    bool scan_directory(const std::string& path, bool recursive, int& imported_count, std::string& error);
 
     bool upsert_track(
         const std::string& path,
