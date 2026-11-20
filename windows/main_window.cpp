@@ -417,6 +417,8 @@ MainWindow::MainWindow(
             settings.value(QStringLiteral("Video/Subtitle/VerticalPosition"), 80).toInt(), 60, 80);
         middle_click_action_ = std::clamp(
             settings.value(QStringLiteral("Video/Mouse/MiddleClickAction"), 1).toInt(), 0, 2);
+        double_click_action_ = std::clamp(
+            settings.value(QStringLiteral("Video/Mouse/DoubleClickAction"), 0).toInt(), 0, 2);
         wheel_action_ = std::clamp(
             settings.value(QStringLiteral("Video/Mouse/WheelAction"), 0).toInt(), 0, 2);
         mouse_gestures_enabled_ = settings.value(
@@ -1164,10 +1166,15 @@ MainWindow::MainWindow(
         video_surface_->set_interaction_callbacks(
             [this]
             {
-                if (isFullScreen())
-                    showNormal();
-                else
-                    showFullScreen();
+                if (double_click_action_ == 1)
+                    togglePlayback();
+                else if (double_click_action_ == 0)
+                {
+                    if (isFullScreen())
+                        showNormal();
+                    else
+                        showFullScreen();
+                }
             },
             [this](int direction, bool control)
             {
@@ -2898,6 +2905,11 @@ void MainWindow::openVideoSettings()
     middle_click->addItem(QStringLiteral("播放/暂停"), 1);
     middle_click->addItem(QStringLiteral("切换全屏"), 2);
     middle_click->setCurrentIndex(middle_click_action_);
+    auto* double_click = new QComboBox(interface_page);
+    double_click->addItem(QStringLiteral("切换全屏"), 0);
+    double_click->addItem(QStringLiteral("播放/暂停"), 1);
+    double_click->addItem(QStringLiteral("无动作"), 2);
+    double_click->setCurrentIndex(double_click_action_);
     auto* mouse_gestures = new QCheckBox(
         QStringLiteral("启用右键拖动手势（左/右：快退/快进，上/下：音量）"), interface_page);
     mouse_gestures->setChecked(mouse_gestures_enabled_);
@@ -2912,6 +2924,7 @@ void MainWindow::openVideoSettings()
     interface_form->addRow(show_playlist);
     interface_form->addRow(always_on_top);
     interface_form->addRow(QStringLiteral("画面中键操作"), middle_click);
+    interface_form->addRow(QStringLiteral("画面双击操作"), double_click);
     interface_form->addRow(QStringLiteral("鼠标滚轮操作"), wheel_action);
     interface_form->addRow(mouse_gestures);
     add_settings_page(QStringLiteral("界面"), interface_page);
@@ -3126,6 +3139,7 @@ void MainWindow::openVideoSettings()
         show_playlist->setChecked(true);
         always_on_top->setChecked(false);
         middle_click->setCurrentIndex(1);
+        double_click->setCurrentIndex(0);
         wheel_action->setCurrentIndex(0);
         mouse_gestures->setChecked(false);
         aspect->setCurrentIndex(0);
@@ -3201,6 +3215,7 @@ void MainWindow::openVideoSettings()
     playlist_panel_visible_ = show_playlist->isChecked();
     always_on_top_ = always_on_top->isChecked();
     middle_click_action_ = middle_click->currentData().toInt();
+    double_click_action_ = double_click->currentData().toInt();
     mouse_gestures_enabled_ = mouse_gestures->isChecked();
     if (video_surface_)
         video_surface_->set_gesture_enabled(mouse_gestures_enabled_);
@@ -3278,6 +3293,7 @@ void MainWindow::openVideoSettings()
     }
     settings.setValue(QStringLiteral("Video/UI/PlaylistVisible"), playlist_panel_visible_);
     settings.setValue(QStringLiteral("Video/Mouse/MiddleClickAction"), middle_click_action_);
+    settings.setValue(QStringLiteral("Video/Mouse/DoubleClickAction"), double_click_action_);
     settings.setValue(QStringLiteral("Video/Mouse/WheelAction"), wheel_action_);
     settings.setValue(QStringLiteral("Video/Mouse/RightDragGestures"), mouse_gestures_enabled_);
     settings.setValue(QStringLiteral("Video/Display/AspectRatio"), video_aspect_ratio_override_);
