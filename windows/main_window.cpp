@@ -358,6 +358,8 @@ MainWindow::MainWindow(
         connect(video_surface_, &QWidget::customContextMenuRequested, this, [this](const QPoint& point)
         {
             QMenu menu(this);
+            menu.setMouseTracking(true);
+            menu.installEventFilter(this);
             QAction* play_pause = menu.addAction(is_playing_
                 ? QStringLiteral("暂停")
                 : QStringLiteral("播放"));
@@ -1277,8 +1279,15 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event)
 {
     if (isFullScreen())
     {
+        QWidget* watched_widget = qobject_cast<QWidget*>(watched);
+        bool is_menu_widget = qobject_cast<QMenu*>(watched) != nullptr;
+        for (QWidget* parent = watched_widget ? watched_widget->parentWidget() : nullptr;
+            parent && !is_menu_widget; parent = parent->parentWidget())
+            is_menu_widget = qobject_cast<QMenu*>(parent) != nullptr;
         const bool is_control_widget = watched == control_panel_ ||
-            (control_panel_ && control_panel_->isAncestorOf(qobject_cast<QWidget*>(watched)));
+            (control_panel_ && watched_widget && control_panel_->isAncestorOf(watched_widget)) ||
+            watched == menuBar() || (menuBar() && watched_widget && menuBar()->isAncestorOf(watched_widget)) ||
+            is_menu_widget;
         if (watched == video_surface_ && event->type() == QEvent::Resize && osd_label_ && osd_label_->isVisible())
         {
             osd_label_->adjustSize();
@@ -1286,7 +1295,16 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event)
                 (video_surface_->width() - osd_label_->width()) / 2,
                 (video_surface_->height() - osd_label_->height()) / 2);
         }
-        if (event->type() == QEvent::MouseMove)
+        if (event->type() == QEvent::Show && is_menu_widget)
+        {
+            fullscreen_hide_timer_->stop();
+        }
+        else if (event->type() == QEvent::Hide && is_menu_widget)
+        {
+            if (fullscreen_hide_delay_ms_ > 0)
+                fullscreen_hide_timer_->start(fullscreen_hide_delay_ms_);
+        }
+        else if (event->type() == QEvent::MouseMove)
         {
             if (is_control_widget)
             {
