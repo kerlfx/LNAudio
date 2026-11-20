@@ -9,6 +9,7 @@
 
 #include <QMouseEvent>
 #include <QContextMenuEvent>
+#include <cstdlib>
 #include <QPainter>
 #include <QPaintEvent>
 #include <QResizeEvent>
