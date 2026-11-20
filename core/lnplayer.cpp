@@ -730,10 +730,21 @@ lnplayer_result_t lnplayer_read_video_frame(
 {
     if (!is_current_player(player))
         return set_error(LNPLAYER_RESULT_INVALID_HANDLE, "Invalid Player handle.");
-    if (!end_of_stream)
-        return set_error(LNPLAYER_RESULT_INVALID_ARGUMENT, "End-of-stream output is null.");
+    if (!callback || !end_of_stream)
+        return set_error(LNPLAYER_RESULT_INVALID_ARGUMENT, "Video frame callback or end-of-stream output is null.");
 
-    return player->controller.read_video_frame(callback, user_data, end_of_stream);
+    try
+    {
+        const lnplayer_result_t result =
+            player->controller->read_video_frame(callback, user_data, end_of_stream);
+        if (result == LNPLAYER_RESULT_OK)
+            g_last_error.clear();
+        return result;
+    }
+    catch (...)
+    {
+        return set_error(LNPLAYER_RESULT_INTERNAL_ERROR, "Unexpected error while reading a video frame.");
+    }
 }
 
 lnplayer_result_t lnplayer_get_snapshot(
