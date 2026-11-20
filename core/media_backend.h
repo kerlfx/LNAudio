@@ -62,6 +62,11 @@ struct VideoFrame
     int64_t pts_ms = 0;
     uint64_t generation = 0;
     float display_aspect_ratio = 0.0f;
+    std::string subtitle_text;
+    std::vector<uint8_t> subtitle_bgra;
+    int subtitle_width = 0;
+    int subtitle_height = 0;
+    int subtitle_stride = 0;
 #ifdef _WIN32
     void* d3d11_texture = nullptr;
     uint32_t d3d11_array_slice = 0;
