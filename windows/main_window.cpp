@@ -24,6 +24,7 @@
 #include <QListWidgetItem>
 #include <QMenuBar>
 #include <QMenu>
+#include <QMouseEvent>
 #include <QShortcut>
 #include <QKeySequence>
 #include <QMetaObject>
@@ -39,6 +40,7 @@
 #include <QUrl>
 #include <QVBoxLayout>
 #include <QWidget>
+#include <QWheelEvent>
 
 class VideoSurface final : public QWidget
 {
@@ -51,16 +53,23 @@ public:
     void set_stretch(bool enabled);
     void set_aspect_ratio(float ratio);
     bool present_frame_threadsafe(const QImage& frame);
+    void set_interaction_callbacks(
+        std::function<void()> double_click,
+        std::function<void(int)> wheel);
 
 protected:
     void paintEvent(QPaintEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
+    void mouseDoubleClickEvent(QMouseEvent* event) override;
+    void wheelEvent(QWheelEvent* event) override;
 
 private:
     QImage frame_;
     lnplayer::windows::D3D11VideoRenderer* renderer_ = nullptr;
     bool stretch_ = false;
     float aspect_ratio_ = 0.0f;
+    std::function<void()> double_click_callback_;
+    std::function<void(int)> wheel_callback_;
 };
 
 VideoSurface::VideoSurface(QWidget* parent)
@@ -137,6 +146,28 @@ bool VideoSurface::present_frame_threadsafe(const QImage& frame)
         frame.width(),
         frame.height(),
         frame.bytesPerLine());
+}
+
+void VideoSurface::set_interaction_callbacks(
+    std::function<void()> double_click,
+    std::function<void(int)> wheel)
+{
+    double_click_callback_ = std::move(double_click);
+    wheel_callback_ = std::move(wheel);
+}
+
+void VideoSurface::mouseDoubleClickEvent(QMouseEvent* event)
+{
+    if (event->button() == Qt::LeftButton && double_click_callback_)
+        double_click_callback_();
+    QWidget::mouseDoubleClickEvent(event);
+}
+
+void VideoSurface::wheelEvent(QWheelEvent* event)
+{
+    if (wheel_callback_ && event->angleDelta().y() != 0)
+        wheel_callback_(event->angleDelta().y() > 0 ? 1 : -1);
+    event->accept();
 }
 
 void VideoSurface::paintEvent(QPaintEvent* event)
@@ -275,6 +306,19 @@ MainWindow::MainWindow(PlayerMode mode, const QString& initial_media, QWidget* p
     if (mode_ == PlayerMode::Video)
     {
         video_surface_ = new VideoSurface(content);
+        video_surface_->set_interaction_callbacks(
+            [this]
+            {
+                if (isFullScreen())
+                    showNormal();
+                else
+                    showFullScreen();
+            },
+            [this](int direction)
+            {
+                volume_slider_->setValue(std::clamp(
+                    volume_slider_->value() + direction * 50, 0, 1000));
+            });
         video_surface_->setContextMenuPolicy(Qt::CustomContextMenu);
         connect(video_surface_, &QWidget::customContextMenuRequested, this, [this](const QPoint& point)
         {
