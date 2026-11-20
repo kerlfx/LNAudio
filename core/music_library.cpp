@@ -533,6 +533,13 @@ bool MusicLibrary::upsert_track(
         goto rollback;
     }
     sqlite3_finalize(statement);
+    statement = nullptr;
+
+    if (!execute(
+        "DELETE FROM tracks WHERE NOT EXISTS "
+        "(SELECT 1 FROM file_locations WHERE file_locations.track_id=tracks.id);",
+        error))
+        goto rollback;
 
     if (execute("COMMIT;", error))
         return true;
@@ -557,34 +564,50 @@ bool MusicLibrary::record_playback(
         return false;
     }
 
+    if (!execute("BEGIN IMMEDIATE;", error))
+        return false;
+
     sqlite3_stmt* statement = nullptr;
     if (!prepare(database_,
         "INSERT INTO playback_history(track_id, position_ms, completed) VALUES(?, ?, ?);",
         &statement, error))
-        return false;
+        goto rollback;
 
     sqlite3_bind_int64(statement, 1, track_id);
     sqlite3_bind_int64(statement, 2, position_ms);
     sqlite3_bind_int(statement, 3, completed ? 1 : 0);
-    bool success = sqlite3_step(statement) == SQLITE_DONE;
-    sqlite3_finalize(statement);
-    if (!success)
+    if (sqlite3_step(statement) != SQLITE_DONE)
     {
         error = sqlite3_errmsg(database_);
-        return false;
+        sqlite3_finalize(statement);
+        statement = nullptr;
+        goto rollback;
     }
+    sqlite3_finalize(statement);
+    statement = nullptr;
 
     if (!prepare(database_,
         "UPDATE tracks SET play_count=play_count+1, last_played_at=unixepoch(), updated_at=unixepoch() WHERE id=?;",
         &statement, error))
-        return false;
+        goto rollback;
 
     sqlite3_bind_int64(statement, 1, track_id);
-    success = sqlite3_step(statement) == SQLITE_DONE;
-    if (!success)
+    if (sqlite3_step(statement) != SQLITE_DONE)
+    {
         error = sqlite3_errmsg(database_);
+        sqlite3_finalize(statement);
+        statement = nullptr;
+        goto rollback;
+    }
     sqlite3_finalize(statement);
-    return success;
+
+    return execute("COMMIT;", error);
+
+rollback:
+    if (statement)
+        sqlite3_finalize(statement);
+    sqlite3_exec(database_, "ROLLBACK;", nullptr, nullptr, nullptr);
+    return false;
 }
 
 std::vector<LibraryTrack> MusicLibrary::search_tracks(
