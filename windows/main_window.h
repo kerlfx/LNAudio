@@ -2,6 +2,8 @@
 #define LNPLAYER_MAIN_WINDOW_H
 
 #include <QMainWindow>
+#include <QList>
+#include <QUrl>
 
 class QLabel;
 class QWidget;
