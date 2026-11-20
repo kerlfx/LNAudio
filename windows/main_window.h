@@ -24,6 +24,7 @@ class QLineEdit;
 class QListWidget;
 class QListWidgetItem;
 class QObject;
+class QEvent;
 class QPushButton;
 class QSlider;
 class QShortcut;
