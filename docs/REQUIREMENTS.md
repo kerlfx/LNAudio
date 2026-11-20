@@ -45,24 +45,23 @@ Windows 端同时提供音频和视频播放界面，两套 UI 属于同一个 L
 - Android JNI 仅承担 Kotlin 与 Native 接口之间的桥接，不承载播放器业务逻辑；JNI 桥接与 Core 保持独立。
 - 暂不为了模块边界强制拆分多个动态库。
 
+
 ### 3.3 平台职责
 
-- Core 对外 C ABI 采用同步接口：调用方在函数返回时取得该操作的最终结果，不暴露 Future、Promise、异步操作句柄或请求完成回调。
-- Core 内部采用异步执行：每个 Runtime 使用一个 `boost::asio::io_context` 作为所有 C ABI 请求和内部任务的统一协调入口，并使用一套共享 `boost::asio::thread_pool` 执行实际业务任务。
-- C ABI 调用线程提交请求后等待结果；请求经 `io_context` 分发到共享线程池，任务完成后结果返回 `io_context`，再唤醒原调用线程。等待不得发生在 `io_context` worker 或共享线程池 worker 中。
-- 请求完成结果通过原 C ABI 函数的返回值/输出参数返回；播放结束、状态变化和错误等独立主动事件仍通过事件回调通知。视频帧交付保持独立实时数据通道。
-- 所有 C ABI 请求必须先进入 `io_context`，不得绕过它直接提交共享线程池。
-
-- Windows 使用 Qt 6 Widgets 构建桌面界面，通过 Core 对外接口调用播放器功能。
-- Android 使用 Kotlin 构建原生界面，通过 JNI 桥接调用 Core 对外接口。
-- UI 交互采用异步任务提交模型；Qt GUI 主线程和 Android Main Thread 不得直接执行可能长时间等待的同步 C ABI 调用。
-- Windows UI 使用 UI 侧 Boost.Asio（`io_context` + 共享 `thread_pool`）异步协调交互任务；工作线程调用同步 C ABI，结果通过 Qt 事件机制回到 GUI 主线程。
-- Android UI 使用 Kotlin Coroutines 和平台 Dispatchers：通过 `Dispatchers.IO` 执行可能阻塞的 JNI/C ABI 调用，通过 `Dispatchers.Main` 更新 UI；Android UI 不要求引入 Boost.Asio。
-- 同一 Player 的有序交互命令需要串行协调；不同 Player 和互不依赖的任务允许并发。后台结果不得直接操作平台 UI 对象。
+- Core 对外 C ABI 使用普通同步函数调用形式，但接口按返回语义分为提交型和查询型；不把所有操作都设计成等待业务执行完成的同步请求。
+- 提交型接口（如 open、play、pause、stop、seek、close）只负责接收请求并提交到 Core Runtime，成功接收后立即返回提交结果及 operation_id，不等待媒体或播放业务完成。
+- 查询型接口（如 get_state、get_position、get_duration、get_media_info）只读取线程安全的状态快照或缓存并快速返回，不等待媒体探测、解码或阻塞式文件 I/O。
+- Core 内部采用异步执行：每个 Runtime 使用一个 boost::asio::io_context 作为所有 C ABI 请求和内部任务的统一协调入口，并使用一套共享 boost::asio::thread_pool 执行实际业务任务。
+- 所有 C ABI 请求必须先进入 io_context，不得绕过它直接提交共享线程池。提交型接口不等待线程池任务完成；任务完成后由 io_context 更新状态并安排操作完成事件。
+- 操作完成事件携带原请求的 operation_id，报告打开、定位、播放控制等操作的最终成功或失败；播放结束、独立状态变化和运行时错误等也通过事件回调通知。视频帧交付保持独立实时数据通道。
+- Windows 使用 Qt 6 Widgets 构建桌面界面，通过 Core 对外接口调用播放器功能。Qt GUI 主线程直接调用快速返回的提交型 C ABI，不引入 UI 侧 Boost.Asio 或专用 UI 工作线程。
+- Android 使用 Kotlin 构建原生界面，通过 JNI 桥接调用 Core 对外接口。JNI 只承担参数转换、句柄桥接和事件转发，不引入第二套播放器业务调度系统。
+- 查询型接口必须保持快速；任何可能长时间等待的查询或数据处理都应设计为异步操作，不得阻塞 Qt GUI 主线程或 Android Main Thread。
+- 同一 Player 的有序命令由 Core Player Controller 统一协调；不同 Player 和互不依赖的内部任务允许并发。事件回调不得直接操作平台 UI 对象，必须投递到对应 UI 线程。
 - 平台相关的音频输出、视频渲染、设备管理和系统媒体控制与共享播放逻辑分离。
 - UI 不直接承担音视频解码工作。
 - FFmpeg 负责媒体探测、解封装和解码；Qt 负责 Windows 界面及窗口交互，不另行建立与 Core 并行的媒体播放管线。
-- Core 管理视频帧队列与播放时钟调度；帧就绪、显示节奏或平台呈现时机触发任务，经 Runtime `io_context` 协调后提交到共享 `thread_pool` 执行 GPU 呈现，不默认创建独立渲染线程或渲染线程池。视频帧交付不通过普通播放控制请求响应或主动事件回调逐帧传输。
+- Core 管理视频帧队列与播放时钟调度；帧就绪、显示节奏或平台呈现时机触发任务，经 Runtime io_context 协调后提交到共享 thread_pool 执行 GPU 呈现，不默认创建独立渲染线程或渲染线程池。视频帧交付不通过普通播放控制请求响应或主动事件回调逐帧传输。
 
 ### 3.4 Windows 进程与窗口模型
 
