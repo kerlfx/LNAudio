@@ -48,6 +48,8 @@
 #include <QLabel>
 #include <QLocale>
 #include <QLineEdit>
+#include <QPlainTextEdit>
+#include <QTextEdit>
 #include <QListWidget>
 #include <QListView>
 #include <QListWidgetItem>
@@ -1591,7 +1593,20 @@ MainWindow::MainWindow(
 
     if (mode_ == PlayerMode::Video)
     {
-        auto bind_shortcut = [this](const QString& id, const QString& label,
+        auto shortcut_focus_blocked = [](QWidget* focus)
+        {
+            return QApplication::activePopupWidget() || QApplication::activeModalWidget() ||
+                qobject_cast<QLineEdit*>(focus) ||
+                qobject_cast<QPlainTextEdit*>(focus) ||
+                qobject_cast<QTextEdit*>(focus) ||
+                qobject_cast<QAbstractItemView*>(focus) ||
+                qobject_cast<QAbstractButton*>(focus) ||
+                qobject_cast<QAbstractSlider*>(focus) ||
+                qobject_cast<QAbstractSpinBox*>(focus) ||
+                qobject_cast<QComboBox*>(focus) ||
+                qobject_cast<QKeySequenceEdit*>(focus);
+        };
+        auto bind_shortcut = [this, shortcut_focus_blocked](const QString& id, const QString& label,
             int key, std::function<void()> action)
         {
             const QKeySequence default_sequence(key);
@@ -1605,17 +1620,9 @@ MainWindow::MainWindow(
             shortcut->setProperty("defaultSequence", default_sequence.toString());
             shortcuts_.insert(id, shortcut);
             connect(shortcut, &QShortcut::activated, this,
-                [action = std::move(action)]
+                [action = std::move(action), shortcut_focus_blocked]
             {
-                QWidget* focus = QApplication::focusWidget();
-                if (QApplication::activePopupWidget() || QApplication::activeModalWidget() ||
-                    qobject_cast<QLineEdit*>(focus) ||
-                    qobject_cast<QAbstractItemView*>(focus) ||
-                    qobject_cast<QAbstractButton*>(focus) ||
-                    qobject_cast<QAbstractSlider*>(focus) ||
-                    qobject_cast<QAbstractSpinBox*>(focus) ||
-                    qobject_cast<QComboBox*>(focus) ||
-                    qobject_cast<QKeySequenceEdit*>(focus))
+                if (shortcut_focus_blocked(QApplication::focusWidget()))
                     return;
                 action();
             });
@@ -1682,6 +1689,16 @@ MainWindow::MainWindow(
                 volume_slider_->setValue(0);
             }
         });
+
+        const auto update_shortcut_availability =
+            [this, shortcut_focus_blocked](QWidget*, QWidget* focus)
+        {
+            const bool enabled = !shortcut_focus_blocked(focus);
+            for (QShortcut* shortcut : shortcuts_)
+                shortcut->setEnabled(enabled);
+        };
+        connect(qApp, &QApplication::focusChanged, this, update_shortcut_availability);
+        update_shortcut_availability(nullptr, QApplication::focusWidget());
     }
     statusBar()->showMessage(QStringLiteral("正在初始化播放器"));
 
