@@ -1,8 +1,10 @@
 #include "subtitle_manager.h"
 
+#include <QByteArray>
 #include <QFile>
 #include <QRegularExpression>
 #include <QStringDecoder>
+#include <QStringList>
 
 #include <algorithm>
 #include <utility>
@@ -18,12 +20,12 @@ bool SubtitleManager::load_file(const QString& path, QString& error)
 
     const QByteArray subtitle_data = file.readAll();
     QString subtitle_text;
-    if (subtitle_data.startsWith("\\xEF\\xBB\\xBF"))
+    if (subtitle_data.startsWith("\xEF\xBB\xBF"))
     {
         subtitle_text = QString::fromUtf8(
             subtitle_data.constData() + 3, subtitle_data.size() - 3);
     }
-    else if (subtitle_data.startsWith("\\xFF\\xFE\\x00\\x00"))
+    else if (subtitle_data.startsWith("\xFF\xFE\x00\x00"))
     {
         QStringDecoder decoder("UTF-32LE");
         subtitle_text = decoder(subtitle_data.mid(4));
@@ -33,7 +35,7 @@ bool SubtitleManager::load_file(const QString& path, QString& error)
             return false;
         }
     }
-    else if (subtitle_data.startsWith("\\x00\\x00\\xFE\\xFF"))
+    else if (subtitle_data.startsWith("\x00\x00\xFE\xFF"))
     {
         QStringDecoder decoder("UTF-32BE");
         subtitle_text = decoder(subtitle_data.mid(4));
@@ -43,14 +45,14 @@ bool SubtitleManager::load_file(const QString& path, QString& error)
             return false;
         }
     }
-    else if (subtitle_data.startsWith("\\xFF\\xFE"))
+    else if (subtitle_data.startsWith("\xFF\xFE"))
     {
         QStringDecoder decoder("UTF-16LE");
         subtitle_text = decoder(subtitle_data.mid(2));
         if (decoder.hasError())
             subtitle_text = QString::fromLocal8Bit(subtitle_data);
     }
-    else if (subtitle_data.startsWith("\\xFE\\xFF"))
+    else if (subtitle_data.startsWith("\xFE\xFF"))
     {
         QStringDecoder decoder("UTF-16BE");
         subtitle_text = decoder(subtitle_data.mid(2));
@@ -150,9 +152,9 @@ bool SubtitleManager::load_file(const QString& path, QString& error)
 
             cue.text = fields[text_index];
             cue.text.remove(QRegularExpression(QStringLiteral("\\{[^}]*\\}")));
-            cue.text.replace(QStringLiteral("\\\\N"), QStringLiteral("\\n"));
-            cue.text.replace(QStringLiteral("\\\\n"), QStringLiteral("\\n"));
-            cue.text.replace(QStringLiteral("\\\\h"), QStringLiteral(" "));
+            cue.text.replace(QStringLiteral("\\N"), QStringLiteral("\n"));
+            cue.text.replace(QStringLiteral("\\n"), QStringLiteral("\n"));
+            cue.text.replace(QStringLiteral("\\h"), QStringLiteral(" "));
             if (!cue.text.trimmed().isEmpty())
                 cues.push_back(std::move(cue));
         }
@@ -179,7 +181,7 @@ bool SubtitleManager::load_file(const QString& path, QString& error)
             for (++i; i < lines.size() && !lines[i].trimmed().isEmpty(); ++i)
                 text_lines.append(lines[i].trimmed());
 
-            cue.text = text_lines.join(QLatin1Char('\\n'));
+            cue.text = text_lines.join(QLatin1Char('\n'));
             cue.text.remove(QRegularExpression(QStringLiteral("<[^>]*>")));
             cue.text.replace(QStringLiteral("&amp;"), QStringLiteral("&"));
             cue.text.replace(QStringLiteral("&lt;"), QStringLiteral("<"));
