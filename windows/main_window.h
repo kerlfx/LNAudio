@@ -132,6 +132,7 @@ private:
     VideoSurface* video_surface_ = nullptr;
     QWidget* control_panel_ = nullptr;
     QLabel* osd_label_ = nullptr;
+    QLabel* empty_state_label_ = nullptr;
     QWidget* playlist_panel_ = nullptr;
     QAction* playlist_visibility_action_ = nullptr;
     QAction* always_on_top_action_ = nullptr;
