@@ -13,6 +13,7 @@
 #include <cstdint>
 
 #include "lnplayer.h"
+#include "subtitle_manager.h"
 
 class QLabel;
 class VideoSurface;
@@ -43,13 +44,6 @@ protected:
     void dropEvent(QDropEvent* event) override;
 
 private:
-    struct SubtitleCue
-    {
-        int64_t start_ms = 0;
-        int64_t end_ms = 0;
-        QString text;
-    };
-
     struct VideoFrameHistoryEntry
     {
         QImage image;
@@ -166,7 +160,7 @@ private:
     float video_denoise_ = 0.0f;
     bool video_grayscale_ = false;
     uint64_t media_generation_ = 0;
-    std::vector<SubtitleCue> subtitle_cues_;
+    SubtitleManager subtitle_manager_;
     QList<QUrl> playlist_;
     int playlist_index_ = -1;
     QListWidgetItem* playing_playlist_item_ = nullptr;

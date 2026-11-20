@@ -1,11 +1,9 @@
 find_package(Qt6 6.12 REQUIRED COMPONENTS Widgets)
 
+aux_source_directory("${CMAKE_CURRENT_SOURCE_DIR}" LNPLAYER_WINDOWS_SOURCES)
+
 qt_add_executable(LNPlayerApp WIN32
-    main.cpp
-    main_window.cpp
-    main_window.h
-    d3d11_video_renderer.cpp
-    d3d11_video_renderer.h
+    ${LNPLAYER_WINDOWS_SOURCES}
 )
 
 target_link_libraries(LNPlayerApp
