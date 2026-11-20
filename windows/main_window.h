@@ -91,6 +91,7 @@ private:
     void saveVideoPlaylist() const;
     void savePlaybackPosition() const;
     QString playbackPositionSettingKey(const QString& path) const;
+    QString mediaPreferenceKey(const QString& category, const QString& path) const;
     void removeSelectedPlaylistItem();
     void clearPlaylist();
     void openVideoSettings();
