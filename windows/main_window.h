@@ -81,6 +81,8 @@ private:
     void rebuildPlaylistWidget();
     void loadVideoPlaylist();
     void saveVideoPlaylist() const;
+    void savePlaybackPosition() const;
+    QString playbackPositionSettingKey(const QString& path) const;
     void removeSelectedPlaylistItem();
     void clearPlaylist();
     void openVideoSettings();
@@ -159,6 +161,7 @@ private:
     int subtitle_vertical_position_ = 80;
     int middle_click_action_ = 1;
     bool auto_match_subtitle_ = true;
+    bool remember_position_ = true;
     int64_t loop_a_ms_ = -1;
     int64_t loop_b_ms_ = -1;
     bool has_video_ = false;
