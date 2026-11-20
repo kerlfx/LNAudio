@@ -55,8 +55,9 @@ public:
                 asio::post(runtime_.io_context(), [this]
                 {
                     const lnplayer::SessionSnapshot snapshot = session_.snapshot();
-                    publish_snapshot(snapshot);
-                    emit(LNPLAYER_EVENT_PLAYBACK_ENDED, LNPLAYER_RESULT_OK, 0, nullptr);
+                    publish_snapshot(snapshot, pending_seek_count_ > 0);
+                    if (pending_seek_count_ == 0)
+                        emit(LNPLAYER_EVENT_PLAYBACK_ENDED, LNPLAYER_RESULT_OK, 0, nullptr);
                 });
             }
             catch (...)
@@ -108,7 +109,7 @@ public:
 
                     asio::post(runtime_.io_context(), [this, id, result = std::move(result)]() mutable
                     {
-                        publish_snapshot(result.snapshot);
+                        publish_snapshot(result.snapshot, pending_seek_count_ > 0);
                         emit(
                             LNPLAYER_EVENT_OPEN_COMPLETED,
                             result.success ? LNPLAYER_RESULT_OK : LNPLAYER_RESULT_INTERNAL_ERROR,
