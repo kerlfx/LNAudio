@@ -1216,6 +1216,8 @@ void MainWindow::updatePlaybackState(
     {
         if (is_playing_)
         {
+            if (!was_playing)
+                video_end_of_stream_ = false;
             if (!was_playing && !has_audio_)
             {
                 video_clock_base_pts_ms_ = position_ms;
