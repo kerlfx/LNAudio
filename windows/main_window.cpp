@@ -1946,7 +1946,9 @@ void MainWindow::appendPlaylistFiles(const QList<QUrl>& urls)
         const QString path = url.toLocalFile();
         if (path.isEmpty())
             continue;
-        playlist_.append(QUrl::fromLocalFile(QFileInfo(path).absoluteFilePath()));
+        const QString absolute_path = QFileInfo(path).absoluteFilePath();
+        playlist_.append(QUrl::fromLocalFile(absolute_path));
+        schedulePlaylistMetadataProbe(absolute_path);
     }
     resetShuffleOrder();
     rebuildPlaylistWidget();
@@ -1966,18 +1968,88 @@ void MainWindow::rebuildPlaylistWidget()
     playlist_widget_->clear();
     for (const QUrl& url : playlist_)
     {
-        const QFileInfo info(url.toLocalFile());
-        auto* item = new QListWidgetItem(info.fileName(), playlist_widget_);
-        item->setData(Qt::UserRole, url.toLocalFile());
-        item->setToolTip(QStringLiteral("%1\n%2 bytes")
-            .arg(info.absoluteFilePath())
-            .arg(info.exists() ? info.size() : 0));
+        const QString path = QFileInfo(url.toLocalFile()).absoluteFilePath();
+        const QFileInfo file_info(path);
+        auto* item = new QListWidgetItem(file_info.fileName(), playlist_widget_);
+        item->setData(Qt::UserRole, path);
+        updatePlaylistItemMetadata(path);
+        if (!playlist_video_metadata_.contains(path))
+            schedulePlaylistMetadataProbe(path);
     }
     playing_playlist_item_ = nullptr;
     if (playlist_index_ >= 0 && playlist_index_ < playlist_.size())
     {
         playlist_widget_->setCurrentRow(playlist_index_);
         playing_playlist_item_ = playlist_widget_->item(playlist_index_);
+    }
+}
+
+void MainWindow::schedulePlaylistMetadataProbe(const QString& path)
+{
+    if (path.isEmpty() || playlist_video_metadata_.contains(path) ||
+        playlist_probe_pending_.contains(path))
+        return;
+
+    playlist_probe_pending_.insert(path);
+    const QByteArray path_utf8 = path.toUtf8();
+    QMetaObject::invokeMethod(library_worker_, [this, path, path_utf8]
+    {
+        lnplayer_video_info_t info{};
+        info.struct_size = sizeof(info);
+        int64_t duration_ms = -1;
+        const lnplayer_result_t result = lnplayer_probe_media(
+            path_utf8.constData(), &duration_ms, &info);
+        QMetaObject::invokeMethod(this, [this, path, info, duration_ms, result]
+        {
+            playlist_probe_pending_.remove(path);
+            if (result == LNPLAYER_RESULT_OK)
+            {
+                playlist_video_metadata_.insert(path, info);
+                playlist_durations_.insert(path, duration_ms);
+            }
+            updatePlaylistItemMetadata(path);
+        }, Qt::QueuedConnection);
+    }, Qt::QueuedConnection);
+}
+
+void MainWindow::updatePlaylistItemMetadata(const QString& path)
+{
+    if (!playlist_widget_)
+        return;
+
+    for (int row = 0; row < playlist_widget_->count(); ++row)
+    {
+        QListWidgetItem* item = playlist_widget_->item(row);
+        if (item->data(Qt::UserRole).toString() != path)
+            continue;
+
+        const QFileInfo file_info(path);
+        const auto metadata = playlist_video_metadata_.constFind(path);
+        QString details = QStringLiteral("%1 bytes")
+            .arg(file_info.exists() ? file_info.size() : 0);
+        QString label = file_info.fileName();
+        if (metadata != playlist_video_metadata_.cend())
+        {
+            const lnplayer_video_info_t& info = metadata.value();
+            const int64_t duration = playlist_durations_.value(path, -1);
+            const double fps = info.frame_rate_den > 0
+                ? static_cast<double>(info.frame_rate_num) / info.frame_rate_den : 0.0;
+            if (info.width > 0 && info.height > 0)
+                label += QStringLiteral("    %1 × %2").arg(info.width).arg(info.height);
+            if (fps > 0.0)
+                label += QStringLiteral(" · %1 fps").arg(fps, 0, 'f', 2);
+            if (duration >= 0)
+                label += QStringLiteral(" · %1").arg(format_position(duration));
+            details += QStringLiteral("\n容器：%1\n编码：%2\n像素格式：%3\n码率：%4")
+                .arg(QString::fromUtf8(info.container_long_name))
+                .arg(QString::fromUtf8(info.codec_name))
+                .arg(QString::fromUtf8(info.pixel_format))
+                .arg(info.bit_rate > 0
+                    ? QString::number(info.bit_rate / 1000) + QStringLiteral(" kbps")
+                    : QStringLiteral("未知"));
+        }
+        item->setText(label);
+        item->setToolTip(QStringLiteral("%1\n%2").arg(file_info.absoluteFilePath(), details));
     }
 }
 
@@ -1989,7 +2061,10 @@ void MainWindow::loadVideoPlaylist()
     for (const QString& path : files)
     {
         if (QFileInfo::exists(path))
+        {
             playlist_.append(QUrl::fromLocalFile(path));
+            schedulePlaylistMetadataProbe(QFileInfo(path).absoluteFilePath());
+        }
     }
 
     playlist_index_ = playlist_.isEmpty()
