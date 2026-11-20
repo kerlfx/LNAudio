@@ -17,6 +17,17 @@ struct MediaInfo
     bool has_video = false;
 };
 
+struct MediaTrackInfo
+{
+    int stream_index = -1;
+    std::string title;
+    std::string language;
+    std::string codec;
+    int channels = 0;
+    int sample_rate = 0;
+    bool is_default = false;
+};
+
 struct MediaBackendResult
 {
     bool success = false;
@@ -64,6 +75,8 @@ public:
     virtual MediaBackendResult close() = 0;
     virtual MediaBackendResult read_audio_frame(AudioFrame& frame, bool& end_of_stream) = 0;
     virtual MediaBackendResult read_video_frame(VideoFrame& frame, bool& end_of_stream) = 0;
+    virtual std::vector<MediaTrackInfo> audio_tracks() const = 0;
+    virtual MediaBackendResult select_audio_track(int stream_index) = 0;
     virtual int64_t position_ms() const = 0;
     virtual bool playback_ended() const = 0;
     virtual void set_volume(float volume) = 0;
