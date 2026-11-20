@@ -1015,6 +1015,23 @@ private:
 
             if (!write_success && playback_error_callback_)
                 playback_error_callback_("Windows audio output failed while writing PCM samples.");
+
+            if (write_success)
+            {
+                uint32_t queued_frames = 0;
+                if (output.current_padding(queued_frames) && output_sample_rate_ > 0)
+                {
+                    const int64_t media_duration_ms = static_cast<int64_t>(
+                        frame.samples.size() / frame.channels * 1000.0 *
+                        playback_rate_.load(std::memory_order_relaxed) / output_sample_rate_);
+                    const int64_t queued_media_ms = static_cast<int64_t>(
+                        queued_frames * 1000.0 *
+                        playback_rate_.load(std::memory_order_relaxed) / output_sample_rate_);
+                    position_ms_.store(
+                        frame.pts_ms + media_duration_ms - queued_media_ms,
+                        std::memory_order_relaxed);
+                }
+            }
         }
 
         output.close();
