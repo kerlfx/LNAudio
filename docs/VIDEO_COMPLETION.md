@@ -779,3 +779,5 @@
 - `d711b020a4ec3bc0921d32e0aabc16e86afc0d13`、`f729bdddef8778ee916e54fc88131ca1e90d769b` — VideoSurface 缩放状态和 Ctrl+滚轮识别。
 - `9289b89c9201762d3e7d57b76e671de693e873d7` — MainWindow 音量/缩放分流、OSD 和重置入口。
 
+
+- [x] 静态复核后将软件 D3D11 缩放从扩大 viewport 改为像素着色器 UV 中心裁切，避免负 viewport 原点；缩放参数与滤镜常量缓冲区按 16 字节对齐传递。提交：`fdf78fd27aa1c7c8d84671bae4f58ccf4a57c38f`、`01e92aea4e9a029eabc76b2d964c36ebee937f0f`。
