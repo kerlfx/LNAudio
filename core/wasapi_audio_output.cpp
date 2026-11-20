@@ -276,6 +276,23 @@ bool WasapiAudioOutput::write(const float* samples, uint32_t frames)
     return true;
 }
 
+bool WasapiAudioOutput::flush()
+{
+    if (!started_ || !audio_client_)
+        return false;
+
+    HRESULT result = audio_client_->Stop();
+    if (FAILED(result))
+        return false;
+
+    result = audio_client_->Reset();
+    if (FAILED(result))
+        return false;
+
+    result = audio_client_->Start();
+    return SUCCEEDED(result);
+}
+
 void WasapiAudioOutput::close()
 {
     if (started_ && audio_client_)
