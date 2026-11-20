@@ -10,6 +10,16 @@ PlaybackSession::PlaybackSession(MediaBackendFactory backend_factory)
 {
 }
 
+#ifdef _WIN32
+void PlaybackSession::set_video_device(void* device)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (backend_)
+        backend_->set_video_device(device);
+    video_device_ = device;
+}
+#endif
+
 SessionResult PlaybackSession::open(const std::string& source)
 {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -48,6 +58,9 @@ SessionResult PlaybackSession::open(const std::string& source)
         return make_result(false, "Unable to create media backend.");
     }
 
+#ifdef _WIN32
+    backend_->set_video_device(video_device_);
+#endif
     backend_->set_volume(volume_);
     backend_->set_playback_rate(playback_rate_);
     backend_->set_playback_end_callback(playback_end_callback_);
