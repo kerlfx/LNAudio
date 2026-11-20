@@ -2393,45 +2393,68 @@ void MainWindow::openFile()
 
 void MainWindow::openFiles(const QList<QUrl>& urls)
 {
-    savePlaybackPosition();
-    const QStringList paths = expand_media_urls(urls);
-    QList<QUrl> next_playlist;
-    for (const QString& path : paths)
-        next_playlist.append(QUrl::fromLocalFile(path));
-    if (next_playlist.isEmpty())
+    if (urls.isEmpty())
         return;
 
-    playlist_ = std::move(next_playlist);
-    playlist_index_ = 0;
-    resetShuffleOrder();
-    rebuildPlaylistWidget();
-    saveVideoPlaylist();
-    openPlaylistIndex(0);
+    savePlaybackPosition();
+    status_label_->setText(QStringLiteral("正在扫描媒体文件..."));
+    postLibrary([this, urls]
+    {
+        const QStringList paths = expand_media_urls(urls);
+        QMetaObject::invokeMethod(this, [this, paths]
+        {
+            QList<QUrl> next_playlist;
+            for (const QString& path : paths)
+                next_playlist.append(QUrl::fromLocalFile(path));
+            if (next_playlist.isEmpty())
+            {
+                status_label_->setText(QStringLiteral("没有找到支持的媒体文件"));
+                return;
+            }
+
+            playlist_ = std::move(next_playlist);
+            playlist_index_ = 0;
+            resetShuffleOrder();
+            rebuildPlaylistWidget();
+            saveVideoPlaylist();
+            openPlaylistIndex(0);
+        }, Qt::QueuedConnection);
+    });
 }
 
 void MainWindow::appendPlaylistFiles(const QList<QUrl>& urls)
 {
-    const QStringList paths = expand_media_urls(urls);
-    for (const QString& path : paths)
+    if (urls.isEmpty())
+        return;
+
+    postLibrary([this, urls]
     {
-        playlist_.append(QUrl::fromLocalFile(path));
-        schedulePlaylistMetadataProbe(path);
-    }
-    resetShuffleOrder();
-    rebuildPlaylistWidget();
-    saveVideoPlaylist();
-    if (playlist_index_ < 0 && !playlist_.isEmpty())
-    {
-        playlist_index_ = 0;
-        resetShuffleOrder();
-        openPlaylistIndex(0);
-    }
+        const QStringList paths = expand_media_urls(urls);
+        QMetaObject::invokeMethod(this, [this, paths]
+        {
+            for (const QString& path : paths)
+            {
+                playlist_.append(QUrl::fromLocalFile(path));
+                schedulePlaylistMetadataProbe(path);
+            }
+            resetShuffleOrder();
+            rebuildPlaylistWidget();
+            saveVideoPlaylist();
+            if (playlist_index_ < 0 && !playlist_.isEmpty())
+            {
+                playlist_index_ = 0;
+                resetShuffleOrder();
+                openPlaylistIndex(0);
+            }
+        }, Qt::QueuedConnection);
+    });
 }
 
 void MainWindow::rebuildPlaylistWidget()
 {
     if (!playlist_widget_)
         return;
+    playlist_item_index_.clear();
     playlist_widget_->clear();
     for (const QUrl& url : playlist_)
     {
@@ -2439,6 +2462,7 @@ void MainWindow::rebuildPlaylistWidget()
         const QFileInfo file_info(path);
         auto* item = new QListWidgetItem(file_info.fileName(), playlist_widget_);
         item->setData(Qt::UserRole, path);
+        playlist_item_index_.insert(path, item);
         updatePlaylistItemMetadata(path);
         if (!playlist_video_metadata_.contains(path))
             schedulePlaylistMetadataProbe(path);
@@ -2484,40 +2508,41 @@ void MainWindow::updatePlaylistItemMetadata(const QString& path)
     if (!playlist_widget_)
         return;
 
-    for (int row = 0; row < playlist_widget_->count(); ++row)
-    {
-        QListWidgetItem* item = playlist_widget_->item(row);
-        if (item->data(Qt::UserRole).toString() != path)
-            continue;
+    const auto items = playlist_item_index_.values(path);
+    if (items.isEmpty())
+        return;
 
-        const QFileInfo file_info(path);
-        const auto metadata = playlist_video_metadata_.constFind(path);
-        QString duration_text = QStringLiteral("--:--");
-        QString resolution_text = QStringLiteral("未知");
-        QString details = QStringLiteral("%1 bytes")
-            .arg(file_info.exists() ? file_info.size() : 0);
-        if (metadata != playlist_video_metadata_.cend())
-        {
-            const lnplayer_video_info_t& info = metadata.value();
-            const int64_t duration = playlist_durations_.value(path, -1);
-            if (duration >= 0)
-                duration_text = format_position(duration);
-            if (info.width > 0 && info.height > 0)
-                resolution_text = QStringLiteral("%1×%2").arg(info.width).arg(info.height);
-            details += QStringLiteral("\n容器：%1\n编码：%2\n像素格式：%3\n码率：%4")
-                .arg(QString::fromUtf8(info.container_long_name))
-                .arg(QString::fromUtf8(info.codec_name))
-                .arg(QString::fromUtf8(info.pixel_format))
-                .arg(info.bit_rate > 0
-                    ? QString::number(info.bit_rate / 1000) + QStringLiteral(" kbps")
-                    : QStringLiteral("未知"));
-        }
+    const QFileInfo file_info(path);
+    const auto metadata = playlist_video_metadata_.constFind(path);
+    QString duration_text = QStringLiteral("--:--");
+    QString resolution_text = QStringLiteral("未知");
+    QString details = QStringLiteral("%1 bytes")
+        .arg(file_info.exists() ? file_info.size() : 0);
+    if (metadata != playlist_video_metadata_.cend())
+    {
+        const lnplayer_video_info_t& info = metadata.value();
+        const int64_t duration = playlist_durations_.value(path, -1);
+        if (duration >= 0)
+            duration_text = format_position(duration);
+        if (info.width > 0 && info.height > 0)
+            resolution_text = QStringLiteral("%1×%2").arg(info.width).arg(info.height);
+        details += QStringLiteral("\n容器：%1\n编码：%2\n像素格式：%3\n码率：%4")
+            .arg(QString::fromUtf8(info.container_long_name))
+            .arg(QString::fromUtf8(info.codec_name))
+            .arg(QString::fromUtf8(info.pixel_format))
+            .arg(info.bit_rate > 0
+                ? QString::number(info.bit_rate / 1000) + QStringLiteral(" kbps")
+                : QStringLiteral("未知"));
+    }
+
+    for (QListWidgetItem* item : items)
+    {
         item->setText(file_info.fileName());
         item->setData(Qt::UserRole + 1, duration_text);
         item->setData(Qt::UserRole + 2, resolution_text);
         item->setToolTip(QStringLiteral("%1\n%2").arg(file_info.absoluteFilePath(), details));
-        playlist_widget_->viewport()->update();
     }
+    playlist_widget_->viewport()->update();
 }
 
 void MainWindow::loadVideoPlaylist()
@@ -2638,6 +2663,7 @@ void MainWindow::clearPlaylist()
     pending_hardware_texture_ = nullptr;
     video_timer_->stop();
 
+    playlist_item_index_.clear();
     if (playlist_widget_)
         playlist_widget_->clear();
     if (video_surface_)
