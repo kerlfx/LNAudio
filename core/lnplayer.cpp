@@ -9,6 +9,7 @@
 
 #include <atomic>
 #include <cstring>
+#include <cmath>
 #include <future>
 #include <functional>
 #include <memory>
@@ -302,6 +303,11 @@ public:
         session_.set_volume(static_cast<float>(volume) / 1000.0f);
         std::lock_guard<std::mutex> lock(snapshot_mutex_);
         snapshot_.volume = volume;
+    }
+
+    void set_playback_rate(float rate)
+    {
+        session_.set_playback_rate(rate);
     }
 
 private:
@@ -789,6 +795,17 @@ lnplayer_result_t lnplayer_set_volume(lnplayer_t* player, uint32_t volume)
     player->controller->set_volume(volume);
     g_last_error.clear();
     return LNPLAYER_RESULT_OK;
+}
+
+lnplayer_result_t lnplayer_set_playback_rate(lnplayer_t* player, float rate)
+{
+    if (!is_current_player(player))
+        return set_error(LNPLAYER_RESULT_INVALID_HANDLE, "Invalid Player handle.");
+    if (!std::isfinite(rate) || rate < 0.25f || rate > 4.0f)
+        return set_error(LNPLAYER_RESULT_INVALID_ARGUMENT, "Playback rate must be between 0.25 and 4.0.");
+
+    player->controller->set_playback_rate(rate);
+    return finish_result(LNPLAYER_RESULT_OK);
 }
 
 lnplayer_result_t lnplayer_get_last_error(
