@@ -1465,5 +1465,99 @@ std::unique_ptr<MediaBackend> create_ffmpeg_media_backend()
 {
     return std::make_unique<FFmpegMediaBackend>();
 }
+bool convert_d3d11_frame_to_bgra(
+    const std::shared_ptr<void>& frame_owner,
+    std::vector<uint8_t>& pixels,
+    int& width,
+    int& height,
+    int& stride,
+    float& display_aspect_ratio,
+    std::string& error)
+{
+#ifdef _WIN32
+    auto* hardware_frame = static_cast<AVFrame*>(frame_owner.get());
+    if (!hardware_frame || hardware_frame->format != AV_PIX_FMT_D3D11)
+    {
+        error = "The retained frame is not a D3D11 hardware frame.";
+        return false;
+    }
+
+    AVFrame* software_frame = av_frame_alloc();
+    if (!software_frame)
+    {
+        error = "Unable to allocate a software video frame.";
+        return false;
+    }
+
+    const int transfer_result = av_hwframe_transfer_data(
+        software_frame, hardware_frame, 0);
+    if (transfer_result < 0)
+    {
+        error = "Unable to download the D3D11 video frame: " +
+            ffmpeg_error(transfer_result);
+        av_frame_free(&software_frame);
+        return false;
+    }
+
+    SwsContext* scaler = sws_getContext(
+        software_frame->width,
+        software_frame->height,
+        static_cast<AVPixelFormat>(software_frame->format),
+        software_frame->width,
+        software_frame->height,
+        AV_PIX_FMT_BGRA,
+        SWS_BILINEAR,
+        nullptr,
+        nullptr,
+        nullptr);
+    if (!scaler)
+    {
+        error = "Unable to initialize hardware-frame BGRA conversion.";
+        av_frame_free(&software_frame);
+        return false;
+    }
+
+    width = software_frame->width;
+    height = software_frame->height;
+    stride = width * 4;
+    pixels.resize(static_cast<size_t>(stride) * height);
+    uint8_t* destination[] = {pixels.data()};
+    int destination_stride[] = {stride};
+    const int rows = sws_scale(
+        scaler,
+        software_frame->data,
+        software_frame->linesize,
+        0,
+        height,
+        destination,
+        destination_stride);
+    sws_freeContext(scaler);
+    av_frame_free(&software_frame);
+    if (rows != height)
+    {
+        pixels.clear();
+        error = "Unable to convert the downloaded video frame.";
+        return false;
+    }
+
+    AVRational sample_aspect_ratio = hardware_frame->sample_aspect_ratio;
+    if (sample_aspect_ratio.num > 0 && sample_aspect_ratio.den > 0)
+        display_aspect_ratio =
+            static_cast<float>(width) * sample_aspect_ratio.num /
+            (static_cast<float>(height) * sample_aspect_ratio.den);
+    else
+        display_aspect_ratio = static_cast<float>(width) / height;
+    return true;
+#else
+    (void)frame_owner;
+    (void)pixels;
+    (void)width;
+    (void)height;
+    (void)stride;
+    (void)display_aspect_ratio;
+    error = "D3D11 frame conversion is only available on Windows.";
+    return false;
+#endif
+}
 
 }
