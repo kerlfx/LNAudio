@@ -426,7 +426,8 @@ public:
 
         *end_of_stream = read.end_of_stream ? 1 : 0;
         if (!read.end_of_stream && callback &&
-            (!read.frame.bgra.empty() || read.frame.d3d11_texture))
+            (!read.frame.bgra.empty() || read.frame.d3d11_texture ||
+             read.frame.generation != 0))
         {
             const lnplayer_windows_video_frame_t frame{
                 sizeof(lnplayer_windows_video_frame_t),
