@@ -1,6 +1,6 @@
 # LNPlayer 需求基线
 
-> 状态：需求确认与工程搭建阶段  
+> 状态：Windows 完整版本开发阶段  
 > 本文区分已经确认的项目要求、当前工程约定和仍待确认的事项。
 
 ## 1. 项目定位
@@ -16,7 +16,7 @@ Windows 端同时提供音频和视频播放界面，两套 UI 属于同一个 L
 - 当前开发阶段以 **Windows 完整版本** 为唯一交付目标。
 - 在 Windows 版本达到完整功能、稳定性和发布要求之前，不启动 Android UI、JNI、Android 音频输出或 Android 视频输出的实现工作。
 - Android 仍属于产品后续支持平台，不从整体架构中删除；但不得与 Windows 当前开发任务并行分散实现资源。
-- Core 继续保持平台无关：不得依赖 Qt、Win32、D3D11、WASAPI 等 Windows 专有类型作为通用播放逻辑的公共接口。Windows 专有能力通过 Platform Audio/Video Output 实现。
+- Core 继续保持平台无关：不得依赖 Qt、Win32、D3D11、WASAPI 等 Windows 专有类型作为通用播放逻辑的公共接口。Windows 专有能力通过 Platform Audio/Video Output 实现。Core 优先采用 C++ 标准库；Standalone Asio、FFmpeg、SQLite 分别用于异步协调、媒体处理和音乐库持久化。
 - Windows 完整版本以本文已确认的 Windows 音频、视频、音乐库、播放列表、窗口/进程管理和系统集成功能为范围。第 11 节列出的候选功能也纳入 Windows 完整版本规划；具体交互和参数在对应模块实现前细化。
 - 本阶段不实现多端同步、远程控制、设备发现、P2P 或云端服务。
 
@@ -53,7 +53,9 @@ Windows 端同时提供音频和视频播放界面，两套 UI 属于同一个 L
 - Windows 和 Android 共用 C++ 播放器核心。
 - 核心以动态库形式提供：Windows 生成 DLL，Android 生成 SO。
 - 核心通过独立的对外接口供平台应用调用；C ABI 公共头文件位于 `core/include/lnplayer.h`。
-- 核心内部使用 C++ 实现，不要求内部模块遵循 C 语言编程风格。
+- 核心内部使用 C++20 实现，不要求内部模块遵循 C 语言编程风格。
+- Core 优先使用 C++ 标准库实现通用容器、字符串、时间、线程、同步、智能指针和回调；仅在标准库不适合或平台 API 必需时引入第三方库。
+- Core 不依赖 Qt，也不使用 Qt 类型或 Qt 并发/时间设施；Standalone Asio 是已确认的必要例外，用于 `io_context`、`thread_pool` 和异步协调，不使用 Boost.Asio。
 - 内部头文件与对应的 .cpp 放在同一模块目录。
 - 只有对外公开的 C ABI 头文件放在 `core/include/`，不再增加额外的 `lnplayer/` 子目录。
 - Core 不依赖 Qt、Kotlin 或 JNI。
@@ -76,7 +78,7 @@ Windows 端同时提供音频和视频播放界面，两套 UI 属于同一个 L
 - 提交型接口：首期 `open`、`seek`。请求成功进入唯一 Player 的受管理命令队列后立即返回提交结果及 operation_id；最终结果通过完成事件通知。
 - 同步完成型接口：首期 `play`、`pause`、`stop`、`close`。调用线程等待实际操作完成后返回最终结果，不只是返回请求入队结果。
 - 快速查询型接口：如 `get_state`、`get_position`、`get_duration`、`get_media_info`，只读取线程安全状态快照或缓存，不等待媒体探测、解码或阻塞式文件 I/O。
-- 每个进程只有一个 Player。每个进程内的 Core Runtime 维护一个 `asio::io_context`、一套共享 `asio::thread_pool` 和唯一 Player。
+- 每个进程只有一个 Player。每个进程内的 Core Runtime 维护一个 `asio::io_context`、一套共享 `asio::thread_pool` 和唯一 Player；当前共享 `thread_pool` 固定为 2 个 worker，不按播放器负载创建大量线程。
 - `io_context` 负责命令协调、任务分发、结果回收、状态更新、事件排序和同步等待者唤醒；共享 `thread_pool` 执行实际业务任务。
 - 同步完成型接口的等待发生在调用 C ABI 的线程，`io_context` worker 不得阻塞等待线程池业务任务。快速查询直接读取线程安全快照，是不经过 `io_context` 的明确例外。
 - `open/seek` 的最终成功或失败通过携带 operation_id 的完成事件报告；`play/pause/stop/close` 的最终结果由函数返回。独立状态变化、播放结束和运行时错误通过事件通知。视频帧交付保持独立实时数据通道。
@@ -86,7 +88,7 @@ Windows 端同时提供音频和视频播放界面，两套 UI 属于同一个 L
 - 平台相关音频输出、视频渲染、设备管理和系统媒体控制与共享播放逻辑分离。
 - UI 不直接承担音视频解码工作。
 - FFmpeg 负责媒体探测、解封装和解码；Qt 负责 Windows 界面及窗口交互，不另行建立与 Core 并行的媒体播放管线。
-- Core 管理视频帧队列与播放时钟调度；有音频时以 WASAPI `IAudioClock` 为主时钟，无音频视频使用 `std::chrono::steady_clock` 维护单调时钟，并由 Core 提供媒体播放位置。平台 UI 只依据 Core 的播放位置和视频帧 PTS 调度呈现，不自行维护媒体时钟。帧就绪、显示节奏或平台呈现时机触发任务，经 Runtime `io_context` 协调后提交到共享 `thread_pool` 执行 GPU 呈现，不默认创建独立渲染线程或渲染线程池。视频帧交付不通过普通播放控制请求响应或主动事件回调逐帧传输。
+- Core 管理视频帧队列与播放时钟调度；有音频时以 WASAPI `IAudioClock` 为主时钟，无音频视频使用 `std::chrono::steady_clock` 维护单调时钟，并由 Core 提供媒体播放位置。无音频时钟在暂停期间冻结，恢复时重新计时，Seek 和播放速度变化时重新锚定。平台 UI 只依据 Core 的播放位置和视频帧 PTS 调度呈现，不自行维护媒体时钟，也不使用 `QElapsedTimer` 计算媒体时间。帧就绪、显示节奏或平台呈现时机触发任务，经 Runtime `io_context` 协调后提交到共享 `thread_pool` 执行 GPU 呈现，不默认创建独立渲染线程或渲染线程池。视频帧交付不通过普通播放控制请求响应或主动事件回调逐帧传输。
 
 ### 3.4 Windows 工程现状与目标
 
@@ -95,9 +97,9 @@ Windows 端同时提供音频和视频播放界面，两套 UI 属于同一个 L
 - Core 使用独立的 Standalone Asio 头文件依赖，不依赖 Boost；默认从仓库的 `3rd_cache/asio/asio/include` 或 `3rd_cache/asio/include` 查找 `asio.hpp`。
 - Core Runtime 使用单线程 `asio::io_context` 和共享 `asio::thread_pool`。
 - 当前 Windows 已接入 FFmpeg 音频解码、WASAPI 输出和 SQLite 音乐库；视频模式已接入 FFmpeg 视频解码、Windows D3D11 Swap Chain 呈现、D3D11VA 尝试与软件回退。
-- 视频帧通过 Windows 专用 `lnplayer_windows.h` Pull 接口交付，不扩展通用播放控制 C ABI。视频 UI 已具备 PTS 基础等待、全屏、快捷键、右键菜单、原始比例/16:9/4:3/拉伸切换、截图和逐帧操作。视频播放列表已支持多文件加入、队列展示、双击切换、上一项/下一项和播放结束自动切换；当前通过文件选择器或拖放文件整体替换队列，队列内增删、拖动排序和随机/循环播放仍未实现。
+- 视频帧通过 Windows 专用 `lnplayer_windows.h` Pull 接口交付，不扩展通用播放控制 C ABI。视频 UI 已具备 PTS 基础等待、全屏、快捷键、右键菜单、原始比例/16:9/4:3/拉伸切换、截图和基础逐帧操作。视频播放列表已支持多文件加入、队列展示、双击切换、上一项/下一项和播放结束自动切换；打开文件或拖放文件会整体替换当前队列。队列内增删、拖动排序、随机/循环播放及音乐库与视频播放列表的统一管理仍未实现。
 - 无音频视频播放时钟由 Core 使用 `std::chrono::steady_clock` 实现；暂停冻结时钟，恢复重新计时，Seek 和播放速度变化时重新锚定时钟。Windows UI 不再使用 `QElapsedTimer` 维护视频媒体时钟。
-- FFmpeg D3D11VA 已接入 Renderer 的共享 D3D11 Device。NV12/P010 硬件帧通过 AVFrame 引用交给 D3D11 Video Processor，转换到独立 BGRA 输出纹理，再复制到 Swap Chain back buffer；GPU event query 完成前保留 AVFrame，GPU 队列最多保留 4 帧，超出时丢帧。外部字幕通过透明 BGRA overlay 在 GPU 输出纹理上合成；截图从保留的 BGRA 输出纹理读回。共享设备不可用时仍保留 FFmpeg CPU transfer + BGRA 上传路径；Video Processor 初始化或呈现失败时，会保留 AVFrame 并按需调用 FFmpeg `av_hwframe_transfer_data()` 下载和转换为 BGRA，再走软件呈现路径。Renderer 检测到 DXGI device removed/reset/hung 后会释放旧 GPU 资源并尝试重建设备；Windows UI 轮询设备身份，检测到新设备时重新注入 Core。若 Renderer 暂时无法创建设备，则向 Core detach 旧设备并重建软件解码后端；设备恢复后再切回共享 D3D11 Device。Core 在设备切换时重建媒体后端，恢复播放位置以及播放/暂停状态，并递增 generation 使旧帧失效。该恢复流程尚未经过真实 GPU/驱动运行验证。音频主时钟已接入 WASAPI `IAudioClock` 硬件位置计数，并结合待播放缓冲量映射媒体时间，硬件时钟查询失败时回退到缓冲量估算。外挂 SRT 字幕已支持加载和软件 BGRA 帧基础叠加；内嵌字幕解码、多音轨、字幕样式/时间偏移、保音高变速和滤镜仍未实现。播放速度 0.25x–4.0x 已接入，当前通过重采样改变速度，因此音高也会变化。
+- FFmpeg D3D11VA 已接入 Renderer 的共享 D3D11 Device。NV12/P010 硬件帧通过 AVFrame 引用交给 D3D11 Video Processor，转换到独立 BGRA 输出纹理，再复制到 Swap Chain back buffer；GPU event query 完成前保留 AVFrame，GPU 队列最多保留 4 帧，超出时丢帧。外部字幕通过透明 BGRA overlay 在 GPU 输出纹理上合成；截图从保留的 BGRA 输出纹理读回。共享设备不可用时仍保留 FFmpeg CPU transfer + BGRA 上传路径；Video Processor 初始化或呈现失败时，会保留 AVFrame 并按需调用 FFmpeg `av_hwframe_transfer_data()` 下载和转换为 BGRA，再走软件呈现路径。当前代码包含设备重建/软件回退的初步处理，但真实 GPU 拔出、驱动重置、多显卡切换及设备恢复验证不属于当前功能开发任务，留待 Windows 完整功能完成后统一评估。音频主时钟已接入 WASAPI `IAudioClock` 硬件位置计数，并结合待播放缓冲量映射媒体时间，硬件时钟查询失败时回退到缓冲量估算。外挂 SRT 字幕已支持基础加载和画面叠加；切换媒体时清理字幕数据。字幕编码自动识别、ASS/SSA、字幕时间偏移/样式设置、启用/禁用即时刷新和内嵌字幕解码仍未完成。多音轨枚举与切换、完整上一帧/下一帧逐帧控制、视频旋转元数据、色彩空间/HDR 处理及滤镜仍未实现。播放速度 0.25x–4.0x 已接入，当前通过重采样改变速度，因此音高也会变化。
 - 本节描述的是当前工程状态，不代表 Windows 功能范围仅限于首期骨架；Windows 完整版本范围由第 1.1、1.2 节和后续 Windows 功能章节共同定义。
 
 ### 3.5 第三方依赖获取与集成
