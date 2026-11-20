@@ -17,9 +17,11 @@ Runtime::Runtime()
 
 Runtime::~Runtime()
 {
-    thread_pool_.join();
     work_guard_.reset();
-    io_thread_.join();
+    io_context_.stop();
+    if (io_thread_.joinable())
+        io_thread_.join();
+    thread_pool_.join();
 }
 
 asio::io_context& Runtime::io_context()
@@ -30,6 +32,11 @@ asio::io_context& Runtime::io_context()
 asio::thread_pool& Runtime::thread_pool()
 {
     return thread_pool_;
+}
+
+bool Runtime::running_in_io_thread() const
+{
+    return io_context_.get_executor().running_in_this_thread();
 }
 
 }
