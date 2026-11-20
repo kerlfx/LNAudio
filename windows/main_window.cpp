@@ -1,5 +1,7 @@
 #include "main_window.h"
 
+#include <algorithm>
+
 #include <QDragEnterEvent>
 #include <QDropEvent>
 #include <QFileDialog>
