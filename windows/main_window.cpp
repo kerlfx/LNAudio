@@ -27,6 +27,7 @@
 #include <QFormLayout>
 #include <QCheckBox>
 #include <QColor>
+#include <QCryptographicHash>
 #include <QComboBox>
 #include <QDoubleSpinBox>
 #include <QSpinBox>
@@ -128,6 +129,8 @@ MainWindow::MainWindow(
             settings.value(QStringLiteral("Video/Mouse/MiddleClickAction"), 1).toInt(), 0, 2);
         auto_match_subtitle_ = settings.value(
             QStringLiteral("Video/Subtitle/AutoMatch"), true).toBool();
+        remember_position_ = settings.value(
+            QStringLiteral("Video/Playback/RememberPosition"), true).toBool();
     }
     setAcceptDrops(true);
     resize(mode_ == PlayerMode::Video ? QSize(960, 600) : QSize(720, 480));
@@ -1382,6 +1385,7 @@ MainWindow::MainWindow(
 
 MainWindow::~MainWindow()
 {
+    savePlaybackPosition();
     saveVideoPlaylist();
     snapshot_timer_->stop();
     video_timer_->stop();
@@ -1619,6 +1623,7 @@ void MainWindow::openFile()
 
 void MainWindow::openFiles(const QList<QUrl>& urls)
 {
+    savePlaybackPosition();
     QList<QUrl> next_playlist;
     for (const QUrl& url : urls)
     {
@@ -1713,6 +1718,29 @@ void MainWindow::loadVideoPlaylist()
         openPlaylistIndex(playlist_index_);
 }
 
+QString MainWindow::playbackPositionSettingKey(const QString& path) const
+{
+    const QByteArray normalized_path = QFileInfo(path).absoluteFilePath().toUtf8();
+    const QByteArray digest = QCryptographicHash::hash(
+        normalized_path, QCryptographicHash::Sha1).toHex();
+    return QStringLiteral("Video/PlaybackPositions/") + QString::fromLatin1(digest);
+}
+
+void MainWindow::savePlaybackPosition() const
+{
+    if (!remember_position_ || mode_ != PlayerMode::Video ||
+        playlist_index_ < 0 || playlist_index_ >= playlist_.size())
+        return;
+
+    const QString path = playlist_[playlist_index_].toLocalFile();
+    if (path.isEmpty())
+        return;
+
+    QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+    settings.setValue(playbackPositionSettingKey(path), current_position_ms_);
+    settings.sync();
+}
+
 void MainWindow::saveVideoPlaylist() const
 {
     if (mode_ != PlayerMode::Video)
@@ -1731,6 +1759,7 @@ void MainWindow::saveVideoPlaylist() const
 
 void MainWindow::clearPlaylist()
 {
+    savePlaybackPosition();
     playlist_.clear();
     playlist_index_ = -1;
     shuffle_order_.clear();
@@ -1783,6 +1812,14 @@ void MainWindow::openVideoSettings()
     dialog.setMinimumSize(560, 420);
     auto* root = new QVBoxLayout(&dialog);
     auto* tabs = new QTabWidget(&dialog);
+
+    auto* playback_page = new QWidget(tabs);
+    auto* playback_form = new QFormLayout(playback_page);
+    auto* remember_position = new QCheckBox(
+        QStringLiteral("记住每个视频上次播放位置"), playback_page);
+    remember_position->setChecked(remember_position_);
+    playback_form->addRow(remember_position);
+    tabs->addTab(playback_page, QStringLiteral("播放"));
 
     auto* interface_page = new QWidget(tabs);
     auto* interface_form = new QFormLayout(interface_page);
@@ -1889,6 +1926,7 @@ void MainWindow::openVideoSettings()
 
     connect(defaults, &QPushButton::clicked, &dialog, [=]
     {
+        remember_position->setChecked(true);
         hide_delay->setValue(2);
         show_playlist->setChecked(true);
         middle_click->setCurrentIndex(1);
@@ -1935,6 +1973,7 @@ void MainWindow::openVideoSettings()
     if (dialog.exec() != QDialog::Accepted)
         return;
 
+    remember_position_ = remember_position->isChecked();
     fullscreen_hide_delay_ms_ = hide_delay->value() * 1000;
     fullscreen_hide_timer_->setInterval(fullscreen_hide_delay_ms_);
     playlist_panel_visible_ = show_playlist->isChecked();
@@ -1963,6 +2002,7 @@ void MainWindow::openVideoSettings()
         video_hue_degrees_, video_sharpness_, video_denoise_, video_grayscale_);
 
     QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+    settings.setValue(QStringLiteral("Video/Playback/RememberPosition"), remember_position_);
     settings.setValue(QStringLiteral("Video/UI/FullscreenHideDelayMs"), fullscreen_hide_delay_ms_);
     for (auto it = shortcuts_.begin(); it != shortcuts_.end(); ++it)
     {
@@ -1996,6 +2036,7 @@ void MainWindow::openVideoSettings()
 
 void MainWindow::removeSelectedPlaylistItem()
 {
+    savePlaybackPosition();
     if (!playlist_widget_)
         return;
 
@@ -2128,6 +2169,7 @@ void MainWindow::openPlaylistIndex(int index)
     if (index < 0 || index >= playlist_.size())
         return;
 
+    savePlaybackPosition();
     playlist_index_ = index;
     if (mode_ == PlayerMode::Video)
     {
@@ -3210,6 +3252,35 @@ void MainWindow::handleCoreEvent(
             status_label_->setText(QStringLiteral("媒体已打开"));
             statusBar()->showMessage(QStringLiteral("就绪"));
             seek_slider_->setEnabled(duration_ms > 0);
+            if (mode_ == PlayerMode::Video && remember_position_ &&
+                playlist_index_ >= 0 && playlist_index_ < playlist_.size())
+            {
+                QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+                const QString key = playbackPositionSettingKey(
+                    playlist_[playlist_index_].toLocalFile());
+                const int64_t restore_position = settings.value(key, 0).toLongLong();
+                if (restore_position > 5000 &&
+                    (duration_ms <= 0 || restore_position < duration_ms - 5000))
+                {
+                    video_seek_pending_ = true;
+                    seek_slider_->setEnabled(false);
+                    QMetaObject::invokeMethod(command_worker_, [this, restore_position]
+                    {
+                        uint64_t operation_id = 0;
+                        const lnplayer_result_t seek_result = player_
+                            ? lnplayer_seek(player_, restore_position, &operation_id)
+                            : LNPLAYER_RESULT_INVALID_HANDLE;
+                        if (seek_result != LNPLAYER_RESULT_OK)
+                        {
+                            QMetaObject::invokeMethod(this, [this]
+                            {
+                                video_seek_pending_ = false;
+                                statusBar()->showMessage(QStringLiteral("恢复播放位置失败"));
+                            }, Qt::QueuedConnection);
+                        }
+                    }, Qt::QueuedConnection);
+                }
+            }
             if (auto_match_subtitle_ && playlist_index_ >= 0 &&
                 playlist_index_ < playlist_.size())
             {
