@@ -1732,8 +1732,7 @@ QString MainWindow::playbackPositionSettingKey(const QString& path) const
 
 void MainWindow::savePlaybackPosition() const
 {
-    if (!remember_position_ || mode_ != PlayerMode::Video ||
-        playlist_index_ < 0 || playlist_index_ >= playlist_.size())
+    if (!remember_position_ || mode_ != PlayerMode::Video || current_media_path_.isEmpty())
         return;
 
     const QString path = current_media_path_;
