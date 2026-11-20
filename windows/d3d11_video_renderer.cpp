@@ -612,6 +612,10 @@ public:
             : D3D11_VIDEO_PROCESSOR_NOMINAL_RANGE_16_235;
         video_context_->VideoProcessorSetStreamColorSpace(
             video_processor_.Get(), 0, &color_space);
+        D3D11_VIDEO_PROCESSOR_COLOR_SPACE output_color_space{};
+        output_color_space.RGB_Range = 0;
+        video_context_->VideoProcessorSetOutputColorSpace(
+            video_processor_.Get(), &output_color_space);
         const HRESULT blt_result = video_context_->VideoProcessorBlt(
             video_processor_.Get(), output_view.Get(), 0, 1, &stream);
         if (FAILED(blt_result))
