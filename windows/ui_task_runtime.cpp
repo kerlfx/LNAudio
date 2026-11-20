@@ -3,7 +3,7 @@
 bool UiTaskTracker::try_begin()
 {
     std::lock_guard<std::mutex> lock(mutex_);
-    if (!accepting_)
+    if (!accepting_.load(std::memory_order_acquire))
         return false;
     ++pending_;
     return true;
@@ -11,8 +11,7 @@ bool UiTaskTracker::try_begin()
 
 bool UiTaskTracker::accepting() const
 {
-    std::lock_guard<std::mutex> lock(mutex_);
-    return accepting_;
+    return accepting_.load(std::memory_order_acquire);
 }
 
 void UiTaskTracker::finish()
@@ -27,7 +26,7 @@ void UiTaskTracker::finish()
 void UiTaskTracker::close_and_wait()
 {
     std::unique_lock<std::mutex> lock(mutex_);
-    accepting_ = false;
+    accepting_.store(false, std::memory_order_release);
     condition_.wait(lock, [this]
     {
         return pending_ == 0;
