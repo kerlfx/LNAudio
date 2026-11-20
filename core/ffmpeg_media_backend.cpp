@@ -129,6 +129,7 @@ public:
         opened_ = true;
         position_ms_.store(0, std::memory_order_relaxed);
         playback_ended_.store(false, std::memory_order_relaxed);
+        playback_failed_.store(false, std::memory_order_relaxed);
         audio_draining_ = false;
         audio_packet_pending_ = false;
         return success();
@@ -260,6 +261,7 @@ public:
 
         position_ms_.store(position_ms, std::memory_order_relaxed);
         playback_ended_.store(false, std::memory_order_relaxed);
+        playback_failed_.store(false, std::memory_order_relaxed);
 #ifdef _WIN32
         seek_succeeded = true;
         restore_playback();
@@ -317,6 +319,7 @@ public:
         video_stream_index_ = -1;
         position_ms_.store(0, std::memory_order_relaxed);
         playback_ended_.store(false, std::memory_order_relaxed);
+        playback_failed_.store(false, std::memory_order_relaxed);
         opened_ = false;
         playing_ = false;
         audio_draining_ = false;
@@ -342,6 +345,16 @@ public:
     void set_playback_end_callback(std::function<void()> callback) override
     {
         playback_end_callback_ = std::move(callback);
+    }
+
+    bool playback_failed() const override
+    {
+        return playback_failed_.load(std::memory_order_relaxed);
+    }
+
+    void set_playback_error_callback(std::function<void(std::string)> callback) override
+    {
+        playback_error_callback_ = std::move(callback);
     }
 
     MediaBackendResult read_audio_frame(AudioFrame& output, bool& end_of_stream) override
@@ -468,11 +481,15 @@ private:
                     playing_ = false;
                     if (decode_result.success && end_of_stream)
                         playback_ended_.store(true, std::memory_order_relaxed);
+                    else if (!decode_result.success)
+                        playback_failed_.store(true, std::memory_order_relaxed);
                     playback_condition_.notify_all();
                 }
 
                 if (decode_result.success && end_of_stream && playback_end_callback_)
                     playback_end_callback_();
+                else if (!decode_result.success && playback_error_callback_)
+                    playback_error_callback_(decode_result.message);
                 continue;
             }
 
@@ -504,9 +521,13 @@ private:
                 {
                     playback_active_ = false;
                     playing_ = false;
+                    playback_failed_.store(true, std::memory_order_relaxed);
                 }
                 playback_condition_.notify_all();
             }
+
+            if (!write_success && playback_error_callback_)
+                playback_error_callback_("Windows audio output failed while writing PCM samples.");
         }
 
         output.close();
@@ -620,8 +641,10 @@ private:
     int output_sample_rate_ = kOutputSampleRate;
     std::atomic<int64_t> position_ms_{0};
     std::atomic<bool> playback_ended_{false};
+    std::atomic<bool> playback_failed_{false};
     std::atomic<float> volume_{1.0f};
     std::function<void()> playback_end_callback_;
+    std::function<void(std::string)> playback_error_callback_;
     AVCodecContext* audio_decoder_ = nullptr;
     AVPacket* audio_packet_ = nullptr;
     AVFrame* audio_frame_ = nullptr;
