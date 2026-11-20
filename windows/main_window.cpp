@@ -1471,11 +1471,6 @@ void MainWindow::updatePlaybackState(
         {
             if (!was_playing)
                 video_end_of_stream_ = false;
-            if (!was_playing && !has_audio_)
-            {
-                video_clock_base_pts_ms_ = position_ms;
-                video_clock_.restart();
-            }
             if (!video_timer_->isActive())
                 video_timer_->start();
         }
