@@ -26,6 +26,14 @@ typedef void (*lnplayer_windows_video_frame_callback_t)(
     void* user_data);
 
 /*
+ * Attach the D3D11 device owned by the video renderer before opening media.
+ * The renderer must keep the device alive until the Player is destroyed.
+ */
+LNPLAYER_API lnplayer_result_t lnplayer_windows_set_d3d11_device(
+    lnplayer_t* player,
+    void* d3d11_device);
+
+/*
  * Windows video-output extension.
  * Decodes one frame synchronously on a Core worker. The callback executes
  * on the calling thread and the pixel buffer is valid only during callback.
