@@ -2,6 +2,10 @@
 
 #include <utility>
 
+#ifdef _WIN32
+#include <d3d11.h>
+#endif
+
 namespace lnplayer
 {
 
@@ -10,12 +14,22 @@ PlaybackSession::PlaybackSession(MediaBackendFactory backend_factory)
 {
 }
 
+PlaybackSession::~PlaybackSession()
+{
+#ifdef _WIN32
+    if (video_device_)
+        static_cast<ID3D11Device*>(video_device_)->Release();
+#endif
+}
+
 #ifdef _WIN32
 void PlaybackSession::set_video_device(void* device)
 {
     std::lock_guard<std::mutex> lock(mutex_);
     if (backend_)
         backend_->set_video_device(device);
+    if (video_device_)
+        static_cast<ID3D11Device*>(video_device_)->Release();
     video_device_ = device;
 }
 #endif
