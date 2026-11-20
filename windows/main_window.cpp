@@ -513,13 +513,18 @@ MainWindow::MainWindow(
             if (visible && isFullScreen())
                 showFullscreenControls();
         });
-        auto* settings_action = playlist_menu->addAction(QStringLiteral("视频设置..."));
-        connect(settings_action, &QAction::triggered, this, [this] { openVideoSettings(); });
         auto* clear_playlist_action = playlist_menu->addAction(QStringLiteral("清空播放列表"));
         connect(clear_playlist_action, &QAction::triggered, this, [this]
         {
             clearPlaylist();
         });
+    }
+
+    if (mode_ == PlayerMode::Video)
+    {
+        auto* settings_menu = menuBar()->addMenu(QStringLiteral("设置"));
+        auto* video_settings_action = settings_menu->addAction(QStringLiteral("视频设置..."));
+        connect(video_settings_action, &QAction::triggered, this, [this] { openVideoSettings(); });
     }
 
     if (menuBar())
