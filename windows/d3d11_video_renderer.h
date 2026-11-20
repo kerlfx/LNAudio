@@ -28,6 +28,7 @@ public:
     void resize(uint32_t width, uint32_t height);
     void set_stretch(bool enabled);
     void set_aspect_ratio(float ratio);
+    void set_zoom(float zoom);
     void set_video_filter(
         float brightness, float contrast, float saturation, float hue_degrees,
         float sharpness, float denoise, bool grayscale);
