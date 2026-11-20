@@ -7,6 +7,7 @@
 #include "lnplayer_windows.h"
 #endif
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <cstring>
