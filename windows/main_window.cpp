@@ -83,6 +83,13 @@ MainWindow::MainWindow(
     , snapshot_timer_(new QTimer(this))
     , video_timer_(new QTimer(this))
 {
+    if (mode_ == PlayerMode::Video)
+    {
+        QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+        playback_rate_ = std::clamp(
+            settings.value(QStringLiteral("Video/PlaybackRate"), 1.0).toFloat(),
+            0.25f, 4.0f);
+    }
     setAcceptDrops(true);
     resize(mode_ == PlayerMode::Video ? QSize(960, 600) : QSize(720, 480));
     setWindowTitle(mode_ == PlayerMode::Video
@@ -810,6 +817,9 @@ MainWindow::MainWindow(
         config.user_data = this;
 
         const lnplayer_result_t result = lnplayer_create(&config, &player_);
+        if (result == LNPLAYER_RESULT_OK && mode_ == PlayerMode::Video)
+            lnplayer_set_playback_rate(player_, playback_rate_);
+
         if (result == LNPLAYER_RESULT_OK &&
             mode_ == PlayerMode::Video && video_surface_)
         {
@@ -2068,6 +2078,9 @@ void MainWindow::takeScreenshot()
 void MainWindow::setPlaybackRate(float rate)
 {
     playback_rate_ = rate;
+    QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+    settings.setValue(QStringLiteral("Video/PlaybackRate"), rate);
+    settings.sync();
 
     QMetaObject::invokeMethod(command_worker_, [this, rate]
     {
