@@ -7,7 +7,6 @@
 #include <algorithm>
 #include <cmath>
 #include <functional>
-#include <future>
 #include <iterator>
 #include <memory>
 #include <utility>
@@ -439,11 +438,11 @@ MainWindow::MainWindow(
     , play_button_(new QPushButton(QStringLiteral("播放"), this))
     , pause_button_(new QPushButton(QStringLiteral("暂停"), this))
     , stop_button_(new QPushButton(QStringLiteral("停止"), this))
-    , ui_io_work_guard_(asio::make_work_guard(ui_io_context_))
-    , ui_thread_pool_(3)
-    , command_executor_(asio::make_strand(ui_thread_pool_))
-    , frame_executor_(asio::make_strand(ui_thread_pool_))
-    , library_executor_(asio::make_strand(ui_thread_pool_))
+    , task_tracker_(std::make_shared<UiTaskTracker>())
+    , background_executor_(UiTaskRuntime::instance().thread_pool_executor())
+    , command_executor_(asio::make_strand(background_executor_))
+    , frame_executor_(asio::make_strand(background_executor_))
+    , library_executor_(asio::make_strand(background_executor_))
     , snapshot_timer_(new QTimer(this))
     , video_timer_(new QTimer(this))
     , device_timer_(new QTimer(this))
@@ -1841,11 +1840,6 @@ MainWindow::MainWindow(
     }
     statusBar()->showMessage(QStringLiteral("正在初始化播放器"));
 
-    ui_io_thread_ = std::thread([this]
-    {
-        ui_io_context_.run();
-    });
-
     const uint32_t initial_volume = static_cast<uint32_t>(volume_slider_->value());
     const float initial_playback_rate = playback_rate_;
     const int64_t initial_subtitle_offset_ms = subtitle_offset_ms_;
@@ -2116,20 +2110,7 @@ MainWindow::~MainWindow()
     video_timer_->stop();
     device_timer_->stop();
 
-    std::promise<void> io_barrier;
-    std::future<void> io_barrier_future = io_barrier.get_future();
-    asio::post(ui_io_context_, [&io_barrier]
-    {
-        io_barrier.set_value();
-    });
-    io_barrier_future.wait();
-    ui_io_work_guard_.reset();
-    if (ui_io_thread_.joinable())
-        ui_io_thread_.join();
-
-    // The dispatcher has submitted every accepted task. Drain the shared pool
-    // before destroying the Player handle used by those tasks.
-    ui_thread_pool_.join();
+    task_tracker_->close_and_wait();
     if (lnplayer_t* player = player_.exchange(nullptr, std::memory_order_acq_rel))
         lnplayer_destroy(player);
 }
