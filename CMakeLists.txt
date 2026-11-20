@@ -64,6 +64,16 @@ if(WIN32)
         WriteRegStr HKLM "Software\Clients\Media\LNPlayer\Capabilities\FileAssociations" ".mpg" "LNPlayer.Video"
     ]=])
     set(CPACK_NSIS_EXTRA_UNINSTALL_COMMANDS [=[
+        DeleteRegValue HKCR ".mp4\OpenWithProgids" "LNPlayer.Video"
+        DeleteRegValue HKCR ".mkv\OpenWithProgids" "LNPlayer.Video"
+        DeleteRegValue HKCR ".mov\OpenWithProgids" "LNPlayer.Video"
+        DeleteRegValue HKCR ".avi\OpenWithProgids" "LNPlayer.Video"
+        DeleteRegValue HKCR ".webm\OpenWithProgids" "LNPlayer.Video"
+        DeleteRegValue HKCR ".wmv\OpenWithProgids" "LNPlayer.Video"
+        DeleteRegValue HKCR ".flv\OpenWithProgids" "LNPlayer.Video"
+        DeleteRegValue HKCR ".mpeg\OpenWithProgids" "LNPlayer.Video"
+        DeleteRegValue HKCR ".mpg\OpenWithProgids" "LNPlayer.Video"
+        DeleteRegValue HKLM "Software\RegisteredApplications" "LNPlayer"
         DeleteRegKey HKCR "LNPlayer.Video"
         DeleteRegKey HKCR "Applications\LNPlayer.exe"
         DeleteRegKey HKLM "Software\Clients\Media\LNPlayer"
