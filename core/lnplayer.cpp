@@ -286,13 +286,14 @@ public:
         // The backend may have posted its final completion event immediately
         // before the close operation completed. Drain those handlers while
         // this Controller is still alive.
-        auto drained = std::make_shared<std::promise<void>>();
-        auto future = drained->get_future();
+        std::promise<void> drained;
+        std::future<void> future;
         try
         {
-            asio::post(runtime_.io_context(), [drained]
+            future = drained.get_future();
+            asio::post(runtime_.io_context(), [&drained]
             {
-                drained->set_value();
+                drained.set_value();
             });
         }
         catch (...)
@@ -800,7 +801,23 @@ lnplayer_result_t lnplayer_destroy(lnplayer_t* player)
     });
     lock.unlock();
 
-    const lnplayer_result_t shutdown_result = player->controller->shutdown();
+    lnplayer_result_t shutdown_result = LNPLAYER_RESULT_INTERNAL_ERROR;
+    try
+    {
+        shutdown_result = player->controller->shutdown();
+    }
+    catch (...)
+    {
+        shutdown_result = LNPLAYER_RESULT_INTERNAL_ERROR;
+    }
+
+    if (shutdown_result != LNPLAYER_RESULT_OK)
+    {
+        // If the Controller could not establish its own drain barrier, stop
+        // all producers and drain io_context while the Controller is alive.
+        player->runtime.shutdown();
+    }
+    player->controller.reset();
     delete player;
 
     lock.lock();
