@@ -227,6 +227,11 @@ public:
     }
 
 #ifdef _WIN32
+    void set_video_device(void* device)
+    {
+        session_.set_video_device(device);
+    }
+
     lnplayer_result_t read_video_frame(
         lnplayer_windows_video_frame_callback_t callback,
         void* user_data,
@@ -740,6 +745,19 @@ lnplayer_result_t lnplayer_library_search_tracks(
 }
 
 #ifdef _WIN32
+lnplayer_result_t lnplayer_windows_set_d3d11_device(
+    lnplayer_t* player,
+    void* d3d11_device)
+{
+    if (!is_current_player(player))
+        return set_error(LNPLAYER_RESULT_INVALID_HANDLE, "Invalid Player handle.");
+    if (!d3d11_device)
+        return set_error(LNPLAYER_RESULT_INVALID_ARGUMENT, "D3D11 device is null.");
+
+    player->controller->set_video_device(d3d11_device);
+    return finish_result(LNPLAYER_RESULT_OK);
+}
+
 lnplayer_result_t lnplayer_windows_read_video_frame(
     lnplayer_t* player,
     lnplayer_windows_video_frame_callback_t callback,
