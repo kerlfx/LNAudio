@@ -12,6 +12,7 @@ namespace lnplayer
 {
 
 std::unique_ptr<MediaBackend> create_ffmpeg_media_backend();
+bool probe_ffmpeg_media(const std::string& source, MediaInfo& info, std::string& error);
 
 bool convert_d3d11_frame_to_bgra(
     const std::shared_ptr<void>& frame_owner,
