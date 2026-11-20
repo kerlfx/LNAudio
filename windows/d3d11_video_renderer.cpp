@@ -166,7 +166,7 @@ public:
         return true;
     }
 
-    void* native_device() const
+    void* native_device()
     {
         std::lock_guard<std::mutex> lock(mutex_);
         return device_.Get();
@@ -432,7 +432,7 @@ bool D3D11VideoRenderer::initialize(HWND window)
     return impl_->initialize(window);
 }
 
-void* D3D11VideoRenderer::native_device() const
+void* D3D11VideoRenderer::native_device()
 {
     return impl_->native_device();
 }
