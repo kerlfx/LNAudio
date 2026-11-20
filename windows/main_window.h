@@ -295,6 +295,7 @@ private:
     int playlist_index_ = -1;
     QString current_media_path_;
     QListWidgetItem* playing_playlist_item_ = nullptr;
+    QMultiHash<QString, QListWidgetItem*> playlist_item_index_;
     bool playlist_open_pending_ = false;
     bool subtitles_enabled_ = true;
     int64_t subtitle_offset_ms_ = 0;
