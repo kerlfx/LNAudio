@@ -62,6 +62,7 @@ public:
     bool present_hardware_frame(
         void* texture, uint32_t array_slice, uint32_t format,
         int width, int height, std::shared_ptr<void> frame_owner);
+    QImage capture_frame() const;
     void set_interaction_callbacks(
         std::function<void()> double_click,
         std::function<void(int)> wheel);
@@ -178,6 +179,19 @@ bool VideoSurface::present_hardware_frame(
 {
     return renderer_ && renderer_->present_hardware(
         texture, array_slice, format, width, height, std::move(frame_owner));
+}
+
+QImage VideoSurface::capture_frame() const
+{
+    if (!renderer_)
+        return frame_;
+    std::vector<uint8_t> pixels;
+    int width = 0;
+    int height = 0;
+    if (!renderer_->capture_bgra(pixels, width, height))
+        return frame_;
+    return QImage(
+        pixels.data(), width, height, width * 4, QImage::Format_ARGB32).copy();
 }
 
 void VideoSurface::set_interaction_callbacks(
@@ -1161,7 +1175,8 @@ void MainWindow::seekRelative(int64_t offset_ms)
 
 void MainWindow::takeScreenshot()
 {
-    if (last_video_frame_.isNull())
+    QImage screenshot = video_surface_ ? video_surface_->capture_frame() : last_video_frame_;
+    if (screenshot.isNull())
         return;
 
     const QString path = QFileDialog::getSaveFileName(
@@ -1170,7 +1185,7 @@ void MainWindow::takeScreenshot()
         QStringLiteral("screenshot.png"),
         QStringLiteral("PNG 图片 (*.png);;JPEG 图片 (*.jpg *.jpeg)"));
     if (!path.isEmpty())
-        last_video_frame_.save(path);
+        screenshot.save(path);
 }
 
 void MainWindow::setPlaybackRate(float rate)
