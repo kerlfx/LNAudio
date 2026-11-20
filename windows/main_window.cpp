@@ -2484,6 +2484,9 @@ void MainWindow::openFiles(const QList<QUrl>& urls)
                 return;
             }
 
+            for (const QString& queued_path : playlist_probe_queue_)
+                playlist_probe_pending_.remove(queued_path);
+            playlist_probe_queue_.clear();
             playlist_ = std::move(next_playlist);
             playlist_index_ = 0;
             resetShuffleOrder();
@@ -2721,6 +2724,9 @@ void MainWindow::saveVideoPlaylist() const
 void MainWindow::clearPlaylist()
 {
     savePlaybackPosition();
+    for (const QString& queued_path : playlist_probe_queue_)
+        playlist_probe_pending_.remove(queued_path);
+    playlist_probe_queue_.clear();
     playlist_.clear();
     playlist_index_ = -1;
     current_media_path_.clear();
