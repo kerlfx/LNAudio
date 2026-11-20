@@ -543,7 +543,7 @@ Core 内部可以使用 FFmpeg AVFrame 和 AVBufferRef 管理帧生命周期，�
 - **Android / Kotlin**：Kotlin 通过 JNI 调用相同 C ABI。提交型接口和快速查询可直接调用；同步完成型接口应由后台 Dispatcher/线程调用，不得阻塞 Android Main Thread。
 - **Core 内部**：命令由 Core Runtime 的 `io_context` 协调，实际业务由 Core 共享 `thread_pool` 执行。Windows UI 调度器不替代、不访问 Core 的执行器。
 
-快速查询只读取线程安全快照。同步完成型接口的等待发生在调用 C ABI 的线程，不阻塞 `io_context` worker。事件回调不得直接操作 QWidget、Android View 或其他 UI 对象；平台桥接层必须将事件投递到对应 UI 线程。
+只有纯缓存/原子快照查询才可直接读取且不等待媒体会话锁；当前可能竞争 Session 锁的快照查询必须放在后台执行器。同步完成型接口的等待发生在调用 C ABI 的工作线程，不阻塞 `io_context` worker。事件回调不得直接操作 QWidget、Android View 或其他 UI 对象；平台桥接层必须将事件投递到对应 UI 线程。
 
 不得从 Core 的 `io_context` worker 或 Player 事件回调中调用同步完成型接口，以免发生自等待或死锁。
 
