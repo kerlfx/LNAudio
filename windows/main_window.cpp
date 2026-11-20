@@ -1097,6 +1097,7 @@ MainWindow::MainWindow(
                 lnplayer_seek(player_, target, &operation_id);
             }
         }, Qt::QueuedConnection);
+        requestVideoFrame();
     });
 
     snapshot_timer_->setInterval(250);
@@ -2294,6 +2295,7 @@ void MainWindow::seekRelative(int64_t offset_ms)
         uint64_t operation_id = 0;
         lnplayer_seek(player_, target, &operation_id);
     }, Qt::QueuedConnection);
+    requestVideoFrame();
 }
 
 void MainWindow::takeScreenshot()
