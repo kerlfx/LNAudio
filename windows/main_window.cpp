@@ -1107,8 +1107,9 @@ MainWindow::MainWindow(
                 QStringLiteral("Video/Filter/Grayscale"), false).toBool();
             video_aspect_ratio_override_ = settings.value(
                 QStringLiteral("Video/Display/AspectRatio"), 0.0).toFloat();
-            if (video_aspect_ratio_override_ != 16.0f / 9.0f &&
-                video_aspect_ratio_override_ != 4.0f / 3.0f)
+            if (video_aspect_ratio_override_ != 0.0f &&
+                (video_aspect_ratio_override_ < 0.5f ||
+                    video_aspect_ratio_override_ > 3.0f))
                 video_aspect_ratio_override_ = 0.0f;
             video_stretch_ = settings.value(
                 QStringLiteral("Video/Display/Stretch"), false).toBool();
@@ -3401,7 +3402,7 @@ void MainWindow::openVideoSettings()
     settings.setValue(QStringLiteral("Video/Subtitle/Color"), subtitle_color_);
     settings.setValue(QStringLiteral("Video/Subtitle/VerticalPosition"), subtitle_vertical_position_);
     settings.setValue(QStringLiteral("Video/Screenshot/Directory"), screenshot_directory_);
-    settings.setValue(QStringLiteral("Video/Screenshot/Format"), output_format);
+    settings.setValue(QStringLiteral("Video/Screenshot/Format"), screenshot_format_);
     settings.sync();
 
     setSubtitleOffset(subtitle_offset_ms_);
