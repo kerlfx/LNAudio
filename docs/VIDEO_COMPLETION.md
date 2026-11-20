@@ -855,11 +855,11 @@
 
 ### 2026-11-21 — 便携数据目录与 Windows 文件关联
 
-- [x] 设置文件优先迁移到程序目录下的 `Data/settings.ini`；程序目录不可写时回退到当前用户 Local App Data，避免标准 Program Files 安装因权限不足无法保存设置。
+- [x] 设置文件优先迁移到程序目录下的 `Data/settings.ini`；程序目录不可写时回退到 `QStandardPaths::AppLocalDataLocation/Data`，避免标准 Program Files 安装因权限不足无法保存设置。
 - [x] 明确截图目录默认位于 Data/Screenshots；其他数据继续集中在 INI，缓存/日志等目录仅在对应功能实现后按需创建。
 - [x] 安装包文件关联改为当前用户注册，不写 HKLM；ProgID、OpenWith 和 RegisteredApplications 均限定在 HKCU，卸载只清理 LNPlayer 自身注册项。
-- [x] 设置常规页列出当前支持的视频扩展名，并提供 Windows 默认应用设置入口。默认应用由 Windows 管理，播放器不尝试绕过系统机制强制接管。
-- [ ] 仍需 Windows 实机验收便携目录写入、Program Files 回退、各扩展名双击启动、默认应用设置和卸载清理。
+- [x] 设置常规页列出当前支持的视频扩展名，并通过 `ms-settings:defaultapps?registeredAppUser=LNPlayer` 直达 LNPlayer 默认应用设置页。默认应用由 Windows 管理，播放器不尝试绕过系统机制强制接管。
+- [ ] 仍需 Windows 实机验收便携目录写入、Program Files 回退、各扩展名双击启动、默认应用设置和卸载清理；需确认卸载不会删除旧版注册表偏好。
 - [ ] 本次未运行 Windows 构建、CTest 或 CI。
 
 提交：
@@ -867,19 +867,7 @@
 - `e83bda2b891a16d05fbb7a0096cba08977b98548` — 常规设置页补充支持格式说明。
 - `12ececeaf212401de7703f33420d575690f708fe` — 便携数据目录和关联策略文档。
 
-### 2026-11-21 — 程序目录数据布局与 Windows 文件关联
-
-- [x] Windows 默认数据目录切换为程序目录下的 `Data/`，设置文件为 `Data/settings.ini`。
-- [x] 程序目录不可写时才回退到 `QStandardPaths::AppLocalDataLocation/Data`，避免在 Program Files 等受保护目录中写入失败。
-- [x] 截图默认目录切换到 `Data/Screenshots/`，不再默认写入用户主目录。
-- [x] 首次启动优先迁移旧 AppConfig 目录中的 INI；不存在时才一次性导入旧版注册表设置。新设置持续只写 INI。
-- [x] NSIS 安装路径默认调整到当前用户 LocalAppData/Programs，减少管理员权限需求并保持程序目录可写。
-- [x] 安装程序为当前用户注册视频扩展名、ProgID、OpenWith 和 Windows RegisteredApplications 候选，不写 HKLM，不覆盖默认应用。
-- [x] 设置窗口提供 Windows 默认应用设置入口；默认应用最终由 Windows 10/11 系统界面决定。
-- [ ] 尚未在 Windows 上验证便携目录写入、受保护目录回退、NSIS 安装/卸载清理、默认应用选择及扩展名双击启动。
-- [ ] 未运行 Windows 构建、CTest 或 CI。
-
-实现提交：
 - `1c7928c44b48d31f90038f805df18e5bf35a2884`、`81efb628ec8161b596496885568b9a92b441fb2f`、`03fde8a78bf72f8776fa1a260e7e030a7105b098` — 程序目录 Data 与旧配置迁移。
 - `2f640acb9d0377f76cd8f9c4afb5c8c7c09b2e86`、`2348792f94ebc0f2575e1ff58b1d6ff33ebd50da`、`93cc9c1e3664001052dce1b3261034c19f456b54` — 当前用户文件关联注册和 CMake 脚本修正。
-- `2c374117825ab1ac44bafe72d3d2634e6499d413` — 数据目录及验收说明。
+- `b33ae37c40236af9be8deca9a43d21e991b3a109` — 卸载时只删除空的应用注册表父键，保留其他旧数据。
+- `844c22ebaaad210fb5e88465f687b661c6b1c17e`、`b8906d5d7f11a469aa908949195a04e6b8c3aead` — 默认应用设置页深链接。
