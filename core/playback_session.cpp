@@ -130,6 +130,7 @@ SessionResult PlaybackSession::seek(int64_t position_ms)
         return make_result(false, result.message);
 
     snapshot_.position_ms = position_ms;
+    ++snapshot_.generation;
     return make_result(true);
 }
 
@@ -178,7 +179,10 @@ MediaBackendResult PlaybackSession::read_video_frame(VideoFrame& frame, bool& en
     std::lock_guard<std::mutex> lock(mutex_);
     if (!backend_)
         return MediaBackendResult{false, "No media source is open."};
-    return backend_->read_video_frame(frame, end_of_stream);
+    const MediaBackendResult result = backend_->read_video_frame(frame, end_of_stream);
+    if (result.success && !end_of_stream)
+        frame.generation = snapshot_.generation;
+    return result;
 }
 
 void PlaybackSession::set_volume(float volume)
