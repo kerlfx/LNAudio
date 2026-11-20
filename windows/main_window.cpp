@@ -838,14 +838,15 @@ void MainWindow::takeScreenshot()
 
 void MainWindow::setPlaybackRate(float rate)
 {
-    playback_rate_ = rate;
+    const float previous_rate = playback_rate_;
     if (!has_audio_ && video_clock_.isValid())
     {
         const int64_t current_clock = video_clock_base_pts_ms_ +
-            static_cast<int64_t>(video_clock_.elapsed() * rate);
+            static_cast<int64_t>(video_clock_.elapsed() * previous_rate);
         video_clock_base_pts_ms_ = current_clock;
         video_clock_.restart();
     }
+    playback_rate_ = rate;
 
     QMetaObject::invokeMethod(command_worker_, [this, rate]
     {
