@@ -4156,14 +4156,14 @@ void MainWindow::scheduleVideoPresentation()
     if (!pending_video_frame_valid_ || !is_playing_ || !video_timer_)
         return;
 
-    int64_t clock_ms = current_position_ms_;
+    double clock_ms = static_cast<double>(current_position_ms_);
     if (video_clock_timer_.isValid())
-        clock_ms = video_clock_anchor_position_ms_ +
-            static_cast<int64_t>(video_clock_timer_.elapsed() * playback_rate_);
+        clock_ms = static_cast<double>(video_clock_anchor_position_ms_) +
+            video_clock_timer_.nsecsElapsed() / 1000000.0 * playback_rate_;
 
     const double remaining_ms =
-        static_cast<double>(pending_video_pts_ms_ - clock_ms - 8) /
-        std::max(0.25f, playback_rate_);
+        (static_cast<double>(pending_video_pts_ms_) - clock_ms - 8.0) /
+        std::max(0.25, static_cast<double>(playback_rate_));
     const int delay_ms = static_cast<int>(std::clamp(
         std::ceil(remaining_ms), 0.0, 1000.0));
     video_timer_->start(delay_ms);
@@ -4176,11 +4176,11 @@ void MainWindow::presentPendingVideoFrame()
 
     if (is_playing_)
     {
-        int64_t clock_ms = current_position_ms_;
+        double clock_ms = static_cast<double>(current_position_ms_);
         if (video_clock_timer_.isValid())
-            clock_ms = video_clock_anchor_position_ms_ +
-                static_cast<int64_t>(video_clock_timer_.elapsed() * playback_rate_);
-        if (pending_video_pts_ms_ > clock_ms + 8)
+            clock_ms = static_cast<double>(video_clock_anchor_position_ms_) +
+                video_clock_timer_.nsecsElapsed() / 1000000.0 * playback_rate_;
+        if (static_cast<double>(pending_video_pts_ms_) > clock_ms + 8.0)
         {
             scheduleVideoPresentation();
             return;
@@ -4657,7 +4657,8 @@ void MainWindow::setPlaybackRate(float rate)
     if (is_playing_ && video_clock_timer_.isValid())
     {
         video_clock_anchor_position_ms_ = video_clock_anchor_position_ms_ +
-            static_cast<int64_t>(video_clock_timer_.elapsed() * playback_rate_);
+            static_cast<int64_t>(std::llround(
+                video_clock_timer_.nsecsElapsed() / 1000000.0 * playback_rate_));
         video_clock_timer_.restart();
     }
     else
@@ -4665,6 +4666,8 @@ void MainWindow::setPlaybackRate(float rate)
         video_clock_anchor_position_ms_ = current_position_ms_;
     }
     playback_rate_ = rate;
+    if (pending_video_frame_valid_)
+        scheduleVideoPresentation();
     showOsd(QStringLiteral("播放速度 %1x").arg(rate, 0, 'f', 2));
     QSettings settings(settings_file_path(), QSettings::IniFormat);
     settings.setValue(QStringLiteral("Video/PlaybackRate"), rate);
