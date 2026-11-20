@@ -2560,16 +2560,17 @@ void MainWindow::schedulePlaylistMetadataProbe(const QString& path)
         return;
 
     playlist_probe_pending_.insert(path);
-    playlist_probe_queue_.append(path);
+    playlist_probe_queue_.push_back(path);
     startNextPlaylistMetadataProbe();
 }
 
 void MainWindow::startNextPlaylistMetadataProbe()
 {
-    if (playlist_probe_running_ || playlist_probe_queue_.isEmpty())
+    if (playlist_probe_running_ || playlist_probe_queue_.empty())
         return;
 
-    const QString path = playlist_probe_queue_.takeFirst();
+    const QString path = std::move(playlist_probe_queue_.front());
+    playlist_probe_queue_.pop_front();
     const QByteArray path_utf8 = path.toUtf8();
     playlist_probe_running_ = true;
     postLibrary([this, path, path_utf8]
