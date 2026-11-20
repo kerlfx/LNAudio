@@ -368,7 +368,9 @@ QWidget* create_playlist_header(QWidget* parent)
     return header;
 }
 
-QStringList expand_media_urls(const QList<QUrl>& urls)
+QStringList expand_media_urls(
+    const QList<QUrl>& urls,
+    const std::shared_ptr<UiTaskTracker>& tracker)
 {
     const QStringList video_filters = {
         QStringLiteral("*.mp4"), QStringLiteral("*.mkv"), QStringLiteral("*.mov"),
@@ -384,6 +386,8 @@ QStringList expand_media_urls(const QList<QUrl>& urls)
     QSet<QString> unique_paths;
     for (const QUrl& url : urls)
     {
+        if (!tracker->accepting())
+            return paths;
         const QString path = url.toLocalFile();
         if (path.isEmpty())
             continue;
@@ -393,7 +397,7 @@ QStringList expand_media_urls(const QList<QUrl>& urls)
             QDirIterator iterator(
                 file_info.absoluteFilePath(), video_filters,
                 QDir::Files | QDir::Readable, QDirIterator::Subdirectories);
-            while (iterator.hasNext())
+            while (iterator.hasNext() && tracker->accepting())
             {
                 const QString candidate = QFileInfo(iterator.next()).absoluteFilePath();
                 const QString key = candidate.toCaseFolded();
@@ -415,6 +419,8 @@ QStringList expand_media_urls(const QList<QUrl>& urls)
             }
         }
     }
+    if (!tracker->accepting())
+        return paths;
     std::sort(paths.begin(), paths.end(), [](const QString& left, const QString& right)
     {
         return left.compare(right, Qt::CaseInsensitive) < 0;
@@ -2453,9 +2459,10 @@ void MainWindow::openFiles(const QList<QUrl>& urls)
     savePlaybackPosition();
     const uint64_t operation_generation = ++playlist_operation_generation_;
     status_label_->setText(QStringLiteral("正在扫描媒体文件..."));
-    postLibrary([this, urls, operation_generation]
+    const auto tracker = task_tracker_;
+    postLibrary([this, tracker, urls, operation_generation]
     {
-        const QStringList paths = expand_media_urls(urls);
+        const QStringList paths = expand_media_urls(urls, tracker);
         QMetaObject::invokeMethod(this, [this, paths, operation_generation]
         {
             if (operation_generation != playlist_operation_generation_)
@@ -2488,9 +2495,10 @@ void MainWindow::appendPlaylistFiles(const QList<QUrl>& urls)
         return;
 
     const uint64_t operation_generation = playlist_operation_generation_;
-    postLibrary([this, urls, operation_generation]
+    const auto tracker = task_tracker_;
+    postLibrary([this, tracker, urls, operation_generation]
     {
-        const QStringList paths = expand_media_urls(urls);
+        const QStringList paths = expand_media_urls(urls, tracker);
         QMetaObject::invokeMethod(this, [this, paths, operation_generation]
         {
             if (operation_generation != playlist_operation_generation_)
