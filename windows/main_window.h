@@ -43,6 +43,10 @@ private:
     void refreshLibrary();
     void requestVideoFrame();
     void presentPendingVideoFrame();
+    void togglePlayback();
+    void seekRelative(int64_t offset_ms);
+    void takeScreenshot();
+    void stepVideoFrame();
     void handleCoreEvent(
         lnplayer_event_type_t type,
         lnplayer_result_t result,
@@ -82,10 +86,12 @@ private:
     bool video_first_frame_received_ = false;
     bool video_end_of_stream_ = false;
     QImage pending_video_frame_;
+    QImage last_video_frame_;
     int64_t pending_video_pts_ms_ = 0;
     int64_t current_position_ms_ = 0;
     int64_t video_clock_base_pts_ms_ = 0;
     QElapsedTimer video_clock_;
+    int muted_volume_ = 1000;
 };
 
 #endif
