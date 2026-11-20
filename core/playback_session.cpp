@@ -328,13 +328,23 @@ MediaBackendResult PlaybackSession::read_video_frame(VideoFrame& frame, bool& en
     if (!result.success || end_of_stream)
         return result;
 
-    if (media_generation_.load(std::memory_order_acquire) != generation)
+    const uint64_t current_generation =
+        media_generation_.load(std::memory_order_acquire);
+    if (current_generation != generation)
     {
         frame = {};
+        frame.generation = current_generation;
         end_of_stream = false;
         return MediaBackendResult{true, {}};
     }
 
+#ifdef _WIN32
+    if (frame.bgra.empty() && !frame.d3d11_texture)
+        return result;
+#else
+    if (frame.bgra.empty())
+        return result;
+#endif
     frame.generation = generation;
     return result;
 }
