@@ -57,6 +57,7 @@
 #include <QStyledItemDelegate>
 #include <QStyle>
 #include <QStyleOptionViewItem>
+#include <QStyleOptionSlider>
 #include <QMenuBar>
 #include <QMenu>
 #include <QActionGroup>
@@ -88,6 +89,74 @@
 namespace
 {
 
+class SeekSlider final : public QSlider
+{
+public:
+    explicit SeekSlider(QWidget* parent = nullptr)
+        : QSlider(Qt::Horizontal, parent)
+    {
+    }
+
+protected:
+    void mousePressEvent(QMouseEvent* event) override
+    {
+        if (event->button() == Qt::LeftButton && !sliderHandleRect().contains(event->position().toPoint()))
+        {
+            groove_dragging_ = true;
+            setSliderDown(true);
+            setValueFromPosition(event->position().toPoint().x());
+            event->accept();
+            return;
+        }
+        QSlider::mousePressEvent(event);
+    }
+
+    void mouseMoveEvent(QMouseEvent* event) override
+    {
+        if (groove_dragging_ && (event->buttons() & Qt::LeftButton))
+        {
+            setValueFromPosition(event->position().toPoint().x());
+            event->accept();
+            return;
+        }
+        QSlider::mouseMoveEvent(event);
+    }
+
+    void mouseReleaseEvent(QMouseEvent* event) override
+    {
+        if (groove_dragging_ && event->button() == Qt::LeftButton)
+        {
+            setValueFromPosition(event->position().toPoint().x());
+            groove_dragging_ = false;
+            setSliderDown(false);
+            event->accept();
+            return;
+        }
+        QSlider::mouseReleaseEvent(event);
+    }
+
+private:
+    QRect sliderHandleRect() const
+    {
+        QStyleOptionSlider option;
+        initStyleOption(&option);
+        return style()->subControlRect(
+            QStyle::CC_Slider, &option, QStyle::SC_SliderHandle, this);
+    }
+
+    void setValueFromPosition(int x)
+    {
+        const int handle_width = sliderHandleRect().width();
+        const int span = std::max(1, width() - handle_width);
+        const int position = std::clamp(x - handle_width / 2, 0, span);
+        setValue(QStyle::sliderValueFromPosition(
+            minimum(), maximum(), position, span, orientation() == Qt::Horizontal
+                ? (layoutDirection() == Qt::RightToLeft)
+                : false));
+    }
+
+    bool groove_dragging_ = false;
+};
 
 QString application_data_directory()
 {
@@ -301,7 +370,7 @@ MainWindow::MainWindow(
     , media_title_label_(new QLabel(QStringLiteral("未打开媒体"), this))
     , library_search_(new QLineEdit(this))
     , library_list_(new QListWidget(this))
-    , seek_slider_(new QSlider(Qt::Horizontal, this))
+    , seek_slider_(new SeekSlider(this))
     , volume_slider_(new QSlider(Qt::Horizontal, this))
     , play_button_(new QPushButton(QStringLiteral("播放"), this))
     , pause_button_(new QPushButton(QStringLiteral("暂停"), this))
