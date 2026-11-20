@@ -337,6 +337,8 @@ public:
             return false;
 
         reap_completed_hardware_frames();
+        if (pending_hardware_frames_.size() >= 4)
+            return true;
 
         RECT client{};
         if (!GetClientRect(window_, &client))
