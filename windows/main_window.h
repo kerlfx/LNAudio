@@ -168,6 +168,7 @@ private:
     QTimer* device_timer_;
     QTimer* fullscreen_hide_timer_;
     QTimer* osd_timer_;
+    QTimer* volume_settings_timer_;
     lnplayer_t* player_ = nullptr;
     void* video_device_identity_ = nullptr;
     int64_t duration_ms_ = -1;
