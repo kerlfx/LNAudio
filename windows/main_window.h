@@ -2,6 +2,7 @@
 #define LNPLAYER_MAIN_WINDOW_H
 
 #include <QMainWindow>
+#include <QElapsedTimer>
 #include <QImage>
 #include <QString>
 #include <QStringList>
@@ -157,6 +158,8 @@ private:
     int64_t pending_video_pts_ms_ = 0;
     uint64_t pending_video_generation_ = 0;
     int64_t current_position_ms_ = 0;
+    int64_t video_clock_anchor_position_ms_ = 0;
+    QElapsedTimer video_clock_timer_;
     int muted_volume_ = 1000;
     float playback_rate_ = 1.0f;
     float video_aspect_ratio_override_ = 0.0f;
