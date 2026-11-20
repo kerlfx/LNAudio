@@ -124,6 +124,8 @@ MainWindow::MainWindow(
             settings.value(QStringLiteral("Video/Subtitle/FontSize"), 0).toInt(), 0, 96);
         subtitle_vertical_position_ = std::clamp(
             settings.value(QStringLiteral("Video/Subtitle/VerticalPosition"), 80).toInt(), 60, 80);
+        middle_click_action_ = std::clamp(
+            settings.value(QStringLiteral("Video/Mouse/MiddleClickAction"), 1).toInt(), 0, 2);
     }
     setAcceptDrops(true);
     resize(mode_ == PlayerMode::Video ? QSize(960, 600) : QSize(720, 480));
@@ -411,6 +413,18 @@ MainWindow::MainWindow(
             {
                 volume_slider_->setValue(std::clamp(
                     volume_slider_->value() + direction * 50, 0, 1000));
+            },
+            [this]
+            {
+                if (middle_click_action_ == 1)
+                    togglePlayback();
+                else if (middle_click_action_ == 2)
+                {
+                    if (isFullScreen())
+                        showNormal();
+                    else
+                        showFullScreen();
+                }
             });
         video_surface_->setContextMenuPolicy(Qt::CustomContextMenu);
         connect(video_surface_, &QWidget::customContextMenuRequested, this, [this](const QPoint& point)
@@ -1664,8 +1678,14 @@ void MainWindow::openVideoSettings()
     hide_delay->setValue(fullscreen_hide_delay_ms_ / 1000);
     auto* show_playlist = new QCheckBox(QStringLiteral("显示播放列表侧栏"), interface_page);
     show_playlist->setChecked(playlist_panel_visible_);
+    auto* middle_click = new QComboBox(interface_page);
+    middle_click->addItem(QStringLiteral("无动作"), 0);
+    middle_click->addItem(QStringLiteral("播放/暂停"), 1);
+    middle_click->addItem(QStringLiteral("切换全屏"), 2);
+    middle_click->setCurrentIndex(middle_click_action_);
     interface_form->addRow(QStringLiteral("全屏控制栏自动隐藏"), hide_delay);
     interface_form->addRow(show_playlist);
+    interface_form->addRow(QStringLiteral("画面中键操作"), middle_click);
     tabs->addTab(interface_page, QStringLiteral("界面"));
 
     auto* video_page = new QWidget(tabs);
@@ -1752,6 +1772,7 @@ void MainWindow::openVideoSettings()
     {
         hide_delay->setValue(2);
         show_playlist->setChecked(true);
+        middle_click->setCurrentIndex(1);
         aspect->setCurrentIndex(0);
         brightness->setValue(0.0);
         contrast->setValue(1.0);
@@ -1797,6 +1818,7 @@ void MainWindow::openVideoSettings()
     fullscreen_hide_delay_ms_ = hide_delay->value() * 1000;
     fullscreen_hide_timer_->setInterval(fullscreen_hide_delay_ms_);
     playlist_panel_visible_ = show_playlist->isChecked();
+    middle_click_action_ = middle_click->currentData().toInt();
     if (playlist_visibility_action_)
         playlist_visibility_action_->setChecked(playlist_panel_visible_);
     if (playlist_panel_)
@@ -1830,6 +1852,7 @@ void MainWindow::openVideoSettings()
             sequence.toString(QKeySequence::PortableText));
     }
     settings.setValue(QStringLiteral("Video/UI/PlaylistVisible"), playlist_panel_visible_);
+    settings.setValue(QStringLiteral("Video/Mouse/MiddleClickAction"), middle_click_action_);
     settings.setValue(QStringLiteral("Video/Display/AspectRatio"), video_aspect_ratio_override_);
     settings.setValue(QStringLiteral("Video/Display/Stretch"), video_stretch_);
     settings.setValue(QStringLiteral("Video/Filter/Brightness"), video_brightness_);
