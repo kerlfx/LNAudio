@@ -40,6 +40,27 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
+class VideoSurface final : public QWidget
+{
+public:
+    explicit VideoSurface(QWidget* parent = nullptr);
+    ~VideoSurface() override;
+
+    void set_frame(const QImage& frame);
+    bool has_renderer() const;
+    void set_stretch(bool enabled);
+    bool present_frame_threadsafe(const QImage& frame);
+
+protected:
+    void paintEvent(QPaintEvent* event) override;
+    void resizeEvent(QResizeEvent* event) override;
+
+private:
+    QImage frame_;
+    lnplayer::windows::D3D11VideoRenderer* renderer_ = nullptr;
+    bool stretch_ = false;
+};
+
 VideoSurface::VideoSurface(QWidget* parent)
     : QWidget(parent)
 {
