@@ -2,6 +2,7 @@
 #define LNPLAYER_MAIN_WINDOW_H
 
 #include <QMainWindow>
+#include <QString>
 #include <QList>
 #include <QUrl>
 
