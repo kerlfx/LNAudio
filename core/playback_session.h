@@ -66,6 +66,7 @@ private:
     mutable std::mutex mutex_;
     std::unique_ptr<MediaBackend> backend_;
     SessionSnapshot snapshot_;
+    float volume_ = 1.0f;
 };
 
 }
