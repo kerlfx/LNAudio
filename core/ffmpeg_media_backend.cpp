@@ -127,6 +127,8 @@ public:
         }
 
         opened_ = true;
+        position_ms_.store(0, std::memory_order_relaxed);
+        playback_ended_.store(false, std::memory_order_relaxed);
         audio_draining_ = false;
         audio_packet_pending_ = false;
         return success();
@@ -305,12 +307,24 @@ public:
 
         audio_stream_index_ = -1;
         video_stream_index_ = -1;
+        position_ms_.store(0, std::memory_order_relaxed);
+        playback_ended_.store(false, std::memory_order_relaxed);
         opened_ = false;
         playing_ = false;
         audio_draining_ = false;
         audio_packet_pending_ = false;
         audio_decoder_eof_ = false;
         return success();
+    }
+
+    int64_t position_ms() const override
+    {
+        return position_ms_.load(std::memory_order_relaxed);
+    }
+
+    bool playback_ended() const override
+    {
+        return playback_ended_.load(std::memory_order_relaxed);
     }
 
     MediaBackendResult read_audio_frame(AudioFrame& output, bool& end_of_stream) override
@@ -422,6 +436,8 @@ private:
                 std::lock_guard<std::mutex> lock(playback_mutex_);
                 playback_active_ = false;
                 playing_ = false;
+                if (decode_result.success && end_of_stream)
+                    playback_ended_.store(true, std::memory_order_relaxed);
                 playback_condition_.notify_all();
                 continue;
             }
@@ -529,8 +545,9 @@ private:
         const AVStream* stream = format_context_->streams[audio_stream_index_];
         const int64_t timestamp = audio_frame_->best_effort_timestamp;
         output.pts_ms = timestamp == AV_NOPTS_VALUE
-            ? 0
+            ? position_ms_.load(std::memory_order_relaxed)
             : av_rescale_q(timestamp, stream->time_base, AVRational{1, 1000});
+        position_ms_.store(output.pts_ms, std::memory_order_relaxed);
 
         av_frame_unref(audio_frame_);
         return success();
@@ -559,6 +576,8 @@ private:
     bool playback_start_success_ = false;
 #endif
     int output_sample_rate_ = kOutputSampleRate;
+    std::atomic<int64_t> position_ms_{0};
+    std::atomic<bool> playback_ended_{false};
     AVCodecContext* audio_decoder_ = nullptr;
     AVPacket* audio_packet_ = nullptr;
     AVFrame* audio_frame_ = nullptr;
