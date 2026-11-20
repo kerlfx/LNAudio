@@ -16,9 +16,12 @@
 #include <QAbstractItemView>
 #include <QByteArray>
 #include <QFont>
+#include <QApplication>
+#include <QCursor>
 #include <QDragEnterEvent>
 #include <QDir>
 #include <QDropEvent>
+#include <QEvent>
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -85,6 +88,7 @@ MainWindow::MainWindow(
     , snapshot_timer_(new QTimer(this))
     , video_timer_(new QTimer(this))
     , device_timer_(new QTimer(this))
+    , fullscreen_hide_timer_(new QTimer(this))
 {
     if (mode_ == PlayerMode::Video)
     {
@@ -207,16 +211,16 @@ MainWindow::MainWindow(
         playlist_widget_->setMaximumWidth(280);
         playlist_widget_->setDragDropMode(QAbstractItemView::InternalMove);
         playlist_widget_->setDefaultDropAction(Qt::MoveAction);
-        auto* playlist_panel = new QWidget(content);
-        auto* playlist_panel_layout = new QVBoxLayout(playlist_panel);
+        playlist_panel_ = new QWidget(content);
+        auto* playlist_panel_layout = new QVBoxLayout(playlist_panel_);
         playlist_panel_layout->setContentsMargins(0, 0, 0, 0);
         auto* playlist_actions = new QHBoxLayout();
-        auto* add_to_queue = new QPushButton(QStringLiteral("添加"), playlist_panel);
-        auto* remove_from_queue = new QPushButton(QStringLiteral("移除"), playlist_panel);
-        auto* move_up = new QPushButton(QStringLiteral("上移"), playlist_panel);
-        auto* move_down = new QPushButton(QStringLiteral("下移"), playlist_panel);
-        auto* shuffle_button = new QPushButton(QStringLiteral("随机：关"), playlist_panel);
-        auto* repeat_button = new QPushButton(QStringLiteral("循环：关"), playlist_panel);
+        auto* add_to_queue = new QPushButton(QStringLiteral("添加"), playlist_panel_);
+        auto* remove_from_queue = new QPushButton(QStringLiteral("移除"), playlist_panel_);
+        auto* move_up = new QPushButton(QStringLiteral("上移"), playlist_panel_);
+        auto* move_down = new QPushButton(QStringLiteral("下移"), playlist_panel_);
+        auto* shuffle_button = new QPushButton(QStringLiteral("随机：关"), playlist_panel_);
+        auto* repeat_button = new QPushButton(QStringLiteral("循环：关"), playlist_panel_);
         shuffle_button_ = shuffle_button;
         repeat_button_ = repeat_button;
         shuffle_button->setCheckable(true);
@@ -680,7 +684,7 @@ MainWindow::MainWindow(
         });
         auto* video_layout = new QHBoxLayout();
         video_layout->addWidget(video_surface_, 1);
-        video_layout->addWidget(playlist_panel);
+        video_layout->addWidget(playlist_panel_);
         layout->addLayout(video_layout, 1);
     }
     else
@@ -735,7 +739,10 @@ MainWindow::MainWindow(
     auto* seek_layout = new QHBoxLayout();
     seek_layout->addWidget(position_label_);
     seek_layout->addWidget(seek_slider_, 1);
-    layout->addLayout(seek_layout);
+    control_panel_ = new QWidget(content);
+    auto* control_panel_layout = new QVBoxLayout(control_panel_);
+    control_panel_layout->setContentsMargins(0, 0, 0, 0);
+    control_panel_layout->addLayout(seek_layout);
 
     auto* control_layout = new QHBoxLayout();
     control_layout->addWidget(play_button_);
@@ -750,10 +757,39 @@ MainWindow::MainWindow(
     control_layout->addStretch(1);
     control_layout->addWidget(new QLabel(QStringLiteral("音量"), content));
     control_layout->addWidget(volume_slider_);
-    layout->addLayout(control_layout);
-
-    layout->addWidget(status_label_);
+    control_panel_layout->addLayout(control_layout);
+    control_panel_layout->addWidget(status_label_);
+    layout->addWidget(control_panel_);
     setCentralWidget(content);
+
+    fullscreen_hide_timer_->setSingleShot(true);
+    fullscreen_hide_timer_->setInterval(2000);
+    connect(fullscreen_hide_timer_, &QTimer::timeout, this, [this]
+    {
+        if (!isFullScreen() || !control_panel_)
+            return;
+        control_panel_->hide();
+        fullscreen_controls_visible_ = false;
+        if (menuBar())
+            menuBar()->hide();
+        if (playlist_panel_)
+            playlist_panel_->hide();
+        if (QApplication::widgetAt(QCursor::pos()) == video_surface_)
+            setCursor(Qt::BlankCursor);
+    });
+    if (video_surface_)
+    {
+        video_surface_->setMouseTracking(true);
+        video_surface_->installEventFilter(this);
+    }
+    control_panel_->setMouseTracking(true);
+    control_panel_->installEventFilter(this);
+    const auto control_children = control_panel_->findChildren<QWidget*>();
+    for (QWidget* child : control_children)
+    {
+        child->setMouseTracking(true);
+        child->installEventFilter(this);
+    }
 
     if (mode_ == PlayerMode::Video)
     {
@@ -1086,6 +1122,85 @@ MainWindow::~MainWindow()
     }
 
     delete command_worker_;
+}
+
+void MainWindow::showFullscreenControls()
+{
+    if (!isFullScreen() || !control_panel_)
+        return;
+
+    unsetCursor();
+    control_panel_->show();
+    if (menuBar())
+        menuBar()->show();
+    if (playlist_panel_)
+        playlist_panel_->show();
+    fullscreen_controls_visible_ = true;
+    fullscreen_hide_timer_->start();
+}
+
+void MainWindow::updateFullscreenUi()
+{
+    if (!isFullScreen())
+    {
+        fullscreen_hide_timer_->stop();
+        unsetCursor();
+        if (control_panel_)
+            control_panel_->show();
+        if (menuBar())
+            menuBar()->show();
+        if (playlist_panel_)
+            playlist_panel_->show();
+        fullscreen_controls_visible_ = true;
+        return;
+    }
+
+    if (control_panel_)
+        control_panel_->show();
+    if (menuBar())
+        menuBar()->show();
+    if (playlist_panel_)
+        playlist_panel_->show();
+    fullscreen_controls_visible_ = true;
+    fullscreen_hide_timer_->start();
+}
+
+bool MainWindow::eventFilter(QObject* watched, QEvent* event)
+{
+    if (isFullScreen())
+    {
+        const bool is_control_widget = watched == control_panel_ ||
+            (control_panel_ && control_panel_->isAncestorOf(qobject_cast<QWidget*>(watched)));
+        if (event->type() == QEvent::MouseMove)
+        {
+            if (is_control_widget)
+            {
+                unsetCursor();
+                fullscreen_hide_timer_->stop();
+            }
+            else
+            {
+                showFullscreenControls();
+            }
+        }
+        else if (event->type() == QEvent::Enter && is_control_widget)
+        {
+            unsetCursor();
+            fullscreen_hide_timer_->stop();
+        }
+        else if (event->type() == QEvent::Leave && is_control_widget)
+        {
+            fullscreen_hide_timer_->start();
+        }
+    }
+    return QMainWindow::eventFilter(watched, event);
+}
+
+void MainWindow::changeEvent(QEvent* event)
+{
+    QMainWindow::changeEvent(event);
+    if (event->type() == QEvent::WindowStateChange)
+        updateFullscreenUi();
 }
 
 void MainWindow::dragEnterEvent(QDragEnterEvent* event)
