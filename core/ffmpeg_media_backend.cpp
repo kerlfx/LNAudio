@@ -186,6 +186,7 @@ public:
                 avcodec_free_context(&video_decoder_);
                 av_buffer_unref(&hw_device_context_);
                 video_hardware_decode_ = false;
+                video_device_shared_ = false;
 
                 video_decoder_ = avcodec_alloc_context3(decoder);
                 if (!video_decoder_)
@@ -1044,9 +1045,12 @@ private:
                 start_time_ms_;
         if (!audio_decoder_)
             position_ms_.store(output.pts_ms, std::memory_order_relaxed);
+        if (source_frame != video_frame_)
+            av_frame_unref(transfer_frame_);
         av_frame_unref(video_frame_);
         return success();
     }
+
 #ifdef _WIN32
     void audio_playback_loop()
     {
