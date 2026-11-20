@@ -2701,7 +2701,7 @@ void MainWindow::openVideoSettings()
     hue->setSuffix(QStringLiteral("°"));
     hue->setValue(video_hue_degrees_);
     auto* sharpness = make_filter_spin(video_sharpness_, 0.0, 2.0, 0.05);
-    auto* denoise = make_filter_spin(video_denoise_, 0.0, 2.0, 0.05);
+    auto* denoise = make_filter_spin(video_denoise_, 0.0, 1.0, 0.05);
     auto* grayscale = new QCheckBox(QStringLiteral("灰度画面"), video_page);
     grayscale->setChecked(video_grayscale_);
     video_form->addRow(QStringLiteral("画面比例"), aspect);
