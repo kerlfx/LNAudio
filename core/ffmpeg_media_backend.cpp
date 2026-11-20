@@ -217,6 +217,38 @@ public:
             }
         }
 
+        if (info.has_video)
+        {
+            int first_subtitle_stream = -1;
+            int default_subtitle_stream = -1;
+            for (unsigned int index = 0; index < format_context_->nb_streams; ++index)
+            {
+                AVStream* stream = format_context_->streams[index];
+                if (stream->codecpar->codec_type != AVMEDIA_TYPE_SUBTITLE)
+                    continue;
+                if (first_subtitle_stream < 0)
+                    first_subtitle_stream = static_cast<int>(index);
+                if ((stream->disposition & AV_DISPOSITION_DEFAULT) != 0)
+                {
+                    default_subtitle_stream = static_cast<int>(index);
+                    break;
+                }
+            }
+
+            const int preferred_stream = default_subtitle_stream >= 0
+                ? default_subtitle_stream
+                : first_subtitle_stream;
+            if (preferred_stream >= 0)
+            {
+                if (create_subtitle_decoder(preferred_stream, &subtitle_decoder_))
+                    subtitle_stream_index_ = preferred_stream;
+                else if (preferred_stream != first_subtitle_stream &&
+                    first_subtitle_stream >= 0 &&
+                    create_subtitle_decoder(first_subtitle_stream, &subtitle_decoder_))
+                    subtitle_stream_index_ = first_subtitle_stream;
+            }
+        }
+
         opened_ = true;
         position_ms_.store(0, std::memory_order_relaxed);
         playback_ended_.store(false, std::memory_order_relaxed);
@@ -388,6 +420,9 @@ public:
             avcodec_flush_buffers(audio_decoder_);
         if (video_decoder_)
             avcodec_flush_buffers(video_decoder_);
+        if (subtitle_decoder_)
+            avcodec_flush_buffers(subtitle_decoder_);
+        active_subtitle_cues_.clear();
         if (audio_packet_)
             av_packet_unref(audio_packet_);
         if (video_packet_)
@@ -503,12 +538,16 @@ public:
         av_frame_free(&audio_frame_);
         av_packet_free(&audio_packet_);
         avcodec_free_context(&audio_decoder_);
+        avcodec_free_context(&subtitle_decoder_);
+        active_subtitle_cues_.clear();
+        subtitle_stream_index_ = -1;
         clear_packet_queues_locked();
         if (format_context_)
             avformat_close_input(&format_context_);
 
         audio_stream_index_ = -1;
         video_stream_index_ = -1;
+        subtitle_stream_index_ = -1;
         start_time_ms_ = 0;
         position_ms_.store(0, std::memory_order_relaxed);
         {
@@ -691,6 +730,70 @@ public:
         return success();
     }
 
+    std::vector<MediaSubtitleTrackInfo> subtitle_tracks() const override
+    {
+        std::vector<MediaSubtitleTrackInfo> tracks;
+        if (!format_context_)
+            return tracks;
+
+        for (unsigned int index = 0; index < format_context_->nb_streams; ++index)
+        {
+            const AVStream* stream = format_context_->streams[index];
+            if (stream->codecpar->codec_type != AVMEDIA_TYPE_SUBTITLE)
+                continue;
+
+            MediaSubtitleTrackInfo track;
+            track.stream_index = static_cast<int>(index);
+            track.codec = avcodec_get_name(stream->codecpar->codec_id);
+            track.is_default = (stream->disposition & AV_DISPOSITION_DEFAULT) != 0;
+            track.is_selected = static_cast<int>(index) == subtitle_stream_index_;
+            AVDictionaryEntry* title = av_dict_get(stream->metadata, "title", nullptr, 0);
+            AVDictionaryEntry* language = av_dict_get(stream->metadata, "language", nullptr, 0);
+            if (title)
+                track.title = title->value;
+            if (language)
+                track.language = language->value;
+            tracks.push_back(std::move(track));
+        }
+        return tracks;
+    }
+
+    MediaBackendResult select_subtitle_track(int stream_index) override
+    {
+        if (!opened_ || !format_context_)
+            return failure("No media source is open.");
+        if (playing_.load(std::memory_order_relaxed))
+            return failure("Pause playback before switching the subtitle track.");
+        if (stream_index == subtitle_stream_index_)
+            return success();
+
+        AVCodecContext* replacement_decoder = nullptr;
+        if (stream_index >= 0 && !create_subtitle_decoder(stream_index, &replacement_decoder))
+            return failure("Unable to open the requested subtitle decoder.");
+
+        const int64_t resume_position = position_ms();
+        const MediaBackendResult seek_result = seek(resume_position);
+        if (!seek_result.success)
+        {
+            avcodec_free_context(&replacement_decoder);
+            return seek_result;
+        }
+
+        {
+            std::lock_guard<std::mutex> decode_lock(video_decode_mutex_);
+            std::lock_guard<std::mutex> demux_lock(demux_mutex_);
+            avcodec_free_context(&subtitle_decoder_);
+            subtitle_decoder_ = replacement_decoder;
+            subtitle_stream_index_ = stream_index;
+            active_subtitle_cues_.clear();
+            for (AVPacket* packet : subtitle_packet_queue_)
+                av_packet_free(&packet);
+            subtitle_packet_queue_.clear();
+            subtitle_packet_queue_bytes_ = 0;
+        }
+        return success();
+    }
+
     MediaBackendResult read_audio_frame(AudioFrame& output, bool& end_of_stream) override
     {
         std::lock_guard<std::mutex> decode_lock(audio_decode_mutex_);
@@ -803,6 +906,8 @@ public:
         std::lock_guard<std::mutex> decode_lock(video_decode_mutex_);
         end_of_stream = false;
         output.bgra.clear();
+        output.subtitle_text.clear();
+        output.subtitle_bgra.clear();
 
         if (!opened_ || !video_decoder_ || !video_packet_ || !video_frame_)
             return failure("No decodable video stream is open.");
@@ -816,7 +921,12 @@ public:
         {
             int result = avcodec_receive_frame(video_decoder_, video_frame_);
             if (result == 0)
-                return convert_video_frame(output);
+            {
+                const MediaBackendResult converted = convert_video_frame(output);
+                if (converted.success)
+                    update_subtitle_for_position(output.pts_ms, output);
+                return converted;
+            }
 
             if (result == AVERROR_EOF)
             {
@@ -874,6 +984,164 @@ public:
     }
 
 private:
+    struct DecodedSubtitleCue
+    {
+        int64_t start_ms = 0;
+        int64_t end_ms = 0;
+        std::string text;
+    };
+
+    bool create_subtitle_decoder(int stream_index, AVCodecContext** output_decoder)
+    {
+        *output_decoder = nullptr;
+        if (!format_context_ || stream_index < 0 ||
+            static_cast<unsigned int>(stream_index) >= format_context_->nb_streams)
+            return false;
+
+        AVStream* stream = format_context_->streams[stream_index];
+        if (stream->codecpar->codec_type != AVMEDIA_TYPE_SUBTITLE)
+            return false;
+
+        const AVCodec* decoder = avcodec_find_decoder(stream->codecpar->codec_id);
+        if (!decoder)
+            return false;
+
+        AVCodecContext* context = avcodec_alloc_context3(decoder);
+        if (!context)
+            return false;
+
+        int result = avcodec_parameters_to_context(context, stream->codecpar);
+        if (result >= 0)
+        {
+            context->pkt_timebase = stream->time_base;
+            result = avcodec_open2(context, decoder, nullptr);
+        }
+        if (result < 0)
+        {
+            avcodec_free_context(&context);
+            return false;
+        }
+
+        *output_decoder = context;
+        return true;
+    }
+
+    void update_subtitle_for_position(int64_t position_ms, VideoFrame& output)
+    {
+        std::lock_guard<std::mutex> demux_lock(demux_mutex_);
+        if (subtitle_decoder_ && subtitle_stream_index_ >= 0)
+        {
+            AVStream* stream = format_context_->streams[subtitle_stream_index_];
+            while (!subtitle_packet_queue_.empty())
+            {
+                AVPacket* packet = subtitle_packet_queue_.front();
+                const int64_t packet_timestamp = packet->pts != AV_NOPTS_VALUE
+                    ? av_rescale_q(packet->pts, stream->time_base, AVRational{1, 1000}) - start_time_ms_
+                    : packet->dts != AV_NOPTS_VALUE
+                        ? av_rescale_q(packet->dts, stream->time_base, AVRational{1, 1000}) - start_time_ms_
+                        : position_ms;
+                if (packet_timestamp > position_ms)
+                    break;
+
+                subtitle_packet_queue_.pop_front();
+                subtitle_packet_queue_bytes_ -= static_cast<size_t>(std::max(packet->size, 0));
+
+                AVSubtitle subtitle{};
+                int got_subtitle = 0;
+                const int decoded = avcodec_decode_subtitle2(
+                    subtitle_decoder_, &subtitle, &got_subtitle, packet);
+                if (decoded >= 0 && got_subtitle)
+                {
+                    const int64_t base_ms = subtitle.pts != AV_NOPTS_VALUE
+                        ? av_rescale_q(subtitle.pts, AV_TIME_BASE_Q, AVRational{1, 1000}) - start_time_ms_
+                        : packet_timestamp;
+                    DecodedSubtitleCue cue;
+                    cue.start_ms = base_ms + subtitle.start_display_time;
+                    cue.end_ms = base_ms + subtitle.end_display_time;
+                    if (cue.end_ms <= cue.start_ms)
+                    {
+                        const int64_t packet_duration = packet->duration > 0
+                            ? av_rescale_q(packet->duration, stream->time_base, AVRational{1, 1000})
+                            : 0;
+                        cue.end_ms = cue.start_ms + (packet_duration > 0 ? packet_duration : 5000);
+                    }
+
+                    for (unsigned int index = 0; index < subtitle.num_rects; ++index)
+                    {
+                        const AVSubtitleRect* rect = subtitle.rects[index];
+                        if (rect->text && rect->text[0])
+                        {
+                            if (!cue.text.empty())
+                                cue.text.push_back('\n');
+                            cue.text += rect->text;
+                        }
+                        else if (rect->ass && rect->ass[0])
+                        {
+                            const std::string ass = rect->ass;
+                            const size_t comma = ass.rfind(',');
+                            if (comma != std::string::npos && comma + 1 < ass.size())
+                            {
+                                if (!cue.text.empty())
+                                    cue.text.push_back('\n');
+                                cue.text += ass.substr(comma + 1);
+                            }
+                        }
+                    }
+
+                    const auto replace_all = [](std::string& value, const std::string& from,
+                                                const std::string& to)
+                    {
+                        size_t position = 0;
+                        while ((position = value.find(from, position)) != std::string::npos)
+                        {
+                            value.replace(position, from.size(), to);
+                            position += to.size();
+                        }
+                    };
+                    replace_all(cue.text, "\\N", "\n");
+                    replace_all(cue.text, "\\n", "\n");
+                    replace_all(cue.text, "\\h", " ");
+                    const size_t tag_begin = cue.text.find('{');
+                    if (tag_begin != std::string::npos)
+                    {
+                        size_t begin = tag_begin;
+                        while (begin != std::string::npos)
+                        {
+                            const size_t end = cue.text.find('}', begin);
+                            if (end == std::string::npos)
+                                break;
+                            cue.text.erase(begin, end - begin + 1);
+                            begin = cue.text.find('{', begin);
+                        }
+                    }
+
+                    if (!cue.text.empty() && cue.end_ms > cue.start_ms)
+                    {
+                        active_subtitle_cues_.push_back(std::move(cue));
+                        while (active_subtitle_cues_.size() > 128)
+                            active_subtitle_cues_.pop_front();
+                    }
+                    avsubtitle_free(&subtitle);
+                }
+                av_packet_free(&packet);
+            }
+        }
+
+        while (!active_subtitle_cues_.empty() &&
+            active_subtitle_cues_.front().end_ms <= position_ms)
+            active_subtitle_cues_.pop_front();
+
+        for (const DecodedSubtitleCue& cue : active_subtitle_cues_)
+        {
+            if (cue.start_ms <= position_ms && position_ms < cue.end_ms)
+            {
+                if (!output.subtitle_text.empty())
+                    output.subtitle_text.push_back('\n');
+                output.subtitle_text += cue.text;
+            }
+        }
+    }
+
     bool mark_stream_ended(bool audio_stream)
     {
         std::lock_guard<std::mutex> demux_lock(demux_mutex_);
@@ -937,18 +1205,28 @@ private:
             }
 
             std::deque<AVPacket*>* destination = nullptr;
+            size_t* destination_bytes = nullptr;
             if (deferred_packet_->stream_index == audio_stream_index_ && audio_consumer_active_)
+            {
                 destination = &audio_packet_queue_;
+                destination_bytes = &audio_packet_queue_bytes_;
+            }
             else if (deferred_packet_->stream_index == video_stream_index_ && video_consumer_active_)
+            {
                 destination = &video_packet_queue_;
+                destination_bytes = &video_packet_queue_bytes_;
+            }
+            else if (deferred_packet_->stream_index == subtitle_stream_index_ && subtitle_decoder_)
+            {
+                destination = &subtitle_packet_queue_;
+                destination_bytes = &subtitle_packet_queue_bytes_;
+            }
 
             if (destination)
             {
                 constexpr size_t kMaximumQueuedPackets = 512;
                 constexpr size_t kMaximumQueuedBytes = 64 * 1024 * 1024;
-                size_t& queued_bytes = deferred_packet_->stream_index == audio_stream_index_
-                    ? audio_packet_queue_bytes_
-                    : video_packet_queue_bytes_;
+                size_t& queued_bytes = *destination_bytes;
                 const size_t packet_bytes = static_cast<size_t>(
                     std::max(deferred_packet_->size, 0));
                 if (destination->size() >= kMaximumQueuedPackets ||
@@ -984,18 +1262,28 @@ private:
             }
 
             std::deque<AVPacket*>* destination = nullptr;
+            size_t* destination_bytes = nullptr;
             if (packet->stream_index == audio_stream_index_ && audio_consumer_active_)
+            {
                 destination = &audio_packet_queue_;
+                destination_bytes = &audio_packet_queue_bytes_;
+            }
             else if (packet->stream_index == video_stream_index_ && video_consumer_active_)
+            {
                 destination = &video_packet_queue_;
+                destination_bytes = &video_packet_queue_bytes_;
+            }
+            else if (packet->stream_index == subtitle_stream_index_ && subtitle_decoder_)
+            {
+                destination = &subtitle_packet_queue_;
+                destination_bytes = &subtitle_packet_queue_bytes_;
+            }
 
             if (destination)
             {
                 constexpr size_t kMaximumQueuedPackets = 512;
                 constexpr size_t kMaximumQueuedBytes = 64 * 1024 * 1024;
-                size_t& queued_bytes = packet->stream_index == audio_stream_index_
-                    ? audio_packet_queue_bytes_
-                    : video_packet_queue_bytes_;
+                size_t& queued_bytes = *destination_bytes;
                 const size_t packet_bytes = static_cast<size_t>(
                     std::max(packet->size, 0));
                 if (destination->size() >= kMaximumQueuedPackets ||
@@ -1029,11 +1317,16 @@ private:
             av_packet_free(&packet);
         for (AVPacket* packet : video_packet_queue_)
             av_packet_free(&packet);
+        for (AVPacket* packet : subtitle_packet_queue_)
+            av_packet_free(&packet);
         av_packet_free(&deferred_packet_);
         audio_packet_queue_.clear();
         video_packet_queue_.clear();
+        subtitle_packet_queue_.clear();
         audio_packet_queue_bytes_ = 0;
         video_packet_queue_bytes_ = 0;
+        subtitle_packet_queue_bytes_ = 0;
+        active_subtitle_cues_.clear();
     }
 
     MediaBackendResult convert_video_frame(VideoFrame& output)
@@ -1586,6 +1879,7 @@ private:
     AVFrame* audio_frame_ = nullptr;
     SwrContext* resampler_ = nullptr;
     AVCodecContext* video_decoder_ = nullptr;
+    AVCodecContext* subtitle_decoder_ = nullptr;
     AVPacket* video_packet_ = nullptr;
     AVFrame* video_frame_ = nullptr;
     AVFrame* transfer_frame_ = nullptr;
@@ -1595,11 +1889,15 @@ private:
     bool video_device_shared_ = false;
     std::deque<AVPacket*> audio_packet_queue_;
     std::deque<AVPacket*> video_packet_queue_;
+    std::deque<AVPacket*> subtitle_packet_queue_;
+    std::deque<DecodedSubtitleCue> active_subtitle_cues_;
     AVPacket* deferred_packet_ = nullptr;
     size_t audio_packet_queue_bytes_ = 0;
     size_t video_packet_queue_bytes_ = 0;
+    size_t subtitle_packet_queue_bytes_ = 0;
     int audio_stream_index_ = -1;
     int video_stream_index_ = -1;
+    int subtitle_stream_index_ = -1;
     int64_t start_time_ms_ = 0;
     bool opened_ = false;
     std::atomic<bool> playing_{false};

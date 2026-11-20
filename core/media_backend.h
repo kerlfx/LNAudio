@@ -29,6 +29,16 @@ struct MediaTrackInfo
     bool is_selected = false;
 };
 
+struct MediaSubtitleTrackInfo
+{
+    int stream_index = -1;
+    std::string title;
+    std::string language;
+    std::string codec;
+    bool is_default = false;
+    bool is_selected = false;
+};
+
 struct MediaBackendResult
 {
     bool success = false;
@@ -80,6 +90,11 @@ public:
     virtual MediaBackendResult select_audio_track(int)
     {
         return MediaBackendResult{false, "Audio track selection is not supported by this backend."};
+    }
+    virtual std::vector<MediaSubtitleTrackInfo> subtitle_tracks() const { return {}; }
+    virtual MediaBackendResult select_subtitle_track(int)
+    {
+        return MediaBackendResult{false, "Subtitle track selection is not supported by this backend."};
     }
     virtual int64_t position_ms() const = 0;
     virtual bool playback_ended() const = 0;
