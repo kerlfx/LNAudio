@@ -380,13 +380,19 @@ flowchart TD
 
 Windows 应用使用单一 `LNPlayer.exe`，通过启动参数选择音频或视频界面（`--audio` / `--video`）。每次进程启动只创建一个主窗口和一个 Core Runtime；不在同一进程内创建第二个 Player。
 
-当前基础工程包含：
-- Qt 6 Widgets 应用入口和音频/视频窗口模式骨架。
-- 文件选择和拖放入口；当前只接收并显示所选文件路径，尚未接入播放。
-- Core 内部 Runtime 骨架：一个独立单线程运行的 `asio::io_context`，以及一套共享 `asio::thread_pool`。
-- Core 与 Qt UI 分别构建；Windows UI 通过链接 Core DLL 使用公开 C ABI。
+当前工程包含 Qt 6 Widgets 音频/视频窗口、Core C ABI、FFmpeg 音频解码、WASAPI 输出、SQLite 音乐库及 Windows D3D11 视频输出基础实现。音视频使用同一个 FFmpeg AVFormatContext，分别解码音频与视频流。
 
-当前尚未实现媒体打开、解码、音频设备输出、D3D11 Renderer、播放控制 C ABI、每窗口独立子进程启动和文件打开 IPC。不得将窗口骨架视为已具备播放能力。
+视频链路当前已实现：
+- FFmpeg 音视频流探测、视频解码器初始化及同一解封装上下文的音视频 Packet 分流。
+- 有界 Packet Queue；视频帧转换为 BGRA，支持软件解码。
+- Windows 优先尝试 D3D11VA，硬件帧暂时下载到系统内存，再上传至 Renderer；硬件初始化失败时回退软件解码。
+- Windows 原生 QWidget 子窗口 HWND、D3D11 Device/Swap Chain、纹理采样、保持比例/拉伸显示和窗口 resize。
+- Windows 专用 `lnplayer_windows.h` 视频帧 Pull 接口；视频帧传输不加入通用 `lnplayer.h`。
+- 视频 PTS 等待、音频流主时钟的基础调度；无音频视频使用独立时钟。
+- 视频 Seek 后刷新解码器和 Packet Queue；暂停保留最后一帧。
+- 全屏、快捷键、右键菜单、截图和逐帧操作的基础实现。
+
+当前仍未完成：D3D11VA 与 Renderer 共享同一 Device 的零拷贝路径、精确 WASAPI 音频硬件时钟、独立 Core Video Frame Queue/显示 Scheduler、设备丢失恢复、DXVA2 后备、多音轨选择、字幕解码/渲染、播放速度、色彩空间/旋转元数据、滤镜和完整播放列表。当前 D3D11 Present 由 Windows 命令工作线程执行，窗口 resize 由 UI 线程执行并通过 Renderer 锁串行化；尚未验证实际设备和长时间播放稳定性。
 
 ## 6. Android 运行模型
 
