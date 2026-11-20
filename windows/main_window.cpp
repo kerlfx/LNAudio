@@ -1,5 +1,6 @@
 #include "main_window.h"
 #include "d3d11_video_renderer.h"
+#include "lnplayer_windows.h"
 
 #include <algorithm>
 #include <functional>
@@ -677,9 +678,9 @@ void MainWindow::requestVideoFrame()
         } context;
 
         int end_of_stream = 0;
-        const lnplayer_result_t result = lnplayer_read_video_frame(
+        const lnplayer_result_t result = lnplayer_windows_read_video_frame(
             player_,
-            +[](const lnplayer_video_frame_t* frame, void* user_data)
+            +[](const lnplayer_windows_video_frame_t* frame, void* user_data)
             {
                 auto* context = static_cast<FrameContext*>(user_data);
                 context->image = QImage(
