@@ -289,7 +289,8 @@ public:
                 read.frame.height,
                 read.frame.stride,
                 read.frame.pts_ms,
-                read.frame.generation
+                read.frame.generation,
+                read.frame.display_aspect_ratio
             };
             callback(&frame, user_data);
         }
