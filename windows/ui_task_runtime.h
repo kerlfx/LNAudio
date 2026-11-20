@@ -12,11 +12,12 @@ class UiTaskTracker final
 {
 public:
     bool try_begin();
+    bool accepting() const;
     void finish();
     void close_and_wait();
 
 private:
-    std::mutex mutex_;
+    mutable std::mutex mutex_;
     std::condition_variable condition_;
     std::size_t pending_ = 0;
     bool accepting_ = true;
