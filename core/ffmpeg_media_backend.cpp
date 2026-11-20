@@ -473,11 +473,13 @@ public:
         swr_free(&resampler_);
         sws_freeContext(video_scaler_);
         video_scaler_ = nullptr;
+        av_frame_free(&transfer_frame_);
         av_frame_free(&video_frame_);
         av_packet_free(&video_packet_);
         avcodec_free_context(&video_decoder_);
         av_buffer_unref(&hw_device_context_);
         video_hardware_decode_ = false;
+        video_device_shared_ = false;
         av_frame_free(&audio_frame_);
         av_packet_free(&audio_packet_);
         avcodec_free_context(&audio_decoder_);
@@ -894,7 +896,7 @@ private:
     {
         AVFrame* source_frame = video_frame_;
 #ifdef _WIN32
-        if (video_frame_->format == AV_PIX_FMT_D3D11)
+        if (video_frame_->format == AV_PIX_FMT_D3D11 && video_device_shared_)
         {
             AVFrame* retained_frame = av_frame_clone(video_frame_);
             if (!retained_frame)
@@ -949,10 +951,36 @@ private:
             return success();
         }
 #endif
+#ifdef _WIN32
+        if (video_frame_->format == AV_PIX_FMT_D3D11)
+        {
+            if (!transfer_frame_)
+                transfer_frame_ = av_frame_alloc();
+            if (!transfer_frame_)
+            {
+                av_frame_unref(video_frame_);
+                return failure("Unable to allocate a D3D11 video transfer frame.");
+            }
+
+            av_frame_unref(transfer_frame_);
+            const int transfer_result = av_hwframe_transfer_data(
+                transfer_frame_, video_frame_, 0);
+            if (transfer_result < 0)
+            {
+                av_frame_unref(transfer_frame_);
+                av_frame_unref(video_frame_);
+                return failure("Unable to transfer a D3D11 video frame: " +
+                    ffmpeg_error(transfer_result));
+            }
+            source_frame = transfer_frame_;
+        }
+#endif
         const int width = source_frame->width;
         const int height = source_frame->height;
         if (width <= 0 || height <= 0)
         {
+            if (source_frame != video_frame_)
+                av_frame_unref(transfer_frame_);
             av_frame_unref(video_frame_);
             return failure("Decoded video frame has invalid dimensions.");
         }
@@ -971,6 +999,8 @@ private:
             nullptr);
         if (!video_scaler_)
         {
+            if (source_frame != video_frame_)
+                av_frame_unref(transfer_frame_);
             av_frame_unref(video_frame_);
             return failure("Unable to initialize video pixel format conversion.");
         }
@@ -992,6 +1022,8 @@ private:
         if (rows != height)
         {
             output.bgra.clear();
+            if (source_frame != video_frame_)
+                av_frame_unref(transfer_frame_);
             av_frame_unref(video_frame_);
             return failure("Unable to convert decoded video frame.");
         }
@@ -1305,6 +1337,7 @@ private:
 
     bool create_video_hardware_device()
     {
+        video_device_shared_ = false;
         if (video_device_)
         {
             hw_device_context_ = av_hwdevice_ctx_alloc(AV_HWDEVICE_TYPE_D3D11VA);
@@ -1316,7 +1349,10 @@ private:
                 device_context->device->AddRef();
                 device_context->device->GetImmediateContext(&device_context->device_context);
                 if (av_hwdevice_ctx_init(hw_device_context_) >= 0)
+                {
+                    video_device_shared_ = true;
                     return true;
+                }
                 av_buffer_unref(&hw_device_context_);
             }
         }
@@ -1391,9 +1427,11 @@ private:
     AVCodecContext* video_decoder_ = nullptr;
     AVPacket* video_packet_ = nullptr;
     AVFrame* video_frame_ = nullptr;
+    AVFrame* transfer_frame_ = nullptr;
     SwsContext* video_scaler_ = nullptr;
     AVBufferRef* hw_device_context_ = nullptr;
     bool video_hardware_decode_ = false;
+    bool video_device_shared_ = false;
     std::deque<AVPacket*> audio_packet_queue_;
     std::deque<AVPacket*> video_packet_queue_;
     AVPacket* deferred_packet_ = nullptr;
