@@ -500,7 +500,7 @@ MainWindow::MainWindow(PlayerMode mode, const QString& initial_media, QWidget* p
     snapshot_timer_->setInterval(250);
     connect(snapshot_timer_, &QTimer::timeout, this, &MainWindow::refreshSnapshot);
 
-    video_timer_->setInterval(5);
+    video_timer_->setInterval(16);
     connect(video_timer_, &QTimer::timeout, this, [this]
     {
         presentPendingVideoFrame();
