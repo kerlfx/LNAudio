@@ -848,3 +848,4 @@
 - [ ] 本轮未运行 Windows/MSVC/Qt 构建、CTest 或 CI。
 
 详细设置键和面板说明见 `docs/WINDOWS_UI_SETTINGS.md`。
+- [x] 字幕启用状态加入 INI，并在 Player 初始化和设置窗口保存后同步到 Core；音量滑块改为 300 ms 防抖持久化，窗口关闭时保存最终值，避免拖动过程中频繁写盘。
