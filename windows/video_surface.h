@@ -2,6 +2,10 @@
 #define LNPLAYER_VIDEO_SURFACE_H
 
 #include <QImage>
+#include <QMouseEvent>
+#include <QPaintEvent>
+#include <QResizeEvent>
+#include <QWheelEvent>
 #include <QWidget>
 
 #include <cstdint>
