@@ -158,6 +158,8 @@ private:
     int64_t current_position_ms_ = 0;
     int muted_volume_ = 1000;
     float playback_rate_ = 1.0f;
+    float video_aspect_ratio_override_ = 0.0f;
+    bool video_stretch_ = false;
     float video_brightness_ = 0.0f;
     float video_contrast_ = 1.0f;
     float video_saturation_ = 1.0f;
