@@ -370,6 +370,13 @@ MainWindow::MainWindow(PlayerMode mode, const QString& initial_media, QWidget* p
     if (mode_ == PlayerMode::Video)
     {
         video_surface_ = new VideoSurface(content);
+        playlist_widget_ = new QListWidget(content);
+        playlist_widget_->setMaximumWidth(240);
+        connect(playlist_widget_, &QListWidget::itemDoubleClicked, this,
+            [this](QListWidgetItem* item)
+            {
+                openPlaylistIndex(playlist_widget_->row(item));
+            });
         video_surface_->set_interaction_callbacks(
             [this]
             {
@@ -445,7 +452,10 @@ MainWindow::MainWindow(PlayerMode mode, const QString& initial_media, QWidget* p
             else if (selected == stretch)
                 video_surface_->set_stretch(true);
         });
-        layout->addWidget(video_surface_, 1);
+        auto* video_layout = new QHBoxLayout();
+        video_layout->addWidget(video_surface_, 1);
+        video_layout->addWidget(playlist_widget_);
+        layout->addLayout(video_layout, 1);
     }
     else
     {
@@ -496,6 +506,12 @@ MainWindow::MainWindow(PlayerMode mode, const QString& initial_media, QWidget* p
     control_layout->addWidget(play_button_);
     control_layout->addWidget(pause_button_);
     control_layout->addWidget(stop_button_);
+    auto* previous_button = new QPushButton(QStringLiteral("上一项"), content);
+    auto* next_button = new QPushButton(QStringLiteral("下一项"), content);
+    control_layout->addWidget(previous_button);
+    control_layout->addWidget(next_button);
+    connect(previous_button, &QPushButton::clicked, this, [this] { playPrevious(); });
+    connect(next_button, &QPushButton::clicked, this, [this] { playNext(); });
     control_layout->addStretch(1);
     control_layout->addWidget(new QLabel(QStringLiteral("音量"), content));
     control_layout->addWidget(volume_slider_);
@@ -779,16 +795,53 @@ void MainWindow::openFile()
 
 void MainWindow::openFiles(const QList<QUrl>& urls)
 {
-    if (urls.isEmpty())
+    QList<QUrl> next_playlist;
+    for (const QUrl& url : urls)
+    {
+        if (!url.toLocalFile().isEmpty())
+            next_playlist.append(url);
+    }
+    if (next_playlist.isEmpty())
         return;
 
-    const QString source = urls.first().toLocalFile();
+    playlist_ = std::move(next_playlist);
+    playlist_index_ = -1;
+    if (playlist_widget_)
+    {
+        playlist_widget_->clear();
+        for (const QUrl& url : playlist_)
+            playlist_widget_->addItem(QFileInfo(url.toLocalFile()).fileName());
+    }
+    openPlaylistIndex(0);
+}
+
+void MainWindow::openPlaylistIndex(int index)
+{
+    if (index < 0 || index >= playlist_.size())
+        return;
+
+    playlist_index_ = index;
+    if (playlist_widget_)
+        playlist_widget_->setCurrentRow(index);
+
+    const QString source = playlist_[index].toLocalFile();
     if (source.isEmpty())
         return;
+
+    subtitle_cues_.clear();
+    pending_video_frame_valid_ = false;
+    pending_hardware_frame_owner_.reset();
+    pending_hardware_texture_ = nullptr;
+    video_first_frame_received_ = false;
+    video_end_of_stream_ = false;
+    video_timer_->stop();
+    if (video_surface_)
+        video_surface_->set_frame(QImage());
 
     media_title_label_->setText(QFileInfo(source).fileName());
     status_label_->setText(QStringLiteral("正在打开：%1").arg(source));
     statusBar()->showMessage(QStringLiteral("正在打开媒体"));
+    playlist_open_pending_ = true;
 
     const QByteArray source_utf8 = source.toUtf8();
     QMetaObject::invokeMethod(command_worker_, [this, source_utf8]
@@ -806,10 +859,23 @@ void MainWindow::openFiles(const QList<QUrl>& urls)
         {
             QMetaObject::invokeMethod(this, [this]
             {
+                playlist_open_pending_ = false;
                 status_label_->setText(QStringLiteral("媒体打开请求失败"));
             }, Qt::QueuedConnection);
         }
     }, Qt::QueuedConnection);
+}
+
+void MainWindow::playPrevious()
+{
+    if (playlist_index_ > 0)
+        openPlaylistIndex(playlist_index_ - 1);
+}
+
+void MainWindow::playNext()
+{
+    if (playlist_index_ >= 0 && playlist_index_ + 1 < playlist_.size())
+        openPlaylistIndex(playlist_index_ + 1);
 }
 
 void MainWindow::loadExternalSubtitle()
@@ -1362,12 +1428,15 @@ void MainWindow::handleCoreEvent(
     uint64_t generation,
     const QString& message)
 {
-    media_generation_ = std::max(media_generation_, generation);
+    if (generation < media_generation_)
+        return;
+    media_generation_ = generation;
     updatePlaybackState(state, position_ms, duration_ms);
 
     switch (type)
     {
     case LNPLAYER_EVENT_OPEN_COMPLETED:
+        playlist_open_pending_ = false;
         if (result == LNPLAYER_RESULT_OK)
         {
             status_label_->setText(QStringLiteral("媒体已打开"));
@@ -1407,6 +1476,13 @@ void MainWindow::handleCoreEvent(
         break;
 
     case LNPLAYER_EVENT_PLAYBACK_ENDED:
+        if (playlist_open_pending_)
+            break;
+        if (playlist_index_ >= 0 && playlist_index_ + 1 < playlist_.size())
+        {
+            openPlaylistIndex(playlist_index_ + 1);
+            break;
+        }
         video_timer_->stop();
         status_label_->setText(QStringLiteral("播放结束"));
         break;
