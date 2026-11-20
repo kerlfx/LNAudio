@@ -66,11 +66,14 @@ cbuffer VideoFilterSettings : register(b0)
     float color_primaries;
     float hdr_peak_luminance;
     float padding;
+    float zoom;
+    float3 padding2;
 };
 
 float4 main(float4 position : SV_POSITION, float2 uv : TEXCOORD0) : SV_TARGET
 {
-    float4 sampled = image_texture.Sample(image_sampler, uv);
+    float2 zoomed_uv = (uv - 0.5) / zoom + 0.5;
+    float4 sampled = image_texture.Sample(image_sampler, zoomed_uv);
     float3 rgb = sampled.rgb;
     if (hdr_transfer > 0.5)
     {
@@ -415,9 +418,6 @@ public:
             else
                 viewport_height = target_width / display_aspect;
         }
-
-        viewport_width *= zoom_;
-        viewport_height *= zoom_;
 
         D3D11_VIEWPORT viewport{};
         viewport.TopLeftX = (target_width - viewport_width) * 0.5f;
@@ -841,6 +841,8 @@ private:
         float color_primaries;
         float hdr_peak_luminance;
         float padding;
+        float zoom;
+        float padding2[3];
     };
 
     void update_filter_constants(int width, int height)
