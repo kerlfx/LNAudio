@@ -4975,9 +4975,9 @@ void MainWindow::refreshSnapshot()
     {
         lnplayer_snapshot_t snapshot{};
         snapshot.struct_size = sizeof(snapshot);
-        const lnplayer_t* player = player_.load(std::memory_order_acquire);
+        lnplayer_t* player = player_.load(std::memory_order_acquire);
         const lnplayer_result_t result = player
-            ? lnplayer_get_snapshot(const_cast<lnplayer_t*>(player), &snapshot)
+            ? lnplayer_get_snapshot(player, &snapshot)
             : LNPLAYER_RESULT_INVALID_HANDLE;
 
         QMetaObject::invokeMethod(this, [this, result, snapshot]
