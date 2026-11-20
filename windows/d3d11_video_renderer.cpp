@@ -457,7 +457,7 @@ public:
             return false;
         if (brightness_ != 0.0f || contrast_ != 1.0f || saturation_ != 1.0f ||
             hue_degrees_ != 0.0f || sharpness_ != 0.0f || denoise_ != 0.0f ||
-            grayscale_ || hdr_transfer_ != 0)
+            grayscale_ || hdr_transfer_ != 0 || color_primaries_ != 0)
             return false;
 
         reap_completed_hardware_frames();
