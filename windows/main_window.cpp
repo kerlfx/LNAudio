@@ -1144,6 +1144,11 @@ MainWindow::MainWindow(
             if (playlist_visibility_action_)
                 playlist_visibility_action_->setChecked(!playlist_visibility_action_->isChecked());
         });
+        bind_shortcut(QStringLiteral("toggle_topmost"), QStringLiteral("窗口置顶"), Qt::CTRL | Qt::Key_T, [this]
+        {
+            if (always_on_top_action_)
+                always_on_top_action_->setChecked(!always_on_top_action_->isChecked());
+        });
         bind_shortcut(QStringLiteral("speed_down"), QStringLiteral("降低播放速度"), Qt::Key_X, [this]
         {
             setPlaybackRate(std::max(0.25f, playback_rate_ - 0.25f));
