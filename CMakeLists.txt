@@ -48,7 +48,7 @@ if(WIN32)
     set(CPACK_NSIS_EXTRA_INSTALL_COMMANDS [=[
         WriteRegStr HKCR "LNPlayer.Video" "" "LNPlayer Video"
         WriteRegStr HKCR "LNPlayer.Video\DefaultIcon" "" '"$INSTDIR\LNPlayer.exe",0'
-        WriteRegStr HKCR "LNPlayer.Video\shell\open\command" "" '"$INSTDIR\LNPlayer.exe" "%1"'
+        WriteRegStr HKCR "LNPlayer.Video\shell\open\command" "" '"$INSTDIR\LNPlayer.exe" --video "%1"'
         WriteRegStr HKCR "Applications\LNPlayer.exe\shell\open\command" "" '"$INSTDIR\LNPlayer.exe" "%1"'
         WriteRegStr HKCR "Applications\LNPlayer.exe\SupportedTypes" ".mp4" ""
         WriteRegStr HKCR "Applications\LNPlayer.exe\SupportedTypes" ".mkv" ""
