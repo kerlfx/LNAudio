@@ -329,7 +329,9 @@ public:
         uint32_t format,
         int width,
         int height,
-        std::shared_ptr<void> frame_owner)
+        std::shared_ptr<void> frame_owner,
+        const uint8_t* overlay,
+        int overlay_stride)
     {
         std::lock_guard<std::mutex> lock(mutex_);
         if (!native_texture || width <= 0 || height <= 0 ||
@@ -431,7 +433,10 @@ public:
             output_texture_desc.Usage = D3D11_USAGE_DEFAULT;
             output_texture_desc.BindFlags = D3D11_BIND_RENDER_TARGET;
             if (FAILED(device_->CreateTexture2D(
-                    &output_texture_desc, nullptr, hardware_output_texture_.GetAddressOf())))
+                    &output_texture_desc, nullptr, hardware_output_texture_.GetAddressOf())) ||
+                FAILED(device_->CreateRenderTargetView(
+                    hardware_output_texture_.Get(), nullptr,
+                    hardware_output_render_target_.GetAddressOf())))
                 return false;
             hardware_output_width_ = output_width;
             hardware_output_height_ = output_height;
@@ -479,6 +484,69 @@ public:
             video_processor_.Get(), output_view.Get(), 0, 1, &stream);
         if (FAILED(blt_result))
             return false;
+
+        if (overlay && overlay_stride >= static_cast<int>(output_width * 4))
+        {
+            if (!overlay_texture_ ||
+                overlay_texture_width_ != output_width ||
+                overlay_texture_height_ != output_height)
+            {
+                overlay_texture_.Reset();
+                overlay_view_.Reset();
+                D3D11_TEXTURE2D_DESC overlay_desc{};
+                overlay_desc.Width = output_width;
+                overlay_desc.Height = output_height;
+                overlay_desc.MipLevels = 1;
+                overlay_desc.ArraySize = 1;
+                overlay_desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+                overlay_desc.SampleDesc.Count = 1;
+                overlay_desc.Usage = D3D11_USAGE_DYNAMIC;
+                overlay_desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+                overlay_desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+                if (FAILED(device_->CreateTexture2D(
+                        &overlay_desc, nullptr, overlay_texture_.GetAddressOf())) ||
+                    FAILED(device_->CreateShaderResourceView(
+                        overlay_texture_.Get(), nullptr, overlay_view_.GetAddressOf())))
+                    return false;
+                overlay_texture_width_ = output_width;
+                overlay_texture_height_ = output_height;
+            }
+
+            D3D11_MAPPED_SUBRESOURCE overlay_map{};
+            if (FAILED(context_->Map(
+                    overlay_texture_.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &overlay_map)))
+                return false;
+            for (UINT row = 0; row < output_height; ++row)
+                std::memcpy(
+                    static_cast<uint8_t*>(overlay_map.pData) +
+                        static_cast<size_t>(row) * overlay_map.RowPitch,
+                    overlay + static_cast<size_t>(row) * overlay_stride,
+                    static_cast<size_t>(output_width) * 4);
+            context_->Unmap(overlay_texture_.Get(), 0);
+
+            D3D11_VIEWPORT viewport{};
+            viewport.Width = static_cast<float>(output_width);
+            viewport.Height = static_cast<float>(output_height);
+            viewport.MinDepth = 0.0f;
+            viewport.MaxDepth = 1.0f;
+            context_->OMSetRenderTargets(
+                1, hardware_output_render_target_.GetAddressOf(), nullptr);
+            context_->OMSetBlendState(blend_state_.Get(), nullptr, 0xffffffff);
+            context_->RSSetViewports(1, &viewport);
+            context_->RSSetState(rasterizer_.Get());
+            context_->IASetInputLayout(nullptr);
+            context_->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+            context_->VSSetShader(vertex_shader_.Get(), nullptr, 0);
+            context_->PSSetShader(pixel_shader_.Get(), nullptr, 0);
+            ID3D11ShaderResourceView* overlay_views[] = {overlay_view_.Get()};
+            context_->PSSetShaderResources(0, 1, overlay_views);
+            ID3D11SamplerState* overlay_samplers[] = {sampler_.Get()};
+            context_->PSSetSamplers(0, 1, overlay_samplers);
+            context_->Draw(3, 0);
+            ID3D11ShaderResourceView* empty_views[] = {nullptr};
+            context_->PSSetShaderResources(0, 1, empty_views);
+            context_->OMSetBlendState(nullptr, nullptr, 0xffffffff);
+        }
 
         context_->CopyResource(back_buffer.Get(), hardware_output_texture_.Get());
         context_->End(completion_query.Get());
@@ -609,6 +677,18 @@ private:
         if (FAILED(device_->CreateRasterizerState(&rasterizer_desc, rasterizer_.GetAddressOf())))
             return false;
 
+        D3D11_BLEND_DESC blend_desc{};
+        blend_desc.RenderTarget[0].BlendEnable = TRUE;
+        blend_desc.RenderTarget[0].SrcBlend = D3D11_BLEND_SRC_ALPHA;
+        blend_desc.RenderTarget[0].DestBlend = D3D11_BLEND_INV_SRC_ALPHA;
+        blend_desc.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
+        blend_desc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE;
+        blend_desc.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_INV_SRC_ALPHA;
+        blend_desc.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
+        blend_desc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+        if (FAILED(device_->CreateBlendState(&blend_desc, blend_state_.GetAddressOf())))
+            return false;
+
         D3D11_SAMPLER_DESC sampler_desc{};
         sampler_desc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
         sampler_desc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
@@ -640,6 +720,11 @@ private:
         video_view_.Reset();
         video_texture_.Reset();
         hardware_output_texture_.Reset();
+        hardware_output_render_target_.Reset();
+        overlay_texture_.Reset();
+        overlay_view_.Reset();
+        overlay_texture_width_ = 0;
+        overlay_texture_height_ = 0;
         hardware_output_width_ = 0;
         hardware_output_height_ = 0;
         video_processor_.Reset();
@@ -648,6 +733,7 @@ private:
         video_device_.Reset();
         render_target_.Reset();
         sampler_.Reset();
+        blend_state_.Reset();
         rasterizer_.Reset();
         pixel_shader_.Reset();
         vertex_shader_.Reset();
@@ -681,13 +767,19 @@ private:
     ComPtr<ID3D11RenderTargetView> render_target_;
     ComPtr<ID3D11Texture2D> video_texture_;
     ComPtr<ID3D11Texture2D> hardware_output_texture_;
+    ComPtr<ID3D11RenderTargetView> hardware_output_render_target_;
+    ComPtr<ID3D11Texture2D> overlay_texture_;
+    ComPtr<ID3D11ShaderResourceView> overlay_view_;
     UINT hardware_output_width_ = 0;
     UINT hardware_output_height_ = 0;
+    UINT overlay_texture_width_ = 0;
+    UINT overlay_texture_height_ = 0;
     ComPtr<ID3D11ShaderResourceView> video_view_;
     ComPtr<ID3D11VertexShader> vertex_shader_;
     ComPtr<ID3D11PixelShader> pixel_shader_;
     ComPtr<ID3D11RasterizerState> rasterizer_;
     ComPtr<ID3D11SamplerState> sampler_;
+    ComPtr<ID3D11BlendState> blend_state_;
 };
 
 D3D11VideoRenderer::D3D11VideoRenderer()
@@ -732,10 +824,12 @@ bool D3D11VideoRenderer::present(const uint8_t* bgra, int width, int height, int
 
 bool D3D11VideoRenderer::present_hardware(
     void* texture, uint32_t array_slice, uint32_t format,
-    int width, int height, std::shared_ptr<void> frame_owner)
+    int width, int height, std::shared_ptr<void> frame_owner,
+    const uint8_t* overlay, int overlay_stride)
 {
     return impl_->present_hardware(
-        texture, array_slice, format, width, height, std::move(frame_owner));
+        texture, array_slice, format, width, height,
+        std::move(frame_owner), overlay, overlay_stride);
 }
 
 bool D3D11VideoRenderer::capture_bgra(
