@@ -2924,10 +2924,25 @@ void MainWindow::openVideoSettings()
     aspect->addItem(QStringLiteral("16:9"), 1);
     aspect->addItem(QStringLiteral("4:3"), 2);
     aspect->addItem(QStringLiteral("拉伸填充"), 3);
+    aspect->addItem(QStringLiteral("自定义比例"), 4);
     const int aspect_index = video_stretch_ ? 3
         : std::abs(video_aspect_ratio_override_ - 16.0f / 9.0f) < 0.001f ? 1
-        : std::abs(video_aspect_ratio_override_ - 4.0f / 3.0f) < 0.001f ? 2 : 0;
+        : std::abs(video_aspect_ratio_override_ - 4.0f / 3.0f) < 0.001f ? 2
+        : video_aspect_ratio_override_ > 0.0f ? 4 : 0;
     aspect->setCurrentIndex(aspect_index);
+    auto* custom_aspect = new QDoubleSpinBox(video_page);
+    custom_aspect->setRange(0.5, 3.0);
+    custom_aspect->setSingleStep(0.01);
+    custom_aspect->setDecimals(3);
+    custom_aspect->setSuffix(QStringLiteral(" : 1"));
+    custom_aspect->setValue(video_aspect_ratio_override_ > 0.0f
+        ? video_aspect_ratio_override_ : 16.0 / 9.0);
+    custom_aspect->setEnabled(aspect_index == 4);
+    connect(aspect, qOverload<int>(&QComboBox::currentIndexChanged),
+        custom_aspect, [aspect, custom_aspect](int)
+        {
+            custom_aspect->setEnabled(aspect->currentData().toInt() == 4);
+        });
 
     auto make_filter_spin = [&video_page](double value, double minimum, double maximum, double step)
     {
@@ -2951,6 +2966,7 @@ void MainWindow::openVideoSettings()
     auto* grayscale = new QCheckBox(QStringLiteral("灰度画面"), video_page);
     grayscale->setChecked(video_grayscale_);
     video_form->addRow(QStringLiteral("画面比例"), aspect);
+    video_form->addRow(QStringLiteral("自定义比例"), custom_aspect);
     video_form->addRow(QStringLiteral("亮度"), brightness);
     video_form->addRow(QStringLiteral("对比度"), contrast);
     video_form->addRow(QStringLiteral("饱和度"), saturation);
@@ -3087,6 +3103,7 @@ void MainWindow::openVideoSettings()
         wheel_action->setCurrentIndex(0);
         mouse_gestures->setChecked(false);
         aspect->setCurrentIndex(0);
+        custom_aspect->setValue(16.0 / 9.0);
         brightness->setValue(0.0);
         contrast->setValue(1.0);
         saturation->setValue(1.0);
@@ -3191,7 +3208,9 @@ void MainWindow::openVideoSettings()
     const int selected_aspect = aspect->currentData().toInt();
     video_stretch_ = selected_aspect == 3;
     video_aspect_ratio_override_ = selected_aspect == 1 ? 16.0f / 9.0f
-        : selected_aspect == 2 ? 4.0f / 3.0f : 0.0f;
+        : selected_aspect == 2 ? 4.0f / 3.0f
+        : selected_aspect == 4 ? static_cast<float>(custom_aspect->value())
+        : 0.0f;
     video_brightness_ = static_cast<float>(brightness->value());
     video_contrast_ = static_cast<float>(contrast->value());
     video_saturation_ = static_cast<float>(saturation->value());
