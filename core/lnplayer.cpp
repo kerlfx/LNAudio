@@ -606,6 +606,41 @@ lnplayer_result_t lnplayer_library_scan_directory(
     return finish_result(LNPLAYER_RESULT_OK);
 }
 
+lnplayer_result_t lnplayer_library_search_tracks(
+    lnplayer_t* player,
+    const char* query_utf8,
+    int32_t limit,
+    lnplayer_library_track_callback_t callback,
+    void* user_data)
+{
+    if (!is_current_player(player))
+        return set_error(LNPLAYER_RESULT_INVALID_HANDLE, "Invalid Player handle.");
+    if (!query_utf8 || !callback)
+        return set_error(LNPLAYER_RESULT_INVALID_ARGUMENT, "Invalid library search arguments.");
+
+    std::string error;
+    const auto tracks = player->runtime.music_library().search_tracks(
+        query_utf8, limit, error);
+    if (!error.empty())
+        return set_error(LNPLAYER_RESULT_INTERNAL_ERROR, error.c_str());
+
+    for (const auto& track : tracks)
+    {
+        const lnplayer_library_track_t item{
+            sizeof(lnplayer_library_track_t),
+            track.id,
+            track.duration_ms,
+            track.path.c_str(),
+            track.title.c_str(),
+            track.artist.c_str(),
+            track.album.c_str()
+        };
+        callback(&item, user_data);
+    }
+
+    return finish_result(LNPLAYER_RESULT_OK);
+}
+
 lnplayer_result_t lnplayer_get_snapshot(
     lnplayer_t* player,
     lnplayer_snapshot_t* snapshot)
