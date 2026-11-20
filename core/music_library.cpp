@@ -6,10 +6,13 @@ extern "C"
 {
 #include <libavformat/avformat.h>
 #include <libavutil/dict.h>
+#include <libavutil/mem.h>
 #include <libavutil/sha.h>
 }
 
+#include <algorithm>
 #include <array>
+#include <cctype>
 #include <chrono>
 #include <cstdlib>
 #include <fstream>
@@ -18,6 +21,7 @@ extern "C"
 #include <filesystem>
 #include <string>
 #include <utility>
+#include <vector>
 
 #ifdef _WIN32
 #include <cstdlib>
@@ -360,15 +364,23 @@ bool MusicLibrary::scan_directory(
             return;
         }
 
+        if (av_find_best_stream(format, AVMEDIA_TYPE_AUDIO, -1, -1, nullptr, 0) < 0)
+        {
+            avformat_close_input(&format);
+            return;
+        }
+
         auto metadata = [format](const char* key)
         {
             const AVDictionaryEntry* value = av_dict_get(format->metadata, key, nullptr, 0);
             return value && value->value ? std::string(value->value) : std::string();
         };
 
-        const std::string title = metadata("title").empty()
-            ? file_path.stem().string()
-            : metadata("title");
+        const std::string media_title = metadata("title");
+        const auto filename_title = file_path.stem().u8string();
+        const std::string title = media_title.empty()
+            ? std::string(reinterpret_cast<const char*>(filename_title.data()), filename_title.size())
+            : media_title;
         const std::string artist = metadata("artist");
         const std::string album = metadata("album");
         const std::string genre = metadata("genre");
