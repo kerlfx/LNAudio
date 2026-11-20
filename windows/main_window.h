@@ -156,6 +156,7 @@ private:
     QString subtitle_color_ = QStringLiteral("#ffffff");
     int subtitle_font_size_ = 0;
     int subtitle_vertical_position_ = 80;
+    int middle_click_action_ = 1;
     bool has_video_ = false;
     bool has_audio_ = false;
     bool is_playing_ = false;
