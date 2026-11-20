@@ -822,3 +822,5 @@
 - `4fcd687ad6d61cd5d32c8d9201324fb859bef695`、`90fc98a04df6f2448b36048b3771a0e2f1eeb438` — C ABI 章节枚举。
 - `fad9e75b67b7fea68cf2406b1c450a0fd673248a`、`3cf559642da63bd6c4c3ecdfff25eb93f081162b` — Windows 章节菜单和 Seek。
 - `41a0232c77abb36a1ed2521f37e9e10a84c0ea04` — 章节 API 契约测试。
+
+- [x] 增加按媒体路径 SHA-1 键隔离的持久化书签：可命名添加当前播放位置、从书签菜单跳转、删除单项或清空当前视频书签。提交：`fccf27de6d1e8316b59c6ba6b88219f5b3301c44`。Windows UI 和跨重启持久化仍待运行验收。
