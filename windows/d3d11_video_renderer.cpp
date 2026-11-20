@@ -166,6 +166,12 @@ public:
         return true;
     }
 
+    void* native_device() const
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return device_.Get();
+    }
+
     void resize(uint32_t width, uint32_t height)
     {
         std::unique_lock<std::mutex> lock(mutex_);
@@ -424,6 +430,11 @@ D3D11VideoRenderer::~D3D11VideoRenderer()
 bool D3D11VideoRenderer::initialize(HWND window)
 {
     return impl_->initialize(window);
+}
+
+void* D3D11VideoRenderer::native_device() const
+{
+    return impl_->native_device();
 }
 
 void D3D11VideoRenderer::resize(uint32_t width, uint32_t height)
