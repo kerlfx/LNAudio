@@ -409,6 +409,7 @@ MainWindow::MainWindow(PlayerMode mode, const QString& initial_media, QWidget* p
             const lnplayer_state_t state = event->state;
             const int64_t position_ms = event->position_ms;
             const int64_t duration_ms = event->duration_ms;
+            const uint64_t generation = event->generation;
             const QString message = event->message
                 ? QString::fromUtf8(event->message)
                 : QString();
@@ -421,6 +422,7 @@ MainWindow::MainWindow(PlayerMode mode, const QString& initial_media, QWidget* p
                     state,
                     position_ms,
                     duration_ms,
+                    generation,
                     message);
             }, Qt::QueuedConnection);
         };
@@ -679,6 +681,7 @@ void MainWindow::requestVideoFrame()
         {
             QImage image;
             int64_t pts_ms = 0;
+            uint64_t generation = 0;
         } context;
 
         int end_of_stream = 0;
@@ -694,13 +697,15 @@ void MainWindow::requestVideoFrame()
                     frame->stride,
                     QImage::Format_ARGB32).copy();
                 context->pts_ms = frame->pts_ms;
+                context->generation = frame->generation;
             },
             &context,
             &end_of_stream);
 
         const QImage image = context.image;
         const int64_t pts_ms = context.pts_ms;
-        QMetaObject::invokeMethod(this, [this, result, end_of_stream, image, pts_ms]
+        const uint64_t generation = context.generation;
+        QMetaObject::invokeMethod(this, [this, result, end_of_stream, image, pts_ms, generation]
         {
             video_frame_pending_ = false;
             if (result != LNPLAYER_RESULT_OK)
@@ -717,7 +722,7 @@ void MainWindow::requestVideoFrame()
                 return;
             }
 
-            if (!image.isNull())
+            if (!image.isNull() && generation == media_generation_)
             {
                 video_first_frame_received_ = true;
                 pending_video_frame_ = image;
@@ -838,8 +843,10 @@ void MainWindow::handleCoreEvent(
     lnplayer_state_t state,
     int64_t position_ms,
     int64_t duration_ms,
+    uint64_t generation,
     const QString& message)
 {
+    media_generation_ = generation;
     updatePlaybackState(state, position_ms, duration_ms);
 
     switch (type)
@@ -912,11 +919,13 @@ void MainWindow::refreshSnapshot()
         const lnplayer_state_t state = snapshot.state;
         const int64_t position_ms = snapshot.position_ms;
         const int64_t duration_ms = snapshot.duration_ms;
+        const uint64_t generation = snapshot.generation;
         const bool has_audio = (snapshot.reserved & LNPLAYER_MEDIA_HAS_AUDIO) != 0;
         const bool has_video = (snapshot.reserved & LNPLAYER_MEDIA_HAS_VIDEO) != 0;
 
-        QMetaObject::invokeMethod(this, [this, state, position_ms, duration_ms, has_audio, has_video]
+        QMetaObject::invokeMethod(this, [this, state, position_ms, duration_ms, generation, has_audio, has_video]
         {
+            media_generation_ = generation;
             has_audio_ = has_audio;
             has_video_ = has_video;
             updatePlaybackState(state, position_ms, duration_ms);
