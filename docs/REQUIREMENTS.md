@@ -49,6 +49,16 @@ Windows 端同时提供音频和视频播放界面，两套 UI 属于同一个 L
 
 ### 3.3 平台职责
 
+### 3.5 Windows 首期工程实现
+
+- Windows 使用单一 `LNPlayer.exe`，通过 `--audio` / `--video` 启动对应界面；每次进程启动只创建一个窗口。
+- UI 使用 Qt 6 Widgets，构建要求 Qt 6.12 或更新的 Qt 6 版本。
+- Core 使用独立的 Standalone Asio 头文件依赖，不依赖 Boost；默认从仓库的 `3rd_cache/asio/asio/include` 或 `3rd_cache/asio/include` 查找 `asio.hpp`。
+- Core Runtime 的初始实现包含单线程 `asio::io_context` 和共享 `asio::thread_pool`。
+- 当前窗口工程只完成界面骨架、文件选择和拖放入口，不代表媒体播放功能已实现。
+- 每窗口独立子进程、命令行媒体文件实际打开、IPC、Core 播放 C ABI、FFmpeg 和平台音视频输出仍按后续阶段实现。
+
+
 - Core 对外 C ABI 使用普通同步函数调用形式，接口按返回语义分为提交型、同步完成型和快速查询型。
 - 提交型接口：首期 `open`、`seek`。请求成功进入唯一 Player 的受管理命令队列后立即返回提交结果及 operation_id；最终结果通过完成事件通知。
 - 同步完成型接口：首期 `play`、`pause`、`stop`、`close`。调用线程等待实际操作完成后返回最终结果，不只是返回请求入队结果。
