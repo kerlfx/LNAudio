@@ -552,6 +552,13 @@ public:
                 if (result == AVERROR_EOF)
                 {
                     end_of_stream = true;
+                    if (!audio_decoder_)
+                    {
+                        playback_ended_.store(true, std::memory_order_relaxed);
+                        playing_ = false;
+                        if (playback_end_callback_)
+                            playback_end_callback_();
+                    }
                     return success();
                 }
                 if (result < 0 && result != AVERROR(EAGAIN))
@@ -899,7 +906,10 @@ private:
             }
 
             if (frame.samples.empty())
+            {
+                std::this_thread::yield();
                 continue;
+            }
 
             {
                 std::lock_guard<std::mutex> lock(playback_mutex_);
