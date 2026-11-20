@@ -3,6 +3,8 @@
 
 #include <asio.hpp>
 
+#include "music_library.h"
+
 #include <thread>
 
 namespace lnplayer
@@ -20,12 +22,14 @@ public:
     asio::io_context& io_context();
     asio::thread_pool& thread_pool();
     bool running_in_io_thread() const;
+    MusicLibrary& music_library();
     void shutdown();
 
 private:
     asio::io_context io_context_;
     asio::executor_work_guard<asio::io_context::executor_type> work_guard_;
     asio::thread_pool thread_pool_;
+    MusicLibrary music_library_;
     std::thread io_thread_;
 };
 
