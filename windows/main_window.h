@@ -8,6 +8,7 @@
 #include <QStringList>
 #include <QList>
 #include <QUrl>
+#include <QHash>
 
 #include <vector>
 #include <memory>
@@ -25,6 +26,7 @@ class QListWidgetItem;
 class QObject;
 class QPushButton;
 class QSlider;
+class QShortcut;
 class QThread;
 class QTimer;
 class QWidget;
@@ -122,6 +124,7 @@ private:
     QLabel* osd_label_ = nullptr;
     QWidget* playlist_panel_ = nullptr;
     QAction* playlist_visibility_action_ = nullptr;
+    QHash<QString, QShortcut*> shortcuts_;
     QSlider* seek_slider_;
     QSlider* volume_slider_;
     QPushButton* play_button_;
