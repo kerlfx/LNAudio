@@ -50,6 +50,8 @@ MainWindow::MainWindow(PlayerMode mode, const QString& initial_media, QWidget* p
     , stop_button_(new QPushButton(QStringLiteral("停止"), this))
     , command_worker_(new QObject())
     , command_thread_(new QThread(this))
+    , library_worker_(new QObject())
+    , library_thread_(new QThread(this))
     , snapshot_timer_(new QTimer(this))
 {
     setAcceptDrops(true);
@@ -64,6 +66,43 @@ MainWindow::MainWindow(PlayerMode mode, const QString& initial_media, QWidget* p
     {
         openFile();
     });
+    if (mode_ == PlayerMode::Audio)
+    {
+        auto* import_action = file_menu->addAction(QStringLiteral("导入音乐目录..."));
+        connect(import_action, &QAction::triggered, this, [this]
+        {
+            const QString directory = QFileDialog::getExistingDirectory(
+                this, QStringLiteral("选择音乐目录"));
+            if (directory.isEmpty())
+                return;
+
+            const QByteArray path_utf8 = directory.toUtf8();
+            status_label_->setText(QStringLiteral("正在扫描音乐目录..."));
+            QMetaObject::invokeMethod(library_worker_, [this, path_utf8]
+            {
+                int imported_count = 0;
+                const lnplayer_result_t result = player_
+                    ? lnplayer_library_scan_directory(
+                        player_, path_utf8.constData(), 1, &imported_count)
+                    : LNPLAYER_RESULT_INVALID_HANDLE;
+
+                QMetaObject::invokeMethod(this, [this, result, imported_count]
+                {
+                    if (result == LNPLAYER_RESULT_OK)
+                    {
+                        status_label_->setText(
+                            QStringLiteral("目录扫描完成，导入 %1 个音频文件").arg(imported_count));
+                        statusBar()->showMessage(QStringLiteral("音乐库已更新"));
+                    }
+                    else
+                    {
+                        status_label_->setText(QStringLiteral("音乐目录扫描失败"));
+                    }
+                }, Qt::QueuedConnection);
+            }, Qt::QueuedConnection);
+        });
+    }
+
     file_menu->addSeparator();
     auto* exit_action = file_menu->addAction(QStringLiteral("退出"));
     connect(exit_action, &QAction::triggered, this, &QWidget::close);
@@ -118,6 +157,8 @@ MainWindow::MainWindow(PlayerMode mode, const QString& initial_media, QWidget* p
 
     command_worker_->moveToThread(command_thread_);
     command_thread_->start();
+    library_worker_->moveToThread(library_thread_);
+    library_thread_->start();
 
     QMetaObject::invokeMethod(command_worker_, [this]
     {
@@ -234,6 +275,14 @@ MainWindow::MainWindow(PlayerMode mode, const QString& initial_media, QWidget* p
 MainWindow::~MainWindow()
 {
     snapshot_timer_->stop();
+
+    if (library_thread_->isRunning())
+    {
+        QMetaObject::invokeMethod(library_worker_, [] {}, Qt::BlockingQueuedConnection);
+        library_thread_->quit();
+        library_thread_->wait();
+    }
+    delete library_worker_;
 
     if (command_thread_->isRunning())
     {
