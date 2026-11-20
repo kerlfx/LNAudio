@@ -69,7 +69,8 @@ private:
     void togglePlayback();
     void seekRelative(int64_t offset_ms);
     void takeScreenshot();
-    void stepVideoFrame();
+    void stepVideoFrame(bool backwards = false);
+    void presentHistoricalVideoFrame();
     void setPlaybackRate(float rate);
     void handleCoreEvent(
         lnplayer_event_type_t type,
@@ -120,6 +121,8 @@ private:
     int pending_hardware_width_ = 0;
     int pending_hardware_height_ = 0;
     QImage last_video_frame_;
+    QList<QImage> video_frame_history_;
+    int video_frame_history_index_ = -1;
     int64_t pending_video_pts_ms_ = 0;
     uint64_t pending_video_generation_ = 0;
     int64_t current_position_ms_ = 0;
