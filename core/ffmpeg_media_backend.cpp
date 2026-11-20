@@ -202,6 +202,7 @@ public:
 #ifdef _WIN32
         std::unique_lock<std::mutex> playback_lock(playback_mutex_);
         const bool resume_playback = playback_active_;
+        ++playback_generation_;
         playback_active_ = false;
         playback_condition_.notify_all();
         playback_condition_.wait(playback_lock, [this] { return !playback_writing_; });
@@ -449,6 +450,7 @@ private:
 
         for (;;)
         {
+            uint64_t decode_generation = 0;
             {
                 std::unique_lock<std::mutex> lock(playback_mutex_);
                 playback_condition_.wait(lock, [this]
@@ -474,6 +476,7 @@ private:
                     }
                     continue;
                 }
+                decode_generation = playback_generation_;
             }
 
             AudioFrame frame;
@@ -504,7 +507,9 @@ private:
 
             {
                 std::lock_guard<std::mutex> lock(playback_mutex_);
-                if (!playback_active_ || playback_stop_)
+                if (!playback_active_ ||
+                    playback_stop_ ||
+                    decode_generation != playback_generation_)
                     continue;
                 playback_writing_ = true;
             }
@@ -641,6 +646,7 @@ private:
     bool playback_active_ = false;
     bool playback_writing_ = false;
     bool playback_flush_requested_ = false;
+    uint64_t playback_generation_ = 0;
     bool playback_start_finished_ = false;
     bool playback_start_success_ = false;
 #endif
