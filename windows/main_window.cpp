@@ -24,6 +24,7 @@
 #include <QApplication>
 #include <QDragEnterEvent>
 #include <QDir>
+#include <QDesktopServices>
 #include <QDirIterator>
 #include <QDialog>
 #include <QDialogButtonBox>
@@ -71,6 +72,7 @@
 #include <QStringDecoder>
 #include <QSlider>
 #include <QStatusBar>
+#include <QStandardPaths>
 #include <QSettings>
 #include <QSignalBlocker>
 #include <QThread>
@@ -82,6 +84,35 @@
 
 namespace
 {
+
+
+QString settings_file_path()
+{
+    const QString directory = QStandardPaths::writableLocation(
+        QStandardPaths::AppConfigLocation);
+    QDir().mkpath(directory);
+    return QDir(directory).filePath(QStringLiteral("settings.ini"));
+}
+
+void initialize_settings_file()
+{
+    QSettings settings(settings_file_path(), QSettings::IniFormat);
+    const QString migration_key = QStringLiteral("Config/RegistryMigrationCompleted");
+    if (settings.value(migration_key, false).toBool())
+        return;
+
+#ifdef Q_OS_WIN
+    QSettings legacy(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"),
+        QSettings::NativeFormat);
+    for (const QString& key : legacy.allKeys())
+    {
+        if (!settings.contains(key))
+            settings.setValue(key, legacy.value(key));
+    }
+#endif
+    settings.setValue(migration_key, true);
+    settings.sync();
+}
 
 QString format_position(int64_t position_ms)
 {
@@ -251,9 +282,10 @@ MainWindow::MainWindow(
     , fullscreen_hide_timer_(new QTimer(this))
     , osd_timer_(new QTimer(this))
 {
+    initialize_settings_file();
     if (mode_ == PlayerMode::Video)
     {
-        QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+        QSettings settings(settings_file_path(), QSettings::IniFormat);
         playback_rate_ = std::clamp(
             settings.value(QStringLiteral("Video/PlaybackRate"), 1.0).toFloat(),
             0.25f, 4.0f);
@@ -267,6 +299,13 @@ MainWindow::MainWindow(
             500, 5000);
         osd_position_ = std::clamp(
             settings.value(QStringLiteral("Video/UI/OSDPosition"), 1).toInt(), 0, 2);
+        screenshot_directory_ = settings.value(
+            QStringLiteral("Video/Screenshot/Directory"), QDir::homePath()).toString();
+        screenshot_format_ = settings.value(
+            QStringLiteral("Video/Screenshot/Format"), QStringLiteral("png")).toString();
+        if (screenshot_format_ != QStringLiteral("jpg") &&
+            screenshot_format_ != QStringLiteral("bmp"))
+            screenshot_format_ = QStringLiteral("png");
         subtitle_font_family_ = settings.value(
             QStringLiteral("Video/Subtitle/FontFamily"), QStringLiteral("Segoe UI")).toString();
         subtitle_color_ = settings.value(
@@ -295,7 +334,7 @@ MainWindow::MainWindow(
         : QStringLiteral("LNPlayer - Audio"));
     if (mode_ == PlayerMode::Video)
     {
-        QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+        QSettings settings(settings_file_path(), QSettings::IniFormat);
         const QByteArray geometry = settings.value(QStringLiteral("Video/Window/Geometry")).toByteArray();
         if (!geometry.isEmpty())
             restoreGeometry(geometry);
@@ -381,7 +420,7 @@ MainWindow::MainWindow(
         connect(recent_menu, &QMenu::aboutToShow, this, [this, recent_menu]
         {
             recent_menu->clear();
-            QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+            QSettings settings(settings_file_path(), QSettings::IniFormat);
             const QStringList recent_files = settings.value(
                 QStringLiteral("Video/RecentFiles")).toStringList();
             for (const QString& path : recent_files)
@@ -490,7 +529,7 @@ MainWindow::MainWindow(
                 return;
             }
 
-            QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+            QSettings settings(settings_file_path(), QSettings::IniFormat);
             const QString key = mediaPreferenceKey("Bookmarks", current_media_path_);
             const QVariantList bookmarks = settings.value(key).toList();
             QAction* add_action = bookmarks_menu->addAction(QStringLiteral("添加当前书签..."));
@@ -507,7 +546,7 @@ MainWindow::MainWindow(
                 if (!accepted || name.isEmpty())
                     return;
 
-                QSettings store(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+                QSettings store(settings_file_path(), QSettings::IniFormat);
                 QVariantList updated = store.value(key).toList();
                 QVariantMap entry;
                 entry.insert(QStringLiteral("position"), bookmark_position);
@@ -534,7 +573,7 @@ MainWindow::MainWindow(
                 auto* remove_action = bookmark_menu->addAction(QStringLiteral("删除"));
                 connect(remove_action, &QAction::triggered, this, [this, key, index]
                 {
-                    QSettings store(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+                    QSettings store(settings_file_path(), QSettings::IniFormat);
                     QVariantList updated = store.value(key).toList();
                     if (index >= 0 && index < updated.size())
                     {
@@ -555,7 +594,7 @@ MainWindow::MainWindow(
                 auto* clear_action = bookmarks_menu->addAction(QStringLiteral("清空本视频书签"));
                 connect(clear_action, &QAction::triggered, this, [this, key]
                 {
-                    QSettings store(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+                    QSettings store(settings_file_path(), QSettings::IniFormat);
                     store.remove(key);
                     store.sync();
                 });
@@ -778,7 +817,7 @@ MainWindow::MainWindow(
                 showMaximized();
             else
                 show();
-            QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+            QSettings settings(settings_file_path(), QSettings::IniFormat);
             settings.setValue(QStringLiteral("Video/Window/AlwaysOnTop"), enabled);
             settings.sync();
         });
@@ -795,7 +834,7 @@ MainWindow::MainWindow(
             playlist_panel_visible_ = visible;
             if (playlist_panel_)
                 playlist_panel_->setVisible(visible);
-            QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+            QSettings settings(settings_file_path(), QSettings::IniFormat);
             settings.setValue(QStringLiteral("Video/UI/PlaylistVisible"), visible);
             settings.sync();
             if (visible && isFullScreen())
@@ -862,7 +901,7 @@ MainWindow::MainWindow(
         osd_timer_->setSingleShot(true);
         connect(osd_timer_, &QTimer::timeout, osd_label_, &QWidget::hide);
         {
-            QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+            QSettings settings(settings_file_path(), QSettings::IniFormat);
             video_brightness_ = std::clamp(
                 settings.value(QStringLiteral("Video/Filter/Brightness"), 0.0).toFloat(),
                 -1.0f, 1.0f);
@@ -1306,7 +1345,7 @@ MainWindow::MainWindow(
                     : selected == ratio_4_3 ? 4.0f / 3.0f : 0.0f;
                 video_surface_->set_aspect_ratio(video_aspect_ratio_override_);
                 video_surface_->set_stretch(video_stretch_);
-                QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+                QSettings settings(settings_file_path(), QSettings::IniFormat);
                 settings.setValue(
                     QStringLiteral("Video/Display/AspectRatio"),
                     video_aspect_ratio_override_);
@@ -1362,7 +1401,7 @@ MainWindow::MainWindow(
                 video_surface_->set_video_filter(
                     video_brightness_, video_contrast_, video_saturation_,
                     video_hue_degrees_, video_sharpness_, video_denoise_, video_grayscale_);
-                QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+                QSettings settings(settings_file_path(), QSettings::IniFormat);
                 settings.setValue(QStringLiteral("Video/Filter/Brightness"), video_brightness_);
                 settings.setValue(QStringLiteral("Video/Filter/Contrast"), video_contrast_);
                 settings.setValue(QStringLiteral("Video/Filter/Saturation"), video_saturation_);
@@ -1426,7 +1465,7 @@ MainWindow::MainWindow(
     seek_slider_->setEnabled(false);
     volume_slider_->setRange(0, 1000);
     {
-        QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+        QSettings settings(settings_file_path(), QSettings::IniFormat);
         const int saved_volume = std::clamp(
             settings.value(QStringLiteral("Playback/Volume"), 1000).toInt(), 0, 1000);
         muted_volume_ = std::clamp(
@@ -1500,7 +1539,7 @@ MainWindow::MainWindow(
             int key, std::function<void()> action)
         {
             const QKeySequence default_sequence(key);
-            QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+            QSettings settings(settings_file_path(), QSettings::IniFormat);
             const QString setting_key = QStringLiteral("Video/Shortcuts/") + id;
             const QKeySequence sequence = QKeySequence::fromString(
                 settings.value(setting_key, default_sequence.toString()).toString());
@@ -1725,7 +1764,7 @@ MainWindow::MainWindow(
 
     connect(volume_slider_, &QSlider::valueChanged, this, [this](int value)
     {
-        QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+        QSettings settings(settings_file_path(), QSettings::IniFormat);
         settings.setValue(QStringLiteral("Playback/Volume"), value);
         if (value > 0)
         {
@@ -1848,7 +1887,7 @@ MainWindow::~MainWindow()
     savePlaybackPosition();
     if (mode_ == PlayerMode::Video)
     {
-        QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+        QSettings settings(settings_file_path(), QSettings::IniFormat);
         settings.setValue(QStringLiteral("Video/Window/Geometry"),
             normal_geometry_.isEmpty() ? saveGeometry() : normal_geometry_);
         settings.setValue(QStringLiteral("Video/Window/AlwaysOnTop"), always_on_top_);
@@ -2338,7 +2377,7 @@ void MainWindow::updatePlaylistItemMetadata(const QString& path)
 
 void MainWindow::loadVideoPlaylist()
 {
-    QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+    QSettings settings(settings_file_path(), QSettings::IniFormat);
     const QStringList files = settings.value(QStringLiteral("VideoPlaylist/Files")).toStringList();
     playlist_.clear();
     for (const QString& path : files)
@@ -2400,7 +2439,7 @@ void MainWindow::savePlaybackPosition() const
     if (path.isEmpty())
         return;
 
-    QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+    QSettings settings(settings_file_path(), QSettings::IniFormat);
     settings.setValue(playbackPositionSettingKey(path), current_position_ms_);
     settings.sync();
 }
@@ -2410,7 +2449,7 @@ void MainWindow::saveVideoPlaylist() const
     if (mode_ != PlayerMode::Video)
         return;
 
-    QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+    QSettings settings(settings_file_path(), QSettings::IniFormat);
     QStringList files;
     for (const QUrl& url : playlist_)
         files.append(QFileInfo(url.toLocalFile()).absoluteFilePath());
@@ -2846,7 +2885,7 @@ void MainWindow::openVideoSettings()
         video_brightness_, video_contrast_, video_saturation_,
         video_hue_degrees_, video_sharpness_, video_denoise_, video_grayscale_);
 
-    QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+    QSettings settings(settings_file_path(), QSettings::IniFormat);
     settings.setValue(QStringLiteral("Video/Playback/RememberPosition"), remember_position_);
     settings.setValue(QStringLiteral("Video/Window/AlwaysOnTop"), always_on_top_);
     settings.setValue(QStringLiteral("Video/UI/FullscreenHideDelayMs"), fullscreen_hide_delay_ms_);
@@ -3027,7 +3066,7 @@ void MainWindow::openPlaylistIndex(int index)
     playlist_index_ = index;
     if (mode_ == PlayerMode::Video)
     {
-        QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+        QSettings settings(settings_file_path(), QSettings::IniFormat);
         QStringList recent_files = settings.value(
             QStringLiteral("Video/RecentFiles")).toStringList();
         const QString recent_path = QFileInfo(playlist_[index].toLocalFile()).absoluteFilePath();
@@ -3199,7 +3238,7 @@ void MainWindow::loadExternalSubtitlePath(const QString& path, bool remember)
 
             if (loaded && remember && !media_path.isEmpty())
             {
-                QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+                QSettings settings(settings_file_path(), QSettings::IniFormat);
                 settings.setValue(mediaPreferenceKey(QStringLiteral("ExternalSubtitle"), media_path), path);
                 settings.remove(mediaPreferenceKey(QStringLiteral("SubtitleTrack"), media_path));
                 settings.sync();
@@ -3241,7 +3280,7 @@ void MainWindow::selectSubtitleTrack(int stream_index)
             {
                 if (!media_path.isEmpty())
                 {
-                    QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+                    QSettings settings(settings_file_path(), QSettings::IniFormat);
                     settings.setValue(
                         mediaPreferenceKey(QStringLiteral("SubtitleTrack"), media_path),
                         stream_index);
@@ -3297,7 +3336,7 @@ void MainWindow::selectAudioTrack(int stream_index)
             {
                 if (!media_path.isEmpty())
                 {
-                    QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+                    QSettings settings(settings_file_path(), QSettings::IniFormat);
                     settings.setValue(
                         mediaPreferenceKey(QStringLiteral("AudioTrack"), media_path),
                         stream_index);
@@ -3322,7 +3361,7 @@ void MainWindow::selectAudioTrack(int stream_index)
 void MainWindow::setSubtitleOffset(int64_t offset_ms)
 {
     subtitle_offset_ms_ = std::clamp<int64_t>(offset_ms, -60000, 60000);
-    QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+    QSettings settings(settings_file_path(), QSettings::IniFormat);
     settings.setValue(QStringLiteral("Video/Subtitle/OffsetMs"), subtitle_offset_ms_);
     settings.sync();
 
@@ -4007,29 +4046,41 @@ void MainWindow::takeScreenshot()
     if (screenshot.isNull())
         return;
 
-    QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
-    const QString last_directory = settings.value(
-        QStringLiteral("Video/Screenshot/LastDirectory"),
-        QDir::homePath()).toString();
+    QSettings settings(settings_file_path(), QSettings::IniFormat);
+    if (screenshot_directory_.isEmpty())
+        screenshot_directory_ = QDir::homePath();
+    const QString selected_filter = screenshot_format_ == QStringLiteral("jpg")
+        ? QStringLiteral("JPEG 图片 (*.jpg *.jpeg)")
+        : screenshot_format_ == QStringLiteral("bmp")
+            ? QStringLiteral("BMP 图片 (*.bmp)")
+            : QStringLiteral("PNG 图片 (*.png)");
     const QString path = QFileDialog::getSaveFileName(
         this,
         QStringLiteral("保存视频截图"),
-        QDir(last_directory).filePath(QStringLiteral("screenshot.png")),
-        QStringLiteral("PNG 图片 (*.png);;JPEG 图片 (*.jpg *.jpeg);;BMP 图片 (*.bmp)"));
+        QDir(screenshot_directory_).filePath(
+            QStringLiteral("screenshot.%1").arg(screenshot_format_)),
+        QStringLiteral("PNG 图片 (*.png);;JPEG 图片 (*.jpg *.jpeg);;BMP 图片 (*.bmp)"),
+        nullptr,
+        QFileDialog::Options(),
+        nullptr);
     if (path.isEmpty())
         return;
 
-    if (!screenshot.save(path))
+    QString output_path = path;
+    const QFileInfo output_info(output_path);
+    if (output_info.suffix().isEmpty())
+        output_path += QStringLiteral(".") + screenshot_format_;
+    if (!screenshot.save(output_path))
     {
         statusBar()->showMessage(QStringLiteral("截图保存失败"));
         return;
     }
 
-    settings.setValue(
-        QStringLiteral("Video/Screenshot/LastDirectory"),
-        QFileInfo(path).absolutePath());
+    screenshot_directory_ = QFileInfo(output_path).absolutePath();
+    settings.setValue(QStringLiteral("Video/Screenshot/Directory"), screenshot_directory_);
+    settings.setValue(QStringLiteral("Video/Screenshot/Format"), screenshot_format_);
     settings.sync();
-    statusBar()->showMessage(QStringLiteral("截图已保存：%1").arg(path));
+    statusBar()->showMessage(QStringLiteral("截图已保存：%1").arg(output_path));
     showOsd(QStringLiteral("截图已保存"));
 }
 
@@ -4047,7 +4098,7 @@ void MainWindow::setPlaybackRate(float rate)
     }
     playback_rate_ = rate;
     showOsd(QStringLiteral("播放速度 %1x").arg(rate, 0, 'f', 2));
-    QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+    QSettings settings(settings_file_path(), QSettings::IniFormat);
     settings.setValue(QStringLiteral("Video/PlaybackRate"), rate);
     settings.sync();
 
@@ -4301,7 +4352,7 @@ void MainWindow::handleCoreEvent(
             if (mode_ == PlayerMode::Video && remember_position_ &&
                 playlist_index_ >= 0 && playlist_index_ < playlist_.size())
             {
-                QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+                QSettings settings(settings_file_path(), QSettings::IniFormat);
                 const QString key = playbackPositionSettingKey(
                     playlist_[playlist_index_].toLocalFile());
                 const int64_t restore_position = settings.value(key, 0).toLongLong();
@@ -4329,7 +4380,7 @@ void MainWindow::handleCoreEvent(
             }
             if (playlist_index_ >= 0 && playlist_index_ < playlist_.size())
             {
-                QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+                QSettings settings(settings_file_path(), QSettings::IniFormat);
                 const int saved_audio_track = settings.value(
                     mediaPreferenceKey(QStringLiteral("AudioTrack"), current_media_path_), -1).toInt();
                 if (saved_audio_track >= 0)
@@ -4337,7 +4388,7 @@ void MainWindow::handleCoreEvent(
             }
             if (playlist_index_ >= 0 && playlist_index_ < playlist_.size())
             {
-                QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+                QSettings settings(settings_file_path(), QSettings::IniFormat);
                 const QString external_subtitle_key = mediaPreferenceKey(
                     QStringLiteral("ExternalSubtitle"), current_media_path_);
                 const QString external_subtitle_path = settings.value(external_subtitle_key).toString();
