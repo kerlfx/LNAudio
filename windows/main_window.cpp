@@ -10,6 +10,7 @@
 #include <cmath>
 #include <functional>
 #include <iterator>
+#include <memory>
 #include <utility>
 
 #include <QByteArray>
@@ -58,6 +59,7 @@ public:
     void set_aspect_ratio(float ratio);
     void set_source_aspect_ratio(float ratio);
     bool present_frame_threadsafe(const QImage& frame);
+    bool present_hardware_frame(void* texture, uint32_t array_slice, uint32_t format, int width, int height);
     void set_interaction_callbacks(
         std::function<void()> double_click,
         std::function<void(int)> wheel);
@@ -166,6 +168,13 @@ bool VideoSurface::present_frame_threadsafe(const QImage& frame)
         frame.width(),
         frame.height(),
         frame.bytesPerLine());
+}
+
+bool VideoSurface::present_hardware_frame(
+    void* texture, uint32_t array_slice, uint32_t format, int width, int height)
+{
+    return renderer_ && renderer_->present_hardware(
+        texture, array_slice, format, width, height);
 }
 
 void VideoSurface::set_interaction_callbacks(
@@ -909,6 +918,12 @@ void MainWindow::requestVideoFrame()
         struct FrameContext
         {
             QImage image;
+            std::shared_ptr<void> hardware_owner;
+            void* hardware_texture = nullptr;
+            uint32_t hardware_array_slice = 0;
+            uint32_t hardware_format = 0;
+            int hardware_width = 0;
+            int hardware_height = 0;
             int64_t pts_ms = 0;
             uint64_t generation = 0;
             float display_aspect_ratio = 0.0f;
@@ -920,24 +935,51 @@ void MainWindow::requestVideoFrame()
             +[](const lnplayer_windows_video_frame_t* frame, void* user_data)
             {
                 auto* context = static_cast<FrameContext*>(user_data);
-                context->image = QImage(
-                    frame->bgra,
-                    frame->width,
-                    frame->height,
-                    frame->stride,
-                    QImage::Format_ARGB32).copy();
                 context->pts_ms = frame->pts_ms;
                 context->generation = frame->generation;
                 context->display_aspect_ratio = frame->display_aspect_ratio;
+                if (frame->d3d11_texture)
+                {
+                    void* retained_owner = nullptr;
+                    if (lnplayer_windows_retain_video_frame(frame, &retained_owner) ==
+                        LNPLAYER_RESULT_OK)
+                    {
+                        context->hardware_owner = std::shared_ptr<void>(
+                            retained_owner, lnplayer_windows_release_video_frame);
+                        context->hardware_texture = frame->d3d11_texture;
+                        context->hardware_array_slice = frame->d3d11_array_slice;
+                        context->hardware_format = frame->dxgi_format;
+                        context->hardware_width = frame->width;
+                        context->hardware_height = frame->height;
+                    }
+                }
+                else
+                {
+                    context->image = QImage(
+                        frame->bgra,
+                        frame->width,
+                        frame->height,
+                        frame->stride,
+                        QImage::Format_ARGB32).copy();
+                }
             },
             &context,
             &end_of_stream);
 
         const QImage image = context.image;
+        const auto hardware_owner = context.hardware_owner;
+        const void* hardware_texture = context.hardware_texture;
+        const uint32_t hardware_array_slice = context.hardware_array_slice;
+        const uint32_t hardware_format = context.hardware_format;
+        const int hardware_width = context.hardware_width;
+        const int hardware_height = context.hardware_height;
         const int64_t pts_ms = context.pts_ms;
         const uint64_t generation = context.generation;
         const float display_aspect_ratio = context.display_aspect_ratio;
-        QMetaObject::invokeMethod(this, [this, result, end_of_stream, image, pts_ms, generation, display_aspect_ratio]
+        QMetaObject::invokeMethod(this,
+            [this, result, end_of_stream, image, hardware_owner, hardware_texture,
+             hardware_array_slice, hardware_format, hardware_width, hardware_height,
+             pts_ms, generation, display_aspect_ratio]
         {
             video_frame_pending_ = false;
             if (result != LNPLAYER_RESULT_OK)
@@ -954,12 +996,18 @@ void MainWindow::requestVideoFrame()
                 return;
             }
 
-            if (!image.isNull() && generation == media_generation_)
+            if ((!image.isNull() || hardware_owner) && generation == media_generation_)
             {
                 video_first_frame_received_ = true;
                 if (video_surface_)
                     video_surface_->set_source_aspect_ratio(display_aspect_ratio);
                 pending_video_frame_ = image;
+                pending_hardware_frame_owner_ = hardware_owner;
+                pending_hardware_texture_ = const_cast<void*>(hardware_texture);
+                pending_hardware_array_slice_ = hardware_array_slice;
+                pending_hardware_format_ = hardware_format;
+                pending_hardware_width_ = hardware_width;
+                pending_hardware_height_ = hardware_height;
                 pending_video_pts_ms_ = pts_ms;
                 pending_video_frame_valid_ = true;
                 if (!video_clock_.isValid() && !has_audio_)
@@ -987,6 +1035,34 @@ void MainWindow::presentPendingVideoFrame()
 
         if (pending_video_pts_ms_ > clock_ms + 8)
             return;
+    }
+
+    if (pending_hardware_frame_owner_)
+    {
+        auto owner = std::move(pending_hardware_frame_owner_);
+        void* texture = pending_hardware_texture_;
+        const uint32_t array_slice = pending_hardware_array_slice_;
+        const uint32_t format = pending_hardware_format_;
+        const int width = pending_hardware_width_;
+        const int height = pending_hardware_height_;
+        pending_hardware_texture_ = nullptr;
+        pending_video_frame_valid_ = false;
+
+        QMetaObject::invokeMethod(command_worker_,
+            [this, owner = std::move(owner), texture, array_slice, format, width, height]
+        {
+            const bool presented = video_surface_ &&
+                video_surface_->present_hardware_frame(
+                    texture, array_slice, format, width, height);
+            if (!presented)
+            {
+                QMetaObject::invokeMethod(this, [this]
+                {
+                    status_label_->setText(QStringLiteral("GPU 视频帧渲染失败"));
+                }, Qt::QueuedConnection);
+            }
+        }, Qt::QueuedConnection);
+        return;
     }
 
     QImage frame = pending_video_frame_;
@@ -1042,7 +1118,6 @@ void MainWindow::presentPendingVideoFrame()
     pending_video_frame_ = {};
     pending_video_frame_valid_ = false;
 }
-
 void MainWindow::togglePlayback()
 {
     const bool should_pause = is_playing_;
@@ -1145,6 +1220,10 @@ void MainWindow::handleCoreEvent(
             snapshot_timer_->start();
             refreshSnapshot();
             pending_video_frame_valid_ = false;
+            pending_hardware_frame_owner_.reset();
+            pending_hardware_texture_ = nullptr;
+            pending_hardware_frame_owner_.reset();
+            pending_hardware_texture_ = nullptr;
             video_first_frame_received_ = false;
             video_end_of_stream_ = false;
             last_video_frame_ = {};
