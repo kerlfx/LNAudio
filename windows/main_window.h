@@ -122,6 +122,7 @@ private:
     QThread* library_thread_;
     QTimer* snapshot_timer_;
     QTimer* video_timer_;
+    QTimer* device_timer_;
     lnplayer_t* player_ = nullptr;
     void* video_device_identity_ = nullptr;
     int64_t duration_ms_ = -1;
