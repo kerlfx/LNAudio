@@ -811,14 +811,19 @@ void MainWindow::loadExternalSubtitle()
 
 QString MainWindow::subtitleAt(int64_t position_ms) const
 {
-    for (const SubtitleCue& cue : subtitle_cues_)
-    {
-        if (position_ms < cue.start_ms)
-            break;
-        if (position_ms < cue.end_ms)
-            return cue.text;
-    }
-    return {};
+    const auto next = std::upper_bound(
+        subtitle_cues_.begin(),
+        subtitle_cues_.end(),
+        position_ms,
+        [](int64_t position, const SubtitleCue& cue)
+        {
+            return position < cue.start_ms;
+        });
+    if (next == subtitle_cues_.begin())
+        return {};
+
+    const SubtitleCue& cue = *std::prev(next);
+    return position_ms < cue.end_ms ? cue.text : QString();
 }
 
 void MainWindow::refreshLibrary()
