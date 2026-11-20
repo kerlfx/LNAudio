@@ -329,7 +329,8 @@ MainWindow::MainWindow(
         osd_position_ = std::clamp(
             settings.value(QStringLiteral("Video/UI/OSDPosition"), 1).toInt(), 0, 2);
         screenshot_directory_ = settings.value(
-            QStringLiteral("Video/Screenshot/Directory"),\n            QDir(application_data_directory()).filePath(QStringLiteral("Screenshots")))).toString();
+            QStringLiteral("Video/Screenshot/Directory"),
+            QDir(application_data_directory()).filePath(QStringLiteral("Screenshots"))).toString();
         screenshot_format_ = settings.value(
             QStringLiteral("Video/Screenshot/Format"), QStringLiteral("png")).toString();
         if (screenshot_format_ != QStringLiteral("jpg") &&
