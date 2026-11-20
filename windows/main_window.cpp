@@ -15,6 +15,9 @@
 #include <QListWidget>
 #include <QListWidgetItem>
 #include <QMenuBar>
+#include <QMenu>
+#include <QShortcut>
+#include <QKeySequence>
 #include <QMetaObject>
 #include <QMimeData>
 #include <QPushButton>
@@ -77,6 +80,15 @@ bool VideoSurface::has_renderer() const
     return renderer_ != nullptr;
 }
 
+void VideoSurface::set_stretch(bool enabled)
+{
+    stretch_ = enabled;
+    if (renderer_)
+        renderer_->set_stretch(enabled);
+    else
+        update();
+}
+
 bool VideoSurface::present_frame_threadsafe(const QImage& frame)
 {
     return renderer_ && !frame.isNull() && renderer_->present(
@@ -97,7 +109,8 @@ void VideoSurface::paintEvent(QPaintEvent* event)
     if (frame_.isNull())
         return;
 
-    const QSize fitted = frame_.size().scaled(size(), Qt::KeepAspectRatio);
+    const QSize fitted = frame_.size().scaled(
+        size(), stretch_ ? Qt::IgnoreAspectRatio : Qt::KeepAspectRatio);
     const QRect target(
         (width() - fitted.width()) / 2,
         (height() - fitted.height()) / 2,
@@ -218,6 +231,54 @@ MainWindow::MainWindow(PlayerMode mode, const QString& initial_media, QWidget* p
     if (mode_ == PlayerMode::Video)
     {
         video_surface_ = new VideoSurface(content);
+        video_surface_->setContextMenuPolicy(Qt::CustomContextMenu);
+        connect(video_surface_, &QWidget::customContextMenuRequested, this, [this](const QPoint& point)
+        {
+            QMenu menu(this);
+            QAction* play_pause = menu.addAction(is_playing_
+                ? QStringLiteral("暂停")
+                : QStringLiteral("播放"));
+            QAction* stop = menu.addAction(QStringLiteral("停止"));
+            menu.addSeparator();
+            QAction* fullscreen = menu.addAction(isFullScreen()
+                ? QStringLiteral("退出全屏")
+                : QStringLiteral("全屏"));
+            QAction* screenshot = menu.addAction(QStringLiteral("截图..."));
+            QAction* next_frame = menu.addAction(QStringLiteral("下一帧"));
+            menu.addSeparator();
+            QMenu* aspect_menu = menu.addMenu(QStringLiteral("画面比例"));
+            QAction* fit = aspect_menu->addAction(QStringLiteral("保持比例"));
+            QAction* stretch = aspect_menu->addAction(QStringLiteral("拉伸填充"));
+            fit->setCheckable(true);
+            stretch->setCheckable(true);
+            fit->setChecked(true);
+            stretch->setChecked(false);
+
+            QAction* selected = menu.exec(video_surface_->mapToGlobal(point));
+            if (selected == play_pause)
+                togglePlayback();
+            else if (selected == stop)
+                QMetaObject::invokeMethod(command_worker_, [this]
+                {
+                    if (player_)
+                        lnplayer_stop(player_);
+                }, Qt::QueuedConnection);
+            else if (selected == fullscreen)
+            {
+                if (isFullScreen())
+                    showNormal();
+                else
+                    showFullScreen();
+            }
+            else if (selected == screenshot)
+                takeScreenshot();
+            else if (selected == next_frame)
+                stepVideoFrame();
+            else if (selected == fit)
+                video_surface_->set_stretch(false);
+            else if (selected == stretch)
+                video_surface_->set_stretch(true);
+        });
         layout->addWidget(video_surface_, 1);
     }
     else
@@ -276,6 +337,49 @@ MainWindow::MainWindow(PlayerMode mode, const QString& initial_media, QWidget* p
 
     layout->addWidget(status_label_);
     setCentralWidget(content);
+
+    if (mode_ == PlayerMode::Video)
+    {
+        auto bind_shortcut = [this](int key, std::function<void()> action)
+        {
+            auto* shortcut = new QShortcut(QKeySequence(key), this);
+            shortcut->setContext(Qt::WindowShortcut);
+            connect(shortcut, &QShortcut::activated, this, std::move(action));
+        };
+        bind_shortcut(Qt::Key_Space, [this] { togglePlayback(); });
+        bind_shortcut(Qt::Key_F11, [this]
+        {
+            if (isFullScreen())
+                showNormal();
+            else
+                showFullScreen();
+        });
+        bind_shortcut(Qt::Key_Escape, [this]
+        {
+            if (isFullScreen())
+                showNormal();
+        });
+        bind_shortcut(Qt::Key_Left, [this] { seekRelative(-5000); });
+        bind_shortcut(Qt::Key_Right, [this] { seekRelative(5000); });
+        bind_shortcut(Qt::Key_Up, [this]
+        {
+            volume_slider_->setValue(std::min(1000, volume_slider_->value() + 50));
+        });
+        bind_shortcut(Qt::Key_Down, [this]
+        {
+            volume_slider_->setValue(std::max(0, volume_slider_->value() - 50));
+        });
+        bind_shortcut(Qt::Key_M, [this]
+        {
+            if (volume_slider_->value() == 0)
+                volume_slider_->setValue(muted_volume_);
+            else
+            {
+                muted_volume_ = volume_slider_->value();
+                volume_slider_->setValue(0);
+            }
+        });
+    }
     statusBar()->showMessage(QStringLiteral("正在初始化播放器"));
 
     command_worker_->moveToThread(command_thread_);
@@ -659,6 +763,64 @@ void MainWindow::presentPendingVideoFrame()
     }
     pending_video_frame_ = {};
     pending_video_frame_valid_ = false;
+}
+
+void MainWindow::togglePlayback()
+{
+    QMetaObject::invokeMethod(command_worker_, [this]
+    {
+        if (!player_)
+            return;
+        if (is_playing_)
+            lnplayer_pause(player_);
+        else
+            lnplayer_play(player_);
+    }, Qt::QueuedConnection);
+}
+
+void MainWindow::seekRelative(int64_t offset_ms)
+{
+    if (duration_ms_ <= 0)
+        return;
+
+    const int64_t target = std::clamp<int64_t>(
+        current_position_ms_ + offset_ms, 0, duration_ms_);
+    QMetaObject::invokeMethod(command_worker_, [this, target]
+    {
+        if (!player_)
+            return;
+        uint64_t operation_id = 0;
+        lnplayer_seek(player_, target, &operation_id);
+    }, Qt::QueuedConnection);
+}
+
+void MainWindow::takeScreenshot()
+{
+    if (last_video_frame_.isNull())
+        return;
+
+    const QString path = QFileDialog::getSaveFileName(
+        this,
+        QStringLiteral("保存视频截图"),
+        QStringLiteral("screenshot.png"),
+        QStringLiteral("PNG 图片 (*.png);;JPEG 图片 (*.jpg *.jpeg)"));
+    if (!path.isEmpty())
+        last_video_frame_.save(path);
+}
+
+void MainWindow::stepVideoFrame()
+{
+    if (mode_ != PlayerMode::Video || !has_video_)
+        return;
+
+    QMetaObject::invokeMethod(command_worker_, [this]
+    {
+        if (player_)
+            lnplayer_pause(player_);
+    }, Qt::QueuedConnection);
+    video_frame_pending_ = false;
+    pending_video_frame_valid_ = false;
+    requestVideoFrame();
 }
 
 void MainWindow::handleCoreEvent(
