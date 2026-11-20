@@ -1239,6 +1239,10 @@ void MainWindow::openPlaylistIndex(int index)
     pending_embedded_subtitle_.clear();
     pending_embedded_subtitle_bitmap_ = {};
     pending_video_display_aspect_ratio_ = 0.0f;
+    pending_hdr_transfer_ = 0;
+    pending_color_primaries_ = 0;
+    pending_video_ycbcr_matrix_ = 0;
+    pending_video_ycbcr_full_range_ = 0;
     video_frame_history_.clear();
     video_frame_history_index_ = -1;
     pending_video_frame_valid_ = false;
