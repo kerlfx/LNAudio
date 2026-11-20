@@ -16,6 +16,7 @@ extern "C"
 #include <libswscale/swscale.h>
 }
 
+#include <algorithm>
 #include <atomic>
 #include <cerrno>
 #include <condition_variable>
