@@ -20,7 +20,7 @@ extern "C" {
 
 #define LNPLAYER_ABI_VERSION 1u
 
-typedef struct lnplayer lnplayer_t;
+typedef struct lnplayer_handle lnplayer_t;
 
 typedef enum lnplayer_result
 {
