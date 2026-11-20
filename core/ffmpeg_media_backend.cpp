@@ -54,6 +54,36 @@ std::string ffmpeg_error(int error)
     return buffer;
 }
 
+void populate_video_hdr_metadata(AVStream* stream, MediaVideoInfo& info)
+{
+    size_t side_data_size = 0;
+    uint8_t* mastering_data = av_stream_get_side_data(
+        stream, AV_PKT_DATA_MASTERING_DISPLAY_METADATA, &side_data_size);
+    if (mastering_data && side_data_size >= sizeof(AVMasteringDisplayMetadata))
+    {
+        const auto* mastering =
+            reinterpret_cast<const AVMasteringDisplayMetadata*>(mastering_data);
+        if (mastering->has_luminance)
+        {
+            info.mastering_max_luminance =
+                static_cast<float>(av_q2d(mastering->max_luminance));
+            info.mastering_min_luminance =
+                static_cast<float>(av_q2d(mastering->min_luminance));
+        }
+    }
+
+    side_data_size = 0;
+    uint8_t* content_light_data = av_stream_get_side_data(
+        stream, AV_PKT_DATA_CONTENT_LIGHT_LEVEL, &side_data_size);
+    if (content_light_data && side_data_size >= sizeof(AVContentLightMetadata))
+    {
+        const auto* content_light =
+            reinterpret_cast<const AVContentLightMetadata*>(content_light_data);
+        info.max_content_light_level = content_light->MaxCLL;
+        info.max_frame_average_light_level = content_light->MaxFALL;
+    }
+}
+
 class FFmpegMediaBackend final : public MediaBackend
 {
 public:
@@ -141,8 +171,7 @@ public:
             info.video.pixel_format = pixel_format ? pixel_format : "";
             info.video.width = parameters->width;
             info.video.height = parameters->height;
-            info.video.bit_rate = parameters->bit_rate > 0
-                ? parameters->bit_rate : format_context_->bit_rate;
+            info.video.bit_rate = parameters->bit_rate > 0 ? parameters->bit_rate : 0;
             info.video.frame_rate_num = frame_rate.num;
             info.video.frame_rate_den = frame_rate.den > 0 ? frame_rate.den : 1;
             info.video.sample_aspect_ratio_num = sample_aspect_ratio.num > 0
@@ -156,6 +185,7 @@ public:
             info.video.color_space = parameters->color_space;
             info.video.bit_depth = pixel_descriptor && pixel_descriptor->nb_components > 0
                 ? pixel_descriptor->comp[0].depth : 0;
+            populate_video_hdr_metadata(video_stream, info.video);
         }
 
         if (!info.has_audio && !info.has_video)
@@ -2606,8 +2636,7 @@ bool probe_ffmpeg_media(const std::string& source, MediaInfo& info, std::string&
         info.video.pixel_format = pixel_format ? pixel_format : "";
         info.video.width = parameters->width;
         info.video.height = parameters->height;
-        info.video.bit_rate = parameters->bit_rate > 0
-            ? parameters->bit_rate : context->bit_rate;
+        info.video.bit_rate = parameters->bit_rate > 0 ? parameters->bit_rate : 0;
         info.video.frame_rate_num = frame_rate.num;
         info.video.frame_rate_den = frame_rate.den > 0 ? frame_rate.den : 1;
         info.video.sample_aspect_ratio_num = sample_aspect_ratio.num > 0
@@ -2621,6 +2650,7 @@ bool probe_ffmpeg_media(const std::string& source, MediaInfo& info, std::string&
         info.video.color_space = parameters->color_space;
         info.video.bit_depth = pixel_descriptor && pixel_descriptor->nb_components > 0
             ? pixel_descriptor->comp[0].depth : 0;
+        populate_video_hdr_metadata(stream, info.video);
     }
 
     avformat_close_input(&context);
