@@ -2933,6 +2933,8 @@ void MainWindow::openVideoSettings()
         video_surface_->set_gesture_enabled(mouse_gestures_enabled_);
     if (playlist_visibility_action_)
         playlist_visibility_action_->setChecked(playlist_panel_visible_);
+    if (always_on_top_action_)
+        always_on_top_action_->setChecked(always_on_top_);
     if (playlist_panel_)
         playlist_panel_->setVisible(playlist_panel_visible_);
     const bool was_fullscreen = isFullScreen();
