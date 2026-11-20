@@ -129,6 +129,8 @@ private:
     QList<QUrl> playlist_;
     int playlist_index_ = -1;
     bool playlist_open_pending_ = false;
+    bool subtitles_enabled_ = true;
+    int64_t subtitle_offset_ms_ = 0;
     bool shuffle_enabled_ = false;
     int repeat_mode_ = 0;
     QList<int> shuffle_order_;
