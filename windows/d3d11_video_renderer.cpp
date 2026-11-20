@@ -8,6 +8,7 @@
 #include <mutex>
 
 #include <d3d11.h>
+#include <d3d11_1.h>
 #include <d3dcompiler.h>
 #include <dxgi.h>
 #include <wrl/client.h>
@@ -156,6 +157,9 @@ public:
             release_resources();
             return false;
         }
+
+        device_.As(&video_device_);
+        context_.As(&video_context_);
 
         ComPtr<ID3D11Multithread> multithread;
         if (SUCCEEDED(context_.As(&multithread)))
@@ -317,6 +321,127 @@ public:
         return SUCCEEDED(present_result);
     }
 
+    bool present_hardware(
+        void* native_texture,
+        uint32_t array_slice,
+        uint32_t format,
+        int width,
+        int height)
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (!native_texture || width <= 0 || height <= 0 ||
+            !swap_chain_ || !device_ || !video_device_ || !video_context_)
+            return false;
+
+        RECT client{};
+        if (!GetClientRect(window_, &client))
+            return false;
+        const UINT output_width = static_cast<UINT>(std::max<LONG>(1, client.right - client.left));
+        const UINT output_height = static_cast<UINT>(std::max<LONG>(1, client.bottom - client.top));
+        const DXGI_FORMAT input_format = static_cast<DXGI_FORMAT>(format);
+        if (input_format != DXGI_FORMAT_NV12 && input_format != DXGI_FORMAT_P010)
+            return false;
+
+        if (!video_processor_ || processor_input_width_ != static_cast<UINT>(width) ||
+            processor_input_height_ != static_cast<UINT>(height) ||
+            processor_output_width_ != output_width ||
+            processor_output_height_ != output_height ||
+            processor_format_ != input_format)
+        {
+            video_processor_.Reset();
+            video_processor_enumerator_.Reset();
+
+            D3D11_VIDEO_PROCESSOR_CONTENT_DESC content{};
+            content.InputFrameFormat = D3D11_VIDEO_FRAME_FORMAT_PROGRESSIVE;
+            content.InputFrameRate = {60, 1};
+            content.InputWidth = static_cast<UINT>(width);
+            content.InputHeight = static_cast<UINT>(height);
+            content.OutputFrameRate = {60, 1};
+            content.OutputWidth = output_width;
+            content.OutputHeight = output_height;
+            content.Usage = D3D11_VIDEO_USAGE_PLAYBACK_NORMAL;
+
+            if (FAILED(video_device_->CreateVideoProcessorEnumerator(
+                    &content, video_processor_enumerator_.GetAddressOf())) ||
+                FAILED(video_device_->CreateVideoProcessor(
+                    video_processor_enumerator_.Get(), 0, video_processor_.GetAddressOf())))
+                return false;
+
+            processor_input_width_ = static_cast<UINT>(width);
+            processor_input_height_ = static_cast<UINT>(height);
+            processor_output_width_ = output_width;
+            processor_output_height_ = output_height;
+            processor_format_ = input_format;
+        }
+
+        ID3D11Texture2D* texture = static_cast<ID3D11Texture2D*>(native_texture);
+        D3D11_VIDEO_PROCESSOR_INPUT_VIEW_DESC input_desc{};
+        input_desc.FourCC = 0;
+        input_desc.ViewDimension = D3D11_VPIV_DIMENSION_TEXTURE2D;
+        input_desc.Texture2D.MipSlice = 0;
+        input_desc.Texture2D.ArraySlice = array_slice;
+
+        ComPtr<ID3D11VideoProcessorInputView> input_view;
+        if (FAILED(video_device_->CreateVideoProcessorInputView(
+                texture,
+                video_processor_enumerator_.Get(),
+                &input_desc,
+                input_view.GetAddressOf())))
+            return false;
+
+        ComPtr<ID3D11Texture2D> back_buffer;
+        if (FAILED(swap_chain_->GetBuffer(0, IID_PPV_ARGS(back_buffer.GetAddressOf()))))
+            return false;
+
+        D3D11_VIDEO_PROCESSOR_OUTPUT_VIEW_DESC output_desc{};
+        output_desc.ViewDimension = D3D11_VPOV_DIMENSION_TEXTURE2D;
+        output_desc.Texture2D.MipSlice = 0;
+        ComPtr<ID3D11VideoProcessorOutputView> output_view;
+        if (FAILED(video_device_->CreateVideoProcessorOutputView(
+                back_buffer.Get(),
+                video_processor_enumerator_.Get(),
+                &output_desc,
+                output_view.GetAddressOf())))
+            return false;
+
+        const float source_aspect = aspect_ratio_ > 0.0f
+            ? aspect_ratio_
+            : static_cast<float>(width) / static_cast<float>(height);
+        float target_width = static_cast<float>(output_width);
+        float target_height = static_cast<float>(output_height);
+        if (!stretch_)
+        {
+            if (target_width / target_height > source_aspect)
+                target_width = target_height * source_aspect;
+            else
+                target_height = target_width / source_aspect;
+        }
+
+        RECT target_rect{
+            static_cast<LONG>((output_width - target_width) * 0.5f),
+            static_cast<LONG>((output_height - target_height) * 0.5f),
+            static_cast<LONG>((output_width + target_width) * 0.5f),
+            static_cast<LONG>((output_height + target_height) * 0.5f)
+        };
+
+        const float black[] = {0.0f, 0.0f, 0.0f, 1.0f};
+        context_->ClearRenderTargetView(render_target_.Get(), black);
+        video_context_->VideoProcessorSetOutputTargetRect(
+            video_processor_.Get(), TRUE, &target_rect);
+        video_context_->VideoProcessorSetStreamSourceRect(
+            video_processor_.Get(), 0, TRUE, nullptr);
+
+        D3D11_VIDEO_PROCESSOR_STREAM stream{};
+        stream.Enable = TRUE;
+        stream.pInputSurface = input_view.Get();
+        const HRESULT blt_result = video_context_->VideoProcessorBlt(
+            video_processor_.Get(), output_view.Get(), 0, 1, &stream);
+        if (FAILED(blt_result))
+            return false;
+
+        return SUCCEEDED(swap_chain_->Present(1, 0));
+    }
+
     void clear()
     {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -393,6 +518,10 @@ private:
             context_->ClearState();
         video_view_.Reset();
         video_texture_.Reset();
+        video_processor_.Reset();
+        video_processor_enumerator_.Reset();
+        video_context_.Reset();
+        video_device_.Reset();
         render_target_.Reset();
         sampler_.Reset();
         rasterizer_.Reset();
@@ -414,6 +543,15 @@ private:
     float aspect_ratio_ = 0.0f;
     ComPtr<ID3D11Device> device_;
     ComPtr<ID3D11DeviceContext> context_;
+    ComPtr<ID3D11VideoDevice> video_device_;
+    ComPtr<ID3D11VideoContext> video_context_;
+    ComPtr<ID3D11VideoProcessorEnumerator> video_processor_enumerator_;
+    ComPtr<ID3D11VideoProcessor> video_processor_;
+    UINT processor_input_width_ = 0;
+    UINT processor_input_height_ = 0;
+    UINT processor_output_width_ = 0;
+    UINT processor_output_height_ = 0;
+    DXGI_FORMAT processor_format_ = DXGI_FORMAT_UNKNOWN;
     ComPtr<IDXGISwapChain> swap_chain_;
     ComPtr<ID3D11RenderTargetView> render_target_;
     ComPtr<ID3D11Texture2D> video_texture_;
@@ -462,6 +600,12 @@ void D3D11VideoRenderer::set_aspect_ratio(float ratio)
 bool D3D11VideoRenderer::present(const uint8_t* bgra, int width, int height, int stride)
 {
     return impl_->present(bgra, width, height, stride);
+}
+
+bool D3D11VideoRenderer::present_hardware(
+    void* texture, uint32_t array_slice, uint32_t format, int width, int height)
+{
+    return impl_->present_hardware(texture, array_slice, format, width, height);
 }
 
 void D3D11VideoRenderer::clear()
