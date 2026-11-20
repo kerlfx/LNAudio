@@ -1212,13 +1212,27 @@ private:
                         }
                         else if (rect->ass && rect->ass[0])
                         {
-                            const std::string ass = rect->ass;
-                            const size_t comma = ass.rfind(',');
-                            if (comma != std::string::npos && comma + 1 < ass.size())
+                            std::string ass = rect->ass;
+                            const bool full_dialogue = ass.rfind("Dialogue:", 0) == 0;
+                            if (full_dialogue)
+                                ass.erase(0, 9);
+                            size_t text_begin = 0;
+                            const int metadata_commas = full_dialogue ? 9 : 8;
+                            for (int field = 0; field < metadata_commas; ++field)
+                            {
+                                const size_t comma = ass.find(',', text_begin);
+                                if (comma == std::string::npos)
+                                {
+                                    text_begin = ass.size();
+                                    break;
+                                }
+                                text_begin = comma + 1;
+                            }
+                            if (text_begin < ass.size())
                             {
                                 if (!cue.text.empty())
                                     cue.text.push_back('\n');
-                                cue.text += ass.substr(comma + 1);
+                                cue.text += ass.substr(text_begin);
                             }
                         }
 
