@@ -86,20 +86,48 @@ namespace
 {
 
 
+QString application_data_directory()
+{
+    const QString application_directory = QCoreApplication::applicationDirPath();
+    const QString portable_directory = QDir(application_directory).filePath(
+        QStringLiteral("Data"));
+    if (QDir().mkpath(portable_directory))
+    {
+        QFile write_probe(QDir(portable_directory).filePath(
+            QStringLiteral(".write_test")));
+        if (write_probe.open(QIODevice::WriteOnly | QIODevice::Truncate))
+        {
+            write_probe.close();
+            QFile::remove(write_probe.fileName());
+            return portable_directory;
+        }
+    }
+
+    const QString local_directory = QStandardPaths::writableLocation(
+        QStandardPaths::AppLocalDataLocation);
+    const QString fallback_directory = QDir(local_directory).filePath(
+        QStringLiteral("Data"));
+    QDir().mkpath(fallback_directory);
+    return fallback_directory;
+}
+
 QString settings_file_path()
 {
-    const QString directory = QStandardPaths::writableLocation(
-        QStandardPaths::AppConfigLocation);
-    QDir().mkpath(directory);
-    return QDir(directory).filePath(QStringLiteral("settings.ini"));
+    return QDir(application_data_directory()).filePath(
+        QStringLiteral("settings.ini"));
 }
 
 void initialize_settings_file()
 {
     QSettings settings(settings_file_path(), QSettings::IniFormat);
-    const QString migration_key = QStringLiteral("Config/RegistryMigrationCompleted");
+    const QString migration_key = QStringLiteral("Config/LegacySettingsMigrationCompleted");
     if (settings.value(migration_key, false).toBool())
         return;
+
+    const QString previous_ini = QDir(QStandardPaths::writableLocation(
+        QStandardPaths::AppConfigLocation)).filePath(QStringLiteral("settings.ini"));
+    if (!QFile::exists(settings_file_path()) && QFile::exists(previous_ini))
+        QFile::copy(previous_ini, settings_file_path());
 
 #ifdef Q_OS_WIN
     QSettings legacy(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"),
@@ -301,7 +329,7 @@ MainWindow::MainWindow(
         osd_position_ = std::clamp(
             settings.value(QStringLiteral("Video/UI/OSDPosition"), 1).toInt(), 0, 2);
         screenshot_directory_ = settings.value(
-            QStringLiteral("Video/Screenshot/Directory"), QDir::homePath()).toString();
+            QStringLiteral("Video/Screenshot/Directory"),\n            QDir(application_data_directory()).filePath(QStringLiteral("Screenshots")))).toString();
         screenshot_format_ = settings.value(
             QStringLiteral("Video/Screenshot/Format"), QStringLiteral("png")).toString();
         if (screenshot_format_ != QStringLiteral("jpg") &&
@@ -2645,6 +2673,19 @@ void MainWindow::openVideoSettings()
     });
     general_form->addRow(QStringLiteral("INI 配置文件"), settings_path);
     general_form->addRow(open_settings_directory);
+    auto* association_info = new QLabel(
+        QStringLiteral("安装版会将支持的视频格式注册为“打开方式”。默认应用由 Windows 管理，"
+            "可在系统设置中选择 LNPlayer；便携版可通过“打开方式”手动选择程序。"),
+        general_page);
+    association_info->setWordWrap(true);
+    auto* open_default_apps = new QPushButton(
+        QStringLiteral("打开 Windows 默认应用设置"), general_page);
+    connect(open_default_apps, &QPushButton::clicked, &dialog, []
+    {
+        QDesktopServices::openUrl(QUrl(QStringLiteral("ms-settings:defaultapps")));
+    });
+    general_form->addRow(QStringLiteral("视频文件关联"), association_info);
+    general_form->addRow(open_default_apps);
     tabs->addTab(general_page, QStringLiteral("常规"));
 
     auto* playback_page = new QWidget(tabs);
