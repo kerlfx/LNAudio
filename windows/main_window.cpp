@@ -806,7 +806,9 @@ MainWindow::MainWindow(
         library_thread_->start();
     }
 
-    QMetaObject::invokeMethod(command_worker_, [this]
+    const uint32_t initial_volume = static_cast<uint32_t>(volume_slider_->value());
+    const float initial_playback_rate = playback_rate_;
+    QMetaObject::invokeMethod(command_worker_, [this, initial_volume, initial_playback_rate]
     {
         lnplayer_config_t config{};
         config.struct_size = sizeof(config);
@@ -843,9 +845,9 @@ MainWindow::MainWindow(
         const lnplayer_result_t result = lnplayer_create(&config, &player_);
         if (result == LNPLAYER_RESULT_OK)
         {
-            lnplayer_set_volume(player_, static_cast<uint32_t>(volume_slider_->value()));
+            lnplayer_set_volume(player_, initial_volume);
             if (mode_ == PlayerMode::Video)
-                lnplayer_set_playback_rate(player_, playback_rate_);
+                lnplayer_set_playback_rate(player_, initial_playback_rate);
         }
 
         if (result == LNPLAYER_RESULT_OK &&
