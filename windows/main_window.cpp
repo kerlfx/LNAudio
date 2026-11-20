@@ -1101,12 +1101,14 @@ void MainWindow::presentPendingVideoFrame()
         const int width = pending_hardware_width_;
         const int height = pending_hardware_height_;
         const uint64_t generation = pending_video_generation_;
+        const int64_t pts_ms = pending_video_pts_ms_;
+        const QString subtitle = subtitleAt(pts_ms);
         pending_hardware_texture_ = nullptr;
         pending_video_frame_valid_ = false;
 
         QMetaObject::invokeMethod(command_worker_,
             [this, owner = std::move(owner), texture, array_slice, format,
-             width, height, generation, overlay = std::move(overlay)]
+             width, height, generation, pts_ms, subtitle, overlay = std::move(overlay)]
         {
             lnplayer_snapshot_t snapshot{};
             snapshot.struct_size = sizeof(snapshot);
@@ -1131,7 +1133,7 @@ void MainWindow::presentPendingVideoFrame()
                     lnplayer_windows_convert_video_frame(
                         fallback_owner.get(),
                         generation,
-                        pending_video_pts_ms_,
+                        pts_ms,
                         +[](const lnplayer_windows_video_frame_t* frame, void* user_data)
                         {
                             auto* output = static_cast<FallbackFrame*>(user_data);
@@ -1147,7 +1149,6 @@ void MainWindow::presentPendingVideoFrame()
 
                 if (fallback_result == LNPLAYER_RESULT_OK && !fallback.image.isNull())
                 {
-                    const QString subtitle = subtitleAt(pending_video_pts_ms_);
                     if (!subtitle.isEmpty())
                     {
                         QPainter painter(&fallback.image);
