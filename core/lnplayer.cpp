@@ -135,6 +135,7 @@ public:
         {
             asio::post(runtime_.io_context(), [this, id, position_ms]
             {
+                ++pending_seek_count_;
                 update_state(LNPLAYER_STATE_SEEKING);
                 asio::post(worker_strand_, [this, id, position_ms]
                 {
@@ -150,7 +151,9 @@ public:
 
                     asio::post(runtime_.io_context(), [this, id, result = std::move(result)]() mutable
                     {
-                        publish_snapshot(result.snapshot);
+                        if (pending_seek_count_ > 0)
+                            --pending_seek_count_;
+                        publish_snapshot(result.snapshot, pending_seek_count_ > 0);
                         emit(
                             LNPLAYER_EVENT_SEEK_COMPLETED,
                             result.success ? LNPLAYER_RESULT_OK : LNPLAYER_RESULT_INVALID_STATE,
@@ -408,12 +411,16 @@ private:
         }
     }
 
-    void publish_snapshot(const lnplayer::SessionSnapshot& session_snapshot)
+    void publish_snapshot(
+        const lnplayer::SessionSnapshot& session_snapshot,
+        bool preserve_seeking = false)
     {
         bool changed = false;
         {
             std::lock_guard<std::mutex> lock(snapshot_mutex_);
-            const lnplayer_state_t next = convert_state(session_snapshot.state);
+            const lnplayer_state_t next = preserve_seeking
+                ? LNPLAYER_STATE_SEEKING
+                : convert_state(session_snapshot.state);
             changed = snapshot_.state != next;
             snapshot_.state = next;
             snapshot_.position_ms = session_snapshot.position_ms;
@@ -546,6 +553,7 @@ private:
     PlayerSnapshot snapshot_;
     uint64_t state_version_ = 0;
     std::atomic<uint64_t> next_operation_id_{1};
+    std::size_t pending_seek_count_ = 0;
 };
 
 std::mutex g_player_mutex;
