@@ -188,6 +188,7 @@ private:
     bool auto_match_subtitle_ = true;
     bool mouse_gestures_enabled_ = false;
     bool remember_position_ = true;
+    bool auto_play_next_ = true;
     bool always_on_top_ = false;
     QByteArray normal_geometry_;
     int video_width_ = 0;
