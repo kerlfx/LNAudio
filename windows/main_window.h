@@ -17,6 +17,7 @@ class QLabel;
 class VideoSurface;
 class QLineEdit;
 class QListWidget;
+class QListWidgetItem;
 class QObject;
 class QPushButton;
 class QSlider;
@@ -128,6 +129,7 @@ private:
     std::vector<SubtitleCue> subtitle_cues_;
     QList<QUrl> playlist_;
     int playlist_index_ = -1;
+    QListWidgetItem* playing_playlist_item_ = nullptr;
     bool playlist_open_pending_ = false;
     bool subtitles_enabled_ = true;
     int64_t subtitle_offset_ms_ = 0;
