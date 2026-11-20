@@ -3,6 +3,7 @@
 
 #include <asio.hpp>
 
+#include <atomic>
 #include <condition_variable>
 #include <cstddef>
 #include <mutex>
@@ -17,10 +18,10 @@ public:
     void close_and_wait();
 
 private:
-    mutable std::mutex mutex_;
+    std::mutex mutex_;
     std::condition_variable condition_;
     std::size_t pending_ = 0;
-    bool accepting_ = true;
+    std::atomic<bool> accepting_{true};
 };
 
 class UiTaskRuntime final
