@@ -2944,9 +2944,11 @@ void MainWindow::openVideoSettings()
             custom_aspect->setEnabled(aspect->currentData().toInt() == 4);
         });
 
-    auto make_filter_spin = [&video_page](double value, double minimum, double maximum, double step)
+    auto* filter_page = new QWidget(pages);
+    auto* filter_form = new QFormLayout(filter_page);
+    auto make_filter_spin = [&filter_page](double value, double minimum, double maximum, double step)
     {
-        auto* spin = new QDoubleSpinBox(video_page);
+        auto* spin = new QDoubleSpinBox(filter_page);
         spin->setRange(minimum, maximum);
         spin->setSingleStep(step);
         spin->setDecimals(2);
@@ -2956,25 +2958,26 @@ void MainWindow::openVideoSettings()
     auto* brightness = make_filter_spin(video_brightness_, -1.0, 1.0, 0.05);
     auto* contrast = make_filter_spin(video_contrast_, 0.0, 2.0, 0.05);
     auto* saturation = make_filter_spin(video_saturation_, 0.0, 2.0, 0.05);
-    auto* hue = new QSpinBox(video_page);
+    auto* hue = new QSpinBox(filter_page);
     hue->setRange(-180, 180);
     hue->setSingleStep(5);
     hue->setSuffix(QStringLiteral("°"));
     hue->setValue(video_hue_degrees_);
     auto* sharpness = make_filter_spin(video_sharpness_, 0.0, 2.0, 0.05);
     auto* denoise = make_filter_spin(video_denoise_, 0.0, 1.0, 0.05);
-    auto* grayscale = new QCheckBox(QStringLiteral("灰度画面"), video_page);
+    auto* grayscale = new QCheckBox(QStringLiteral("灰度画面"), filter_page);
     grayscale->setChecked(video_grayscale_);
     video_form->addRow(QStringLiteral("画面比例"), aspect);
     video_form->addRow(QStringLiteral("自定义比例"), custom_aspect);
-    video_form->addRow(QStringLiteral("亮度"), brightness);
-    video_form->addRow(QStringLiteral("对比度"), contrast);
-    video_form->addRow(QStringLiteral("饱和度"), saturation);
-    video_form->addRow(QStringLiteral("色调"), hue);
-    video_form->addRow(QStringLiteral("锐化"), sharpness);
-    video_form->addRow(QStringLiteral("降噪"), denoise);
-    video_form->addRow(grayscale);
-    add_settings_page(QStringLiteral("视频"), video_page);
+    add_settings_page(QStringLiteral("视频显示"), video_page);
+    filter_form->addRow(QStringLiteral("亮度"), brightness);
+    filter_form->addRow(QStringLiteral("对比度"), contrast);
+    filter_form->addRow(QStringLiteral("饱和度"), saturation);
+    filter_form->addRow(QStringLiteral("色调"), hue);
+    filter_form->addRow(QStringLiteral("锐化"), sharpness);
+    filter_form->addRow(QStringLiteral("降噪"), denoise);
+    filter_form->addRow(grayscale);
+    add_settings_page(QStringLiteral("画面滤镜"), filter_page);
 
     auto* subtitle_page = new QWidget(pages);
     auto* subtitle_form = new QFormLayout(subtitle_page);
@@ -2989,32 +2992,35 @@ void MainWindow::openVideoSettings()
     subtitle_offset->setSingleStep(100);
     subtitle_offset->setSuffix(QStringLiteral(" ms"));
     subtitle_offset->setValue(static_cast<int>(subtitle_offset_ms_));
-    auto* subtitle_font = new QFontComboBox(subtitle_page);
+    auto* subtitle_style_page = new QWidget(pages);
+    auto* subtitle_style_form = new QFormLayout(subtitle_style_page);
+    auto* subtitle_font = new QFontComboBox(subtitle_style_page);
     subtitle_font->setCurrentFont(QFont(subtitle_font_family_));
-    auto* subtitle_size = new QSpinBox(subtitle_page);
+    auto* subtitle_size = new QSpinBox(subtitle_style_page);
     subtitle_size->setRange(0, 96);
     subtitle_size->setSpecialValueText(QStringLiteral("自动"));
     subtitle_size->setSuffix(QStringLiteral(" px"));
     subtitle_size->setValue(subtitle_font_size_);
-    auto* subtitle_color = new QComboBox(subtitle_page);
+    auto* subtitle_color = new QComboBox(subtitle_style_page);
     subtitle_color->addItem(QStringLiteral("白色"), QStringLiteral("#ffffff"));
     subtitle_color->addItem(QStringLiteral("黄色"), QStringLiteral("#ffff00"));
     subtitle_color->addItem(QStringLiteral("青色"), QStringLiteral("#00ffff"));
     subtitle_color->addItem(QStringLiteral("绿色"), QStringLiteral("#00ff00"));
     int subtitle_color_index = subtitle_color->findData(subtitle_color_);
     subtitle_color->setCurrentIndex(subtitle_color_index >= 0 ? subtitle_color_index : 0);
-    auto* subtitle_position = new QSpinBox(subtitle_page);
+    auto* subtitle_position = new QSpinBox(subtitle_style_page);
     subtitle_position->setRange(60, 80);
     subtitle_position->setSuffix(QStringLiteral(" %"));
     subtitle_position->setValue(subtitle_vertical_position_);
     subtitle_form->addRow(subtitle_enabled);
     subtitle_form->addRow(auto_match_subtitle);
     subtitle_form->addRow(QStringLiteral("默认时间偏移"), subtitle_offset);
-    subtitle_form->addRow(QStringLiteral("字体"), subtitle_font);
-    subtitle_form->addRow(QStringLiteral("字号"), subtitle_size);
-    subtitle_form->addRow(QStringLiteral("颜色"), subtitle_color);
-    subtitle_form->addRow(QStringLiteral("垂直位置"), subtitle_position);
-    add_settings_page(QStringLiteral("字幕"), subtitle_page);
+    add_settings_page(QStringLiteral("字幕加载"), subtitle_page);
+    subtitle_style_form->addRow(QStringLiteral("字体"), subtitle_font);
+    subtitle_style_form->addRow(QStringLiteral("字号"), subtitle_size);
+    subtitle_style_form->addRow(QStringLiteral("颜色"), subtitle_color);
+    subtitle_style_form->addRow(QStringLiteral("垂直位置"), subtitle_position);
+    add_settings_page(QStringLiteral("字幕样式"), subtitle_style_page);
 
     auto* shortcut_page = new QWidget(pages);
     auto* shortcut_layout = new QVBoxLayout(shortcut_page);
