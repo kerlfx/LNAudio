@@ -3562,7 +3562,7 @@ void MainWindow::refreshSnapshot()
             has_video_ = has_video;
             updatePlaybackState(state, position_ms, duration_ms);
             if (mode_ == PlayerMode::Video && !has_video_ &&
-                !playlist_open_pending_ && empty_state_label_)
+                !playlist_open_pending_ && !current_media_path_.isEmpty() && empty_state_label_)
             {
                 empty_state_label_->setText(QStringLiteral("当前媒体没有可播放的视频流"));
                 empty_state_label_->adjustSize();
