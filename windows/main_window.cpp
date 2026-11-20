@@ -2272,6 +2272,8 @@ void MainWindow::togglePlayback()
         video_frame_history_.clear();
         video_frame_history_index_ = -1;
         pending_video_frame_valid_ = false;
+        video_end_of_stream_ = false;
+        video_timer_->start();
     }
 
     QMetaObject::invokeMethod(command_worker_,
