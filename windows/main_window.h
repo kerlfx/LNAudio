@@ -83,6 +83,7 @@ private:
     void clearPlaylist();
     void openVideoSettings();
     void showOsd(const QString& message);
+    void showPlaybackInfo();
     void moveSelectedPlaylistItem(int offset);
     void cycleRepeatMode();
     void resetShuffleOrder();
