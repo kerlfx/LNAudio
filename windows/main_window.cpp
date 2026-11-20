@@ -809,7 +809,13 @@ MainWindow::MainWindow(
 
     const uint32_t initial_volume = static_cast<uint32_t>(volume_slider_->value());
     const float initial_playback_rate = playback_rate_;
-    QMetaObject::invokeMethod(command_worker_, [this, initial_volume, initial_playback_rate]
+    void* initial_video_device = mode_ == PlayerMode::Video && video_surface_
+        ? video_surface_->native_device()
+        : nullptr;
+    video_device_identity_ = initial_video_device;
+    QMetaObject::invokeMethod(
+        command_worker_,
+        [this, initial_volume, initial_playback_rate, initial_video_device]
     {
         lnplayer_config_t config{};
         config.struct_size = sizeof(config);
@@ -851,18 +857,24 @@ MainWindow::MainWindow(
                 lnplayer_set_playback_rate(player_, initial_playback_rate);
         }
 
-        if (result == LNPLAYER_RESULT_OK &&
-            mode_ == PlayerMode::Video && video_surface_)
+        if (initial_video_device)
         {
-            void* d3d11_device = video_surface_->native_device();
-            if (d3d11_device)
+            if (result == LNPLAYER_RESULT_OK)
             {
                 const lnplayer_result_t device_result =
-                    lnplayer_windows_set_d3d11_device(player_, d3d11_device);
-                if (device_result == LNPLAYER_RESULT_OK)
-                    video_device_identity_ = d3d11_device;
-                else
-                    static_cast<ID3D11Device*>(d3d11_device)->Release();
+                    lnplayer_windows_set_d3d11_device(player_, initial_video_device);
+                if (device_result != LNPLAYER_RESULT_OK)
+                {
+                    static_cast<ID3D11Device*>(initial_video_device)->Release();
+                    QMetaObject::invokeMethod(this, [this]
+                    {
+                        video_device_identity_ = nullptr;
+                    }, Qt::QueuedConnection);
+                }
+            }
+            else
+            {
+                static_cast<ID3D11Device*>(initial_video_device)->Release();
             }
         }
         QMetaObject::invokeMethod(this, [this, result]
