@@ -42,6 +42,7 @@ SessionResult PlaybackSession::set_video_device(void* device)
     const int64_t previous_position = backend_
         ? backend_->position_ms()
         : snapshot_.position_ms;
+    advance_generation();
 
     if (backend_)
     {
@@ -58,7 +59,6 @@ SessionResult PlaybackSession::set_video_device(void* device)
     if (video_device_)
         static_cast<ID3D11Device*>(video_device_)->Release();
     video_device_ = device;
-    advance_generation();
 
     if (source_.empty() || !backend_factory_)
         return make_result(true);
@@ -218,11 +218,11 @@ SessionResult PlaybackSession::play()
 
     if (snapshot_.state == SessionState::Ended)
     {
+        advance_generation();
         const MediaBackendResult seek_result = backend_->seek(0);
         if (!seek_result.success)
             return make_result(false, seek_result.message);
         snapshot_.position_ms = 0;
-        advance_generation();
     }
 
     const MediaBackendResult result = backend_->play();
@@ -280,13 +280,13 @@ SessionResult PlaybackSession::stop()
         return make_result(true);
     }
 
+    advance_generation();
     const MediaBackendResult result = backend_->stop();
     if (!result.success)
         return make_result(false, result.message);
 
     snapshot_.state = SessionState::Ready;
     snapshot_.position_ms = 0;
-    advance_generation();
     return make_result(true);
 }
 
@@ -295,6 +295,7 @@ SessionResult PlaybackSession::close()
     std::lock_guard<std::mutex> lock(mutex_);
 
     snapshot_.state = SessionState::Closing;
+    advance_generation();
     if (backend_)
     {
         const MediaBackendResult result = backend_->close();
@@ -306,7 +307,6 @@ SessionResult PlaybackSession::close()
         backend_.reset();
     }
 
-    advance_generation();
     source_.clear();
     reset_media_state();
     return make_result(true);
@@ -353,12 +353,12 @@ SessionResult PlaybackSession::select_audio_track(int stream_index)
          snapshot_.state != SessionState::Paused))
         return make_result(false, "Audio tracks can only be switched while playback is paused.");
 
+    advance_generation();
     const MediaBackendResult result = backend_->select_audio_track(stream_index);
     if (!result.success)
         return make_result(false, result.message);
 
     snapshot_.position_ms = backend_->position_ms();
-    advance_generation();
     return make_result(true);
 }
 
@@ -376,12 +376,12 @@ SessionResult PlaybackSession::select_subtitle_track(int stream_index)
          snapshot_.state != SessionState::Paused))
         return make_result(false, "Subtitle tracks can only be switched while playback is paused.");
 
+    advance_generation();
     const MediaBackendResult result = backend_->select_subtitle_track(stream_index);
     if (!result.success)
         return make_result(false, result.message);
 
     snapshot_.position_ms = backend_->position_ms();
-    advance_generation();
     return make_result(true);
 }
 
@@ -395,12 +395,12 @@ SessionResult PlaybackSession::set_external_subtitle(const std::string& path)
          snapshot_.state != SessionState::Ended))
         return make_result(false, "External subtitles require an opened video.");
 
+    advance_generation();
     const MediaBackendResult result = backend_->set_external_subtitle(path);
     if (!result.success)
         return make_result(false, result.message);
 
     snapshot_.position_ms = backend_->position_ms();
-    advance_generation();
     return make_result(true);
 }
 
