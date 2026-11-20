@@ -2675,8 +2675,10 @@ void MainWindow::openVideoSettings()
     general_form->addRow(QStringLiteral("INI 配置文件"), settings_path);
     general_form->addRow(open_settings_directory);
     auto* association_info = new QLabel(
-        QStringLiteral("安装版会将支持的视频格式注册为“打开方式”。默认应用由 Windows 管理，"
-            "可在系统设置中选择 LNPlayer；便携版可通过“打开方式”手动选择程序。"),
+        QStringLiteral("安装版会为当前 Windows 用户注册支持的视频格式，不修改其他用户的关联。"
+            "Windows 仍负责默认应用选择；便携版可通过系统“打开方式”选择 LNPlayer。"
+            "支持：MP4、MKV、MOV、AVI、WebM、WMV、FLV、MPEG、MPG、M4V、TS、MTS、"
+            "M2TS、3GP、3G2、VOB、OGV、MXF、ASF、F4V、DIVX、MPE、MPV。"),
         general_page);
     association_info->setWordWrap(true);
     auto* open_default_apps = new QPushButton(
