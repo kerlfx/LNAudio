@@ -66,6 +66,9 @@ public:
     void set_stretch(bool enabled);
     void set_aspect_ratio(float ratio);
     void set_source_aspect_ratio(float ratio);
+    void set_video_filter(
+        float brightness, float contrast, float saturation, float hue_degrees,
+        float sharpness, float denoise, bool grayscale);
     bool present_frame_threadsafe(const QImage& frame);
     bool present_hardware_frame(
         void* texture, uint32_t array_slice, uint32_t format,
@@ -171,6 +174,15 @@ void VideoSurface::set_source_aspect_ratio(float ratio)
         renderer_->set_aspect_ratio(source_aspect_ratio_);
     else
         update();
+}
+
+void VideoSurface::set_video_filter(
+    float brightness, float contrast, float saturation, float hue_degrees,
+    float sharpness, float denoise, bool grayscale)
+{
+    if (renderer_)
+        renderer_->set_video_filter(
+            brightness, contrast, saturation, hue_degrees, sharpness, denoise, grayscale);
 }
 
 bool VideoSurface::present_frame_threadsafe(const QImage& frame)
@@ -594,6 +606,24 @@ MainWindow::MainWindow(PlayerMode mode, const QString& initial_media, QWidget* p
             QAction* ratio_4_3 = aspect_menu->addAction(QStringLiteral("4:3"));
             QAction* stretch = aspect_menu->addAction(QStringLiteral("拉伸填充"));
 
+            QMenu* filter_menu = menu.addMenu(QStringLiteral("视频滤镜"));
+            QAction* brightness_down = filter_menu->addAction(QStringLiteral("亮度 -"));
+            QAction* brightness_up = filter_menu->addAction(QStringLiteral("亮度 +"));
+            QAction* contrast_down = filter_menu->addAction(QStringLiteral("对比度 -"));
+            QAction* contrast_up = filter_menu->addAction(QStringLiteral("对比度 +"));
+            QAction* saturation_down = filter_menu->addAction(QStringLiteral("饱和度 -"));
+            QAction* saturation_up = filter_menu->addAction(QStringLiteral("饱和度 +"));
+            QAction* hue_down = filter_menu->addAction(QStringLiteral("色调 -"));
+            QAction* hue_up = filter_menu->addAction(QStringLiteral("色调 +"));
+            QAction* sharpen_down = filter_menu->addAction(QStringLiteral("锐化 -"));
+            QAction* sharpen_up = filter_menu->addAction(QStringLiteral("锐化 +"));
+            QAction* denoise_down = filter_menu->addAction(QStringLiteral("降噪 -"));
+            QAction* denoise_up = filter_menu->addAction(QStringLiteral("降噪 +"));
+            QAction* grayscale = filter_menu->addAction(QStringLiteral("灰度"));
+            grayscale->setCheckable(true);
+            grayscale->setChecked(video_grayscale_);
+            QAction* filter_reset = filter_menu->addAction(QStringLiteral("重置滤镜"));
+
             QAction* selected = menu.exec(video_surface_->mapToGlobal(point));
             if (selected == play_pause)
                 togglePlayback();
@@ -742,6 +772,56 @@ MainWindow::MainWindow(PlayerMode mode, const QString& initial_media, QWidget* p
                 video_surface_->set_aspect_ratio(4.0f / 3.0f);
             else if (selected == stretch)
                 video_surface_->set_stretch(true);
+            else if (selected == brightness_down || selected == brightness_up ||
+                selected == contrast_down || selected == contrast_up ||
+                selected == saturation_down || selected == saturation_up ||
+                selected == hue_down || selected == hue_up ||
+                selected == sharpen_down || selected == sharpen_up ||
+                selected == denoise_down || selected == denoise_up ||
+                selected == grayscale || selected == filter_reset)
+            {
+                if (selected == brightness_down)
+                    video_brightness_ = std::clamp(video_brightness_ - 0.1f, -1.0f, 1.0f);
+                else if (selected == brightness_up)
+                    video_brightness_ = std::clamp(video_brightness_ + 0.1f, -1.0f, 1.0f);
+                else if (selected == contrast_down)
+                    video_contrast_ = std::clamp(video_contrast_ - 0.1f, 0.0f, 2.0f);
+                else if (selected == contrast_up)
+                    video_contrast_ = std::clamp(video_contrast_ + 0.1f, 0.0f, 2.0f);
+                else if (selected == saturation_down)
+                    video_saturation_ = std::clamp(video_saturation_ - 0.1f, 0.0f, 2.0f);
+                else if (selected == saturation_up)
+                    video_saturation_ = std::clamp(video_saturation_ + 0.1f, 0.0f, 2.0f);
+                else if (selected == hue_down)
+                    video_hue_degrees_ = std::clamp(video_hue_degrees_ - 5.0f, -180.0f, 180.0f);
+                else if (selected == hue_up)
+                    video_hue_degrees_ = std::clamp(video_hue_degrees_ + 5.0f, -180.0f, 180.0f);
+                else if (selected == sharpen_down)
+                    video_sharpness_ = std::clamp(video_sharpness_ - 0.1f, 0.0f, 2.0f);
+                else if (selected == sharpen_up)
+                    video_sharpness_ = std::clamp(video_sharpness_ + 0.1f, 0.0f, 2.0f);
+                else if (selected == denoise_down)
+                    video_denoise_ = std::clamp(video_denoise_ - 0.1f, 0.0f, 1.0f);
+                else if (selected == denoise_up)
+                    video_denoise_ = std::clamp(video_denoise_ + 0.1f, 0.0f, 1.0f);
+                else if (selected == grayscale)
+                    video_grayscale_ = grayscale->isChecked();
+                else
+                {
+                    video_brightness_ = 0.0f;
+                    video_contrast_ = 1.0f;
+                    video_saturation_ = 1.0f;
+                    video_hue_degrees_ = 0.0f;
+                    video_sharpness_ = 0.0f;
+                    video_denoise_ = 0.0f;
+                    video_grayscale_ = false;
+                }
+
+                video_surface_->set_video_filter(
+                    video_brightness_, video_contrast_, video_saturation_,
+                    video_hue_degrees_, video_sharpness_, video_denoise_, video_grayscale_);
+                statusBar()->showMessage(QStringLiteral("视频滤镜已更新"));
+            }
         });
         auto* video_layout = new QHBoxLayout();
         video_layout->addWidget(video_surface_, 1);

@@ -53,9 +53,47 @@ constexpr char kPixelShader[] = R"(
 Texture2D image_texture : register(t0);
 SamplerState image_sampler : register(s0);
 
+cbuffer VideoFilterSettings : register(b0)
+{
+    float brightness;
+    float contrast;
+    float saturation;
+    float hue_degrees;
+    float sharpness;
+    float denoise;
+    float2 texel_size;
+};
+
 float4 main(float4 position : SV_POSITION, float2 uv : TEXCOORD0) : SV_TARGET
 {
-    return image_texture.Sample(image_sampler, uv);
+    float4 sampled = image_texture.Sample(image_sampler, uv);
+    float3 rgb = sampled.rgb;
+    if (sharpness > 0.0 || denoise > 0.0)
+    {
+        float3 neighbors =
+            image_texture.Sample(image_sampler, uv + float2(texel_size.x, 0.0)).rgb +
+            image_texture.Sample(image_sampler, uv - float2(texel_size.x, 0.0)).rgb +
+            image_texture.Sample(image_sampler, uv + float2(0.0, texel_size.y)).rgb +
+            image_texture.Sample(image_sampler, uv - float2(0.0, texel_size.y)).rgb;
+        neighbors *= 0.25;
+        rgb = lerp(rgb, neighbors, denoise);
+        rgb += sharpness * (rgb - neighbors);
+    }
+
+    rgb = (rgb - 0.5) * contrast + 0.5 + brightness;
+    float y = dot(rgb, float3(0.299, 0.587, 0.114));
+    float i = dot(rgb, float3(0.596, -0.274, -0.322)) * saturation;
+    float q = dot(rgb, float3(0.211, -0.523, 0.312)) * saturation;
+    float angle = hue_degrees * 0.01745329252;
+    float sine = sin(angle);
+    float cosine = cos(angle);
+    float rotated_i = i * cosine - q * sine;
+    float rotated_q = i * sine + q * cosine;
+    float3 adjusted = float3(
+        y + 0.956 * rotated_i + 0.621 * rotated_q,
+        y - 0.272 * rotated_i - 0.647 * rotated_q,
+        y - 1.106 * rotated_i + 1.703 * rotated_q);
+    return float4(saturate(adjusted), sampled.a);
 }
 )";
 
@@ -217,6 +255,20 @@ public:
         stretch_ = false;
     }
 
+    void set_video_filter(
+        float brightness, float contrast, float saturation, float hue_degrees,
+        float sharpness, float denoise, bool grayscale)
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        brightness_ = brightness;
+        contrast_ = contrast;
+        saturation_ = grayscale ? 0.0f : saturation;
+        hue_degrees_ = hue_degrees;
+        sharpness_ = sharpness;
+        denoise_ = denoise;
+        grayscale_ = grayscale;
+    }
+
     bool present(const uint8_t* pixels, int width, int height, int stride)
     {
         std::unique_lock<std::mutex> lock(mutex_);
@@ -305,6 +357,7 @@ public:
         context_->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         context_->VSSetShader(vertex_shader_.Get(), nullptr, 0);
         context_->PSSetShader(pixel_shader_.Get(), nullptr, 0);
+        update_filter_constants(width, height);
         ID3D11ShaderResourceView* views[] = {video_view_.Get()};
         context_->PSSetShaderResources(0, 1, views);
         ID3D11SamplerState* samplers[] = {sampler_.Get()};
@@ -338,6 +391,10 @@ public:
         std::unique_lock<std::mutex> lock(mutex_);
         if (!native_texture || width <= 0 || height <= 0 ||
             !frame_owner || !swap_chain_ || !device_ || !video_device_ || !video_context_)
+            return false;
+        if (brightness_ != 0.0f || contrast_ != 1.0f || saturation_ != 1.0f ||
+            hue_degrees_ != 0.0f || sharpness_ != 0.0f || denoise_ != 0.0f ||
+            grayscale_)
             return false;
 
         reap_completed_hardware_frames();
@@ -549,6 +606,7 @@ public:
             context_->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
             context_->VSSetShader(vertex_shader_.Get(), nullptr, 0);
             context_->PSSetShader(pixel_shader_.Get(), nullptr, 0);
+            update_filter_constants(static_cast<int>(output_width), static_cast<int>(output_height));
             ID3D11ShaderResourceView* overlay_views[] = {overlay_view_.Get()};
             context_->PSSetShaderResources(0, 1, overlay_views);
             ID3D11SamplerState* overlay_samplers[] = {sampler_.Get()};
@@ -674,6 +732,33 @@ private:
             back_buffer.Get(), nullptr, render_target_.GetAddressOf()));
     }
 
+    struct FilterConstants
+    {
+        float brightness;
+        float contrast;
+        float saturation;
+        float hue_degrees;
+        float sharpness;
+        float denoise;
+        float texel_x;
+        float texel_y;
+    };
+
+    void update_filter_constants(int width, int height)
+    {
+        if (!filter_constants_buffer_)
+            return;
+        const FilterConstants values{
+            brightness_, contrast_, saturation_, hue_degrees_,
+            sharpness_, denoise_,
+            width > 0 ? 1.0f / width : 0.0f,
+            height > 0 ? 1.0f / height : 0.0f
+        };
+        context_->UpdateSubresource(filter_constants_buffer_.Get(), 0, nullptr, &values, 0, 0);
+        ID3D11Buffer* buffers[] = {filter_constants_buffer_.Get()};
+        context_->PSSetConstantBuffers(0, 1, buffers);
+    }
+
     bool create_pipeline()
     {
         ComPtr<ID3DBlob> vertex_code;
@@ -699,6 +784,14 @@ private:
                 pixel_code->GetBufferSize(),
                 nullptr,
                 pixel_shader_.GetAddressOf())))
+            return false;
+
+        D3D11_BUFFER_DESC filter_buffer_desc{};
+        filter_buffer_desc.ByteWidth = sizeof(FilterConstants);
+        filter_buffer_desc.Usage = D3D11_USAGE_DEFAULT;
+        filter_buffer_desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+        if (FAILED(device_->CreateBuffer(
+                &filter_buffer_desc, nullptr, filter_constants_buffer_.GetAddressOf())))
             return false;
 
         D3D11_RASTERIZER_DESC rasterizer_desc{};
@@ -766,6 +859,7 @@ private:
         sampler_.Reset();
         blend_state_.Reset();
         rasterizer_.Reset();
+        filter_constants_buffer_.Reset();
         pixel_shader_.Reset();
         vertex_shader_.Reset();
         swap_chain_.Reset();
@@ -783,6 +877,13 @@ private:
     UINT texture_height_ = 0;
     bool stretch_ = false;
     float aspect_ratio_ = 0.0f;
+    float brightness_ = 0.0f;
+    float contrast_ = 1.0f;
+    float saturation_ = 1.0f;
+    float hue_degrees_ = 0.0f;
+    float sharpness_ = 0.0f;
+    float denoise_ = 0.0f;
+    bool grayscale_ = false;
     ComPtr<ID3D11Device> device_;
     ComPtr<ID3D11DeviceContext> context_;
     ComPtr<ID3D11VideoDevice> video_device_;
@@ -808,6 +909,7 @@ private:
     ComPtr<ID3D11ShaderResourceView> video_view_;
     ComPtr<ID3D11VertexShader> vertex_shader_;
     ComPtr<ID3D11PixelShader> pixel_shader_;
+    ComPtr<ID3D11Buffer> filter_constants_buffer_;
     ComPtr<ID3D11RasterizerState> rasterizer_;
     ComPtr<ID3D11SamplerState> sampler_;
     ComPtr<ID3D11BlendState> blend_state_;
@@ -846,6 +948,14 @@ void D3D11VideoRenderer::set_stretch(bool enabled)
 void D3D11VideoRenderer::set_aspect_ratio(float ratio)
 {
     impl_->set_aspect_ratio(ratio);
+}
+
+void D3D11VideoRenderer::set_video_filter(
+    float brightness, float contrast, float saturation, float hue_degrees,
+    float sharpness, float denoise, bool grayscale)
+{
+    impl_->set_video_filter(
+        brightness, contrast, saturation, hue_degrees, sharpness, denoise, grayscale);
 }
 
 bool D3D11VideoRenderer::present(const uint8_t* bgra, int width, int height, int stride)

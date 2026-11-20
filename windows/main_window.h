@@ -149,6 +149,13 @@ private:
     int64_t current_position_ms_ = 0;
     int muted_volume_ = 1000;
     float playback_rate_ = 1.0f;
+    float video_brightness_ = 0.0f;
+    float video_contrast_ = 1.0f;
+    float video_saturation_ = 1.0f;
+    float video_hue_degrees_ = 0.0f;
+    float video_sharpness_ = 0.0f;
+    float video_denoise_ = 0.0f;
+    bool video_grayscale_ = false;
     uint64_t media_generation_ = 0;
     std::vector<SubtitleCue> subtitle_cues_;
     QList<QUrl> playlist_;
