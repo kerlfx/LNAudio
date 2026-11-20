@@ -136,3 +136,11 @@
 提交：
 - `4188c8d74b78df7a84b2067b7c00b0ae155af1d3` — 同步请求完成投递失败时释放等待者。
 - `1a7154b6677545d55c89b0c547deeaf4b076b2b2` — 隔离外部 C ABI 回调异常。
+
+- [x] 异步 open/seek 投递到 worker strand 失败时，恢复对应状态并报告操作完成错误，避免 io_context handler 因投递异常直接退出。
+- [x] 将 open 的媒体路径复制和同步命令 promise 分配纳入异常处理范围，避免分配失败穿越 C ABI。
+- [ ] worker 已完成但无法将 open/seek 完成事件重新投递到 io_context 的极端内存分配失败路径，仍需后续统一设计可观测的故障通道。
+
+相关提交：
+- `f24ea9cdfd6d2f0e3695f8bd255f308923aadcd7` — 异步 open/seek worker 投递失败处理。
+- `69a5c94b029391a3417f6903a31c432740300be0` — open 路径和同步 promise 分配异常边界。
