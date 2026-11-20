@@ -48,6 +48,9 @@
 #include <QListWidget>
 #include <QListView>
 #include <QListWidgetItem>
+#include <QStyledItemDelegate>
+#include <QStyle>
+#include <QStyleOptionViewItem>
 #include <QMenuBar>
 #include <QMenu>
 #include <QActionGroup>
@@ -85,6 +88,74 @@ QString format_position(int64_t position_ms)
     return QStringLiteral("%1:%2")
         .arg(minutes)
         .arg(seconds, 2, 10, QLatin1Char('0'));
+}
+
+class PlaylistItemDelegate final : public QStyledItemDelegate
+{
+public:
+    using QStyledItemDelegate::QStyledItemDelegate;
+
+    void paint(QPainter* painter, const QStyleOptionViewItem& option,
+        const QModelIndex& index) const override
+    {
+        QStyleOptionViewItem item_option(option);
+        initStyleOption(&item_option, index);
+        const QString title = item_option.text;
+        item_option.text.clear();
+        const QWidget* widget = item_option.widget;
+        QStyle* style = widget ? widget->style() : QApplication::style();
+        style->drawControl(QStyle::CE_ItemViewItem, &item_option, painter, widget);
+
+        const QRect text_rect = style->subElementRect(
+            QStyle::SE_ItemViewItemText, &item_option, widget);
+        const int gap = 8;
+        const int title_width = text_rect.width() * 55 / 100;
+        const int duration_width = text_rect.width() * 20 / 100;
+        const int resolution_width = text_rect.width() - title_width - duration_width - gap * 2;
+        const QColor text_color = item_option.state & QStyle::State_Selected
+            ? item_option.palette.color(QPalette::HighlightedText)
+            : item_option.palette.color(QPalette::Text);
+        painter->save();
+        painter->setPen(text_color);
+        const QFontMetrics metrics(item_option.font);
+        painter->drawText(QRect(text_rect.left(), text_rect.top(), title_width,
+            text_rect.height()), Qt::AlignVCenter | Qt::AlignLeft,
+            metrics.elidedText(title, Qt::ElideRight, title_width));
+        const QString duration = index.data(Qt::UserRole + 1).toString();
+        const QString resolution = index.data(Qt::UserRole + 2).toString();
+        painter->drawText(QRect(text_rect.left() + title_width + gap, text_rect.top(),
+            duration_width, text_rect.height()), Qt::AlignVCenter | Qt::AlignLeft,
+            metrics.elidedText(duration, Qt::ElideRight, duration_width));
+        painter->drawText(QRect(text_rect.left() + title_width + duration_width + gap * 2,
+            text_rect.top(), resolution_width, text_rect.height()),
+            Qt::AlignVCenter | Qt::AlignLeft,
+            metrics.elidedText(resolution, Qt::ElideRight, resolution_width));
+        painter->restore();
+    }
+
+    QSize sizeHint(const QStyleOptionViewItem& option,
+        const QModelIndex& index) const override
+    {
+        QSize size = QStyledItemDelegate::sizeHint(option, index);
+        size.setHeight(std::max(size.height(), 34));
+        return size;
+    }
+};
+
+QWidget* create_playlist_header(QWidget* parent)
+{
+    auto* header = new QWidget(parent);
+    auto* layout = new QHBoxLayout(header);
+    layout->setContentsMargins(8, 4, 8, 4);
+    layout->setSpacing(8);
+    auto* title = new QLabel(QStringLiteral("文件名"), header);
+    auto* duration = new QLabel(QStringLiteral("时长"), header);
+    auto* resolution = new QLabel(QStringLiteral("分辨率"), header);
+    layout->addWidget(title, 55);
+    layout->addWidget(duration, 20);
+    layout->addWidget(resolution, 25);
+    header->setStyleSheet(QStringLiteral("QWidget { color: palette(mid); font-size: 11px; }"));
+    return header;
 }
 
 QStringList expand_media_urls(const QList<QUrl>& urls)
@@ -691,7 +762,8 @@ MainWindow::MainWindow(
             video_brightness_, video_contrast_, video_saturation_,
             video_hue_degrees_, video_sharpness_, video_denoise_, video_grayscale_);
         playlist_widget_ = new QListWidget(content);
-        playlist_widget_->setMaximumWidth(280);
+        playlist_widget_->setItemDelegate(new PlaylistItemDelegate(playlist_widget_));
+        playlist_widget_->setMaximumWidth(360);
         playlist_widget_->setDragDropMode(QAbstractItemView::InternalMove);
         playlist_widget_->setAcceptDrops(true);
         playlist_widget_->installEventFilter(this);
@@ -722,6 +794,7 @@ MainWindow::MainWindow(
         playback_modes->addWidget(shuffle_button);
         playback_modes->addWidget(repeat_button);
         playlist_panel_layout->addLayout(playback_modes);
+        playlist_panel_layout->addWidget(create_playlist_header(playlist_panel_));
         playlist_panel_layout->addWidget(playlist_widget_, 1);
         connect(add_to_queue, &QPushButton::clicked, this, [this]
         {
@@ -2097,21 +2170,18 @@ void MainWindow::updatePlaylistItemMetadata(const QString& path)
 
         const QFileInfo file_info(path);
         const auto metadata = playlist_video_metadata_.constFind(path);
+        QString duration_text = QStringLiteral("--:--");
+        QString resolution_text = QStringLiteral("未知");
         QString details = QStringLiteral("%1 bytes")
             .arg(file_info.exists() ? file_info.size() : 0);
-        QString label = file_info.fileName();
         if (metadata != playlist_video_metadata_.cend())
         {
             const lnplayer_video_info_t& info = metadata.value();
             const int64_t duration = playlist_durations_.value(path, -1);
-            const double fps = info.frame_rate_den > 0
-                ? static_cast<double>(info.frame_rate_num) / info.frame_rate_den : 0.0;
-            if (info.width > 0 && info.height > 0)
-                label += QStringLiteral("    %1 × %2").arg(info.width).arg(info.height);
-            if (fps > 0.0)
-                label += QStringLiteral(" · %1 fps").arg(fps, 0, 'f', 2);
             if (duration >= 0)
-                label += QStringLiteral(" · %1").arg(format_position(duration));
+                duration_text = format_position(duration);
+            if (info.width > 0 && info.height > 0)
+                resolution_text = QStringLiteral("%1×%2").arg(info.width).arg(info.height);
             details += QStringLiteral("\n容器：%1\n编码：%2\n像素格式：%3\n码率：%4")
                 .arg(QString::fromUtf8(info.container_long_name))
                 .arg(QString::fromUtf8(info.codec_name))
@@ -2120,8 +2190,11 @@ void MainWindow::updatePlaylistItemMetadata(const QString& path)
                     ? QString::number(info.bit_rate / 1000) + QStringLiteral(" kbps")
                     : QStringLiteral("未知"));
         }
-        item->setText(label);
+        item->setText(file_info.fileName());
+        item->setData(Qt::UserRole + 1, duration_text);
+        item->setData(Qt::UserRole + 2, resolution_text);
         item->setToolTip(QStringLiteral("%1\n%2").arg(file_info.absoluteFilePath(), details));
+        playlist_widget_->viewport()->update();
     }
 }
 
@@ -2292,7 +2365,9 @@ void MainWindow::showPlaylistWindow()
 
     auto* root = new QVBoxLayout(dialog);
     auto* view = new QListView(dialog);
+    view->setItemDelegate(new PlaylistItemDelegate(view));
     view->setModel(playlist_widget_->model());
+    root->addWidget(create_playlist_header(dialog));
     view->setSelectionMode(QAbstractItemView::ExtendedSelection);
     view->setDragDropMode(QAbstractItemView::InternalMove);
     view->setDefaultDropAction(Qt::MoveAction);
