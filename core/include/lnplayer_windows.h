@@ -36,6 +36,11 @@ typedef struct lnplayer_windows_video_frame
     int32_t ycbcr_matrix;
     /* 0=limited range, 1=full range. */
     int32_t ycbcr_full_range;
+    float mastering_max_luminance;
+    float mastering_min_luminance;
+    uint32_t max_content_light_level;
+    uint32_t max_frame_average_light_level;
+    float hdr_peak_luminance;
 } lnplayer_windows_video_frame_t;
 
 typedef void (*lnplayer_windows_video_frame_callback_t)(

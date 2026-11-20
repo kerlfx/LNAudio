@@ -449,7 +449,12 @@ public:
                 read.frame.hdr_transfer,
                 read.frame.color_primaries,
                 read.frame.ycbcr_matrix,
-                read.frame.ycbcr_full_range
+                read.frame.ycbcr_full_range,
+                read.frame.mastering_max_luminance,
+                read.frame.mastering_min_luminance,
+                read.frame.max_content_light_level,
+                read.frame.max_frame_average_light_level,
+                read.frame.hdr_peak_luminance
             };
             invoke_callback(callback, &frame, user_data);
         }

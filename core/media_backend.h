@@ -65,6 +65,11 @@ struct VideoFrame
     int rotation_degrees = 0;
     int hdr_transfer = 0;
     int color_primaries = 0;
+    float mastering_max_luminance = 0.0f;
+    float mastering_min_luminance = 0.0f;
+    uint32_t max_content_light_level = 0;
+    uint32_t max_frame_average_light_level = 0;
+    float hdr_peak_luminance = 0.0f;
     int ycbcr_matrix = 0;
     int ycbcr_full_range = 0;
     std::string subtitle_text;

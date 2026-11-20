@@ -15,6 +15,7 @@ extern "C"
 #include <libavutil/hwcontext.h>
 #include <libavutil/hwcontext_d3d11va.h>
 #include <libavutil/mathematics.h>
+#include <libavutil/mastering_display_metadata.h>
 #include <libswresample/swresample.h>
 #include <libswscale/swscale.h>
 }
@@ -578,6 +579,10 @@ public:
         video_stream_index_ = -1;
         subtitle_stream_index_ = -1;
         stream_rotation_degrees_ = 0;
+        mastering_max_luminance_ = 0.0f;
+        mastering_min_luminance_ = 0.0f;
+        max_content_light_level_ = 0;
+        max_frame_average_light_level_ = 0;
         start_time_ms_ = 0;
         position_ms_.store(0, std::memory_order_relaxed);
         {
@@ -1765,6 +1770,39 @@ private:
             ? 1
             : transfer == AVCOL_TRC_ARIB_STD_B67 ? 2 : 0;
         output.color_primaries = primaries == AVCOL_PRI_BT2020 ? 1 : 0;
+
+        if (AVFrameSideData* mastering_side_data = av_frame_get_side_data(
+                video_frame_, AV_FRAME_DATA_MASTERING_DISPLAY_METADATA))
+        {
+            const auto* mastering = reinterpret_cast<const AVMasteringDisplayMetadata*>(
+                mastering_side_data->data);
+            if (mastering->has_luminance)
+            {
+                mastering_max_luminance_ =
+                    static_cast<float>(av_q2d(mastering->max_luminance));
+                mastering_min_luminance_ =
+                    static_cast<float>(av_q2d(mastering->min_luminance));
+            }
+        }
+        if (AVFrameSideData* content_light_side_data = av_frame_get_side_data(
+                video_frame_, AV_FRAME_DATA_CONTENT_LIGHT_LEVEL))
+        {
+            const auto* content_light = reinterpret_cast<const AVContentLightMetadata*>(
+                content_light_side_data->data);
+            max_content_light_level_ = content_light->MaxCLL;
+            max_frame_average_light_level_ = content_light->MaxFALL;
+        }
+        output.mastering_max_luminance = mastering_max_luminance_;
+        output.mastering_min_luminance = mastering_min_luminance_;
+        output.max_content_light_level = max_content_light_level_;
+        output.max_frame_average_light_level = max_frame_average_light_level_;
+        output.hdr_peak_luminance = output.hdr_transfer == 0
+            ? 0.0f
+            : max_content_light_level_ > 0
+                ? static_cast<float>(max_content_light_level_)
+                : mastering_max_luminance_ > 0.0f
+                    ? mastering_max_luminance_
+                    : 1000.0f;
         const AVColorSpace frame_color_space =
             video_frame_->colorspace != AVCOL_SPC_UNSPECIFIED
                 ? video_frame_->colorspace
@@ -2392,6 +2430,10 @@ private:
     int stream_rotation_degrees_ = 0;
     int64_t subtitle_offset_ms_ = 0;
     int64_t start_time_ms_ = 0;
+    float mastering_max_luminance_ = 0.0f;
+    float mastering_min_luminance_ = 0.0f;
+    uint32_t max_content_light_level_ = 0;
+    uint32_t max_frame_average_light_level_ = 0;
     bool subtitles_enabled_ = true;
     bool opened_ = false;
     std::atomic<bool> playing_{false};
