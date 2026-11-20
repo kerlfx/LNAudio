@@ -11,6 +11,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <mutex>
 #include <memory>
 
 namespace lnplayer::windows
@@ -62,6 +63,7 @@ protected:
 
 private:
     QImage frame_;
+    mutable std::mutex frame_mutex_;
     lnplayer::windows::D3D11VideoRenderer* renderer_ = nullptr;
     bool stretch_ = false;
     float aspect_ratio_ = 0.0f;
