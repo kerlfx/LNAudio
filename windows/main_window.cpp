@@ -53,6 +53,7 @@ public:
 
     void set_frame(const QImage& frame);
     bool has_renderer() const;
+    void* native_device() const;
     void set_stretch(bool enabled);
     void set_aspect_ratio(float ratio);
     void set_source_aspect_ratio(float ratio);
@@ -123,6 +124,11 @@ void VideoSurface::set_frame(const QImage& frame)
 bool VideoSurface::has_renderer() const
 {
     return renderer_ != nullptr;
+}
+
+void* VideoSurface::native_device() const
+{
+    return renderer_ ? renderer_->native_device() : nullptr;
 }
 
 void VideoSurface::set_stretch(bool enabled)
@@ -553,6 +559,12 @@ MainWindow::MainWindow(PlayerMode mode, const QString& initial_media, QWidget* p
         {
             if (result == LNPLAYER_RESULT_OK)
             {
+                if (mode_ == PlayerMode::Video && video_surface_)
+                {
+                    void* d3d11_device = video_surface_->native_device();
+                    if (d3d11_device)
+                        lnplayer_windows_set_d3d11_device(player_, d3d11_device);
+                }
                 status_label_->setText(QStringLiteral("播放器已就绪"));
                 statusBar()->showMessage(QStringLiteral("就绪"));
                 if (mode_ == PlayerMode::Audio)
