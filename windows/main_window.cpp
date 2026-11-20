@@ -49,6 +49,7 @@ public:
     void set_frame(const QImage& frame);
     bool has_renderer() const;
     void set_stretch(bool enabled);
+    void set_aspect_ratio(float ratio);
     bool present_frame_threadsafe(const QImage& frame);
 
 protected:
@@ -59,6 +60,7 @@ private:
     QImage frame_;
     lnplayer::windows::D3D11VideoRenderer* renderer_ = nullptr;
     bool stretch_ = false;
+    float aspect_ratio_ = 0.0f;
 };
 
 VideoSurface::VideoSurface(QWidget* parent)
@@ -118,6 +120,16 @@ void VideoSurface::set_stretch(bool enabled)
         update();
 }
 
+void VideoSurface::set_aspect_ratio(float ratio)
+{
+    aspect_ratio_ = ratio;
+    stretch_ = false;
+    if (renderer_)
+        renderer_->set_aspect_ratio(ratio);
+    else
+        update();
+}
+
 bool VideoSurface::present_frame_threadsafe(const QImage& frame)
 {
     return renderer_ && !frame.isNull() && renderer_->present(
@@ -138,7 +150,10 @@ void VideoSurface::paintEvent(QPaintEvent* event)
     if (frame_.isNull())
         return;
 
-    const QSize fitted = frame_.size().scaled(
+    const QSize source_size = aspect_ratio_ > 0.0f
+        ? QSize(static_cast<int>(frame_.height() * aspect_ratio_), frame_.height())
+        : frame_.size();
+    const QSize fitted = source_size.scaled(
         size(), stretch_ ? Qt::IgnoreAspectRatio : Qt::KeepAspectRatio);
     const QRect target(
         (width() - fitted.width()) / 2,
@@ -286,12 +301,10 @@ MainWindow::MainWindow(PlayerMode mode, const QString& initial_media, QWidget* p
             }
             menu.addSeparator();
             QMenu* aspect_menu = menu.addMenu(QStringLiteral("画面比例"));
-            QAction* fit = aspect_menu->addAction(QStringLiteral("保持比例"));
+            QAction* fit = aspect_menu->addAction(QStringLiteral("原始比例"));
+            QAction* ratio_16_9 = aspect_menu->addAction(QStringLiteral("16:9"));
+            QAction* ratio_4_3 = aspect_menu->addAction(QStringLiteral("4:3"));
             QAction* stretch = aspect_menu->addAction(QStringLiteral("拉伸填充"));
-            fit->setCheckable(true);
-            stretch->setCheckable(true);
-            fit->setChecked(true);
-            stretch->setChecked(false);
 
             QAction* selected = menu.exec(video_surface_->mapToGlobal(point));
             if (selected == play_pause)
@@ -316,7 +329,11 @@ MainWindow::MainWindow(PlayerMode mode, const QString& initial_media, QWidget* p
             else if (selected && selected->parent() == speed_menu)
                 setPlaybackRate(selected->data().toFloat());
             else if (selected == fit)
-                video_surface_->set_stretch(false);
+                video_surface_->set_aspect_ratio(0.0f);
+            else if (selected == ratio_16_9)
+                video_surface_->set_aspect_ratio(16.0f / 9.0f);
+            else if (selected == ratio_4_3)
+                video_surface_->set_aspect_ratio(4.0f / 3.0f);
             else if (selected == stretch)
                 video_surface_->set_stretch(true);
         });
