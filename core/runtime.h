@@ -19,6 +19,7 @@ public:
 
     asio::io_context& io_context();
     asio::thread_pool& thread_pool();
+    bool running_in_io_thread() const;
 
 private:
     asio::io_context io_context_;
