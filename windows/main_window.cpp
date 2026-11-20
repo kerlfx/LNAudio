@@ -5124,6 +5124,8 @@ void MainWindow::updatePlaybackState(
         video_clock_timer_.restart();
     else
         video_clock_timer_.invalidate();
+    if (is_playing_ && pending_video_frame_valid_)
+        scheduleVideoPresentation();
     if (mode_ == PlayerMode::Video && has_video_)
     {
         if (is_playing_)
