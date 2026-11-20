@@ -301,14 +301,14 @@ LNPLAYER_API lnplayer_result_t lnplayer_enumerate_subtitle_tracks(
     lnplayer_subtitle_track_callback_t callback,
     void* user_data);
 
-/* Select a subtitle stream returned by enumeration. Pass -1 to disable subtitles.
- * Playback must be paused or not yet started. */
 /* Enumerate container chapters for the currently opened media. */
 LNPLAYER_API lnplayer_result_t lnplayer_enumerate_chapters(
     lnplayer_t* player,
     lnplayer_chapter_callback_t callback,
     void* user_data);
 
+/* Select a subtitle stream returned by enumeration. Pass -1 to disable subtitles.
+ * Playback must be paused or not yet started. */
 LNPLAYER_API lnplayer_result_t lnplayer_select_subtitle_track(
     lnplayer_t* player,
     int32_t stream_index);
