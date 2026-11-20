@@ -723,6 +723,8 @@ MainWindow::MainWindow(
                 playlist_widget_->setCurrentItem(item);
             }
             QMenu menu(playlist_widget_);
+            menu.setMouseTracking(true);
+            menu.installEventFilter(this);
             QAction* play_selected = menu.addAction(QStringLiteral("播放"));
             QAction* remove_selected = menu.addAction(QStringLiteral("移除选中项"));
             QAction* clear_all = menu.addAction(QStringLiteral("清空播放列表"));
