@@ -791,6 +791,49 @@ void lnplayer_windows_release_video_frame(void* retained_owner)
     delete static_cast<std::shared_ptr<void>*>(retained_owner);
 }
 
+lnplayer_result_t lnplayer_windows_convert_video_frame(
+    void* retained_owner,
+    uint64_t generation,
+    int64_t pts_ms,
+    lnplayer_windows_video_frame_callback_t callback,
+    void* user_data)
+{
+    if (!retained_owner || !callback)
+        return set_error(LNPLAYER_RESULT_INVALID_ARGUMENT, "Retained frame or callback is null.");
+
+    try
+    {
+        const auto& owner = *static_cast<std::shared_ptr<void>*>(retained_owner);
+        std::vector<uint8_t> pixels;
+        int width = 0;
+        int height = 0;
+        int stride = 0;
+        float display_aspect_ratio = 0.0f;
+        std::string error;
+        if (!lnplayer::convert_d3d11_frame_to_bgra(
+                owner, pixels, width, height, stride, display_aspect_ratio, error))
+            return set_error(LNPLAYER_RESULT_INTERNAL_ERROR, error.c_str());
+
+        lnplayer_windows_video_frame_t frame{};
+        frame.struct_size = sizeof(frame);
+        frame.bgra = pixels.data();
+        frame.width = width;
+        frame.height = height;
+        frame.stride = stride;
+        frame.pts_ms = pts_ms;
+        frame.generation = generation;
+        frame.display_aspect_ratio = display_aspect_ratio;
+        callback(&frame, user_data);
+        g_last_error.clear();
+        return LNPLAYER_RESULT_OK;
+    }
+    catch (...)
+    {
+        return set_error(LNPLAYER_RESULT_INTERNAL_ERROR, "Unexpected error converting D3D11 video frame.");
+    }
+}
+
+
 lnplayer_result_t lnplayer_windows_read_video_frame(
     lnplayer_t* player,
     lnplayer_windows_video_frame_callback_t callback,
