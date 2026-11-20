@@ -855,7 +855,7 @@ MainWindow::MainWindow(
     if (mode_ == PlayerMode::Video)
     {
         auto* settings_menu = menuBar()->addMenu(QStringLiteral("设置"));
-        auto* video_settings_action = settings_menu->addAction(QStringLiteral("视频设置..."));
+        auto* video_settings_action = settings_menu->addAction(QStringLiteral("播放器设置..."));
         connect(video_settings_action, &QAction::triggered, this, [this] { openVideoSettings(); });
     }
 
@@ -2605,7 +2605,7 @@ void MainWindow::openVideoSettings()
         return;
 
     QDialog dialog(this);
-    dialog.setWindowTitle(QStringLiteral("LNPlayer 视频设置"));
+    dialog.setWindowTitle(QStringLiteral("LNPlayer 播放器设置"));
     dialog.setMinimumSize(680, 520);
     auto* root = new QVBoxLayout(&dialog);
     auto* tabs = new QTabWidget(&dialog);
