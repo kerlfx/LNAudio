@@ -806,3 +806,19 @@
 - [x] 主播放列表和独立播放列表视图均显示 Qt 标准拖动插入位置指示；尚未定制插入线样式。提交：`878110ea8ba6efae1d75d4f93d1ed35c32c5d6ae`。
 
 - [x] 修复播放列表元数据探测线程未在 Video 模式创建的问题；此前 `library_worker_` 仅为 Audio 模式分配，导致视频队列探测任务无法提交。现由所有窗口模式创建并启动该后台线程。提交：`f0c740a3f794d9a5dd3373d487954255830115bd`。
+
+### 2026-11-21 — 容器章节导航
+
+- [x] FFmpeg 从 `AVFormatContext::chapters` 读取章节索引、起止时间和标题，并将时间统一换算到播放器时间轴。
+- [x] Core Session 增加章节查询，C ABI 增加 `lnplayer_enumerate_chapters()`；章节标题只在回调期间有效。
+- [x] Windows 播放菜单增加动态章节子菜单，点击章节后通过统一绝对 Seek 入口跳转。
+- [x] 增加无媒体时章节列表为空、空回调参数被拒绝的 C ABI 测试。
+- [ ] 尚未使用 MP4/MKV/TS 等不同容器章节样本验证时间基、章节偏移和缺失标题行为；Windows UI 未运行验收。
+- [ ] 用户书签（手动添加、命名、删除、按媒体持久化）仍未实现。
+
+实现提交：
+- `e0e90970e0cd48fcb85cf8ca6b8f5471f4a82bd8`、`f8890df85373644d5ace7b40450ee9dfae4fa525` — MediaBackend/FFmpeg 章节读取。
+- `7694cf126ec21646a8e98c6b32b3a45431658a06`、`ddc3c16fb2abda965728f67d3ebe230737554894` — Session 章节查询。
+- `4fcd687ad6d61cd5d32c8d9201324fb859bef695`、`90fc98a04df6f2448b36048b3771a0e2f1eeb438` — C ABI 章节枚举。
+- `fad9e75b67b7fea68cf2406b1c450a0fd673248a`、`3cf559642da63bd6c4c3ecdfff25eb93f081162b` — Windows 章节菜单和 Seek。
+- `41a0232c77abb36a1ed2521f37e9e10a84c0ea04` — 章节 API 契约测试。
