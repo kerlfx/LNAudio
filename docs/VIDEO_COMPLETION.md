@@ -109,3 +109,18 @@
 - `Runtime::shutdown()` 当前先 join thread_pool，再释放 work guard 并 join io thread；需通过生命周期测试证明 worker completion handler 能被完整 drain，且不会等待已停止的执行器。
 - 当前代码审查未发现上述项目均已解决；不得将它们标记为完成。
 
+
+### 2026-11-21 — C ABI Player 句柄并发销毁
+
+- [x] 所有接收 `lnplayer_t*` 的 Player API 入口通过 `PlayerAccess` 获取活动调用计数。
+- [x] `lnplayer_destroy()` 在全局锁下停止新调用进入，等待已经进入的 API 调用退出，再关闭 Controller 并销毁 Player。
+- [x] 通过线程局部活动调用计数，禁止在帧回调/库回调等同步重入路径中销毁同一个 Player，避免等待自身造成死锁。
+- [x] 从 Event Thread 调用 destroy 仍返回 `LNPLAYER_RESULT_WOULD_DEADLOCK`。
+- [ ] 需要在 Windows 上补充并发压力测试：多个查询/控制线程与 destroy 竞争、回调重入、重复 destroy、销毁期间创建新 Player。
+- [ ] 需要检查所有 C ABI 入口是否都受同一生命周期保护，并检查回调期间的字符串/帧引用有效期。
+
+提交：
+- `e639ccfaf96eaaf0b5a16ff903f112b57643d32a` — Player API 活动调用保护与销毁等待屏障。
+- `6e4850e5a2fb3cf70b2041687628b867d8a3238d` — 阻止从活动 API 回调中重入 destroy。
+
+本次只完成代码修改和静态审查，没有运行构建或测试；因此并发屏障仍需 Windows 实际验证后才能标记验收通过。
