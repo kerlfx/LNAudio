@@ -55,6 +55,10 @@ Windows 端同时提供音频和视频播放界面，两套 UI 属于同一个 L
 
 - Windows 使用 Qt 6 Widgets 构建桌面界面，通过 Core 对外接口调用播放器功能。
 - Android 使用 Kotlin 构建原生界面，通过 JNI 桥接调用 Core 对外接口。
+- UI 交互采用异步任务提交模型；Qt GUI 主线程和 Android Main Thread 不得直接执行可能长时间等待的同步 C ABI 调用。
+- Windows UI 使用 UI 侧 Boost.Asio（`io_context` + 共享 `thread_pool`）异步协调交互任务；工作线程调用同步 C ABI，结果通过 Qt 事件机制回到 GUI 主线程。
+- Android UI 使用 Kotlin Coroutines 和平台 Dispatchers：通过 `Dispatchers.IO` 执行可能阻塞的 JNI/C ABI 调用，通过 `Dispatchers.Main` 更新 UI；Android UI 不要求引入 Boost.Asio。
+- 同一 Player 的有序交互命令需要串行协调；不同 Player 和互不依赖的任务允许并发。后台结果不得直接操作平台 UI 对象。
 - 平台相关的音频输出、视频渲染、设备管理和系统媒体控制与共享播放逻辑分离。
 - UI 不直接承担音视频解码工作。
 - FFmpeg 负责媒体探测、解封装和解码；Qt 负责 Windows 界面及窗口交互，不另行建立与 Core 并行的媒体播放管线。
