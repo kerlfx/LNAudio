@@ -144,3 +144,13 @@
 相关提交：
 - `f24ea9cdfd6d2f0e3695f8bd255f308923aadcd7` — 异步 open/seek worker 投递失败处理。
 - `69a5c94b029391a3417f6903a31c432740300be0` — open 路径和同步 promise 分配异常边界。
+
+### 2026-11-21 — 关闭屏障失败时的析构顺序
+
+- [x] Controller 正常关闭后使用栈上 promise 建立 io_context drain barrier，避免为屏障本身额外分配共享状态。
+- [x] Controller 关闭未能建立屏障时，先关闭 Runtime：停止 thread_pool 生产者并排空 io_context，再销毁 Controller。
+- [ ] 需要覆盖 close 失败、投递失败和 Runtime drain 的故障注入测试。
+
+提交：`25f7df3267b923ae181e770a69314ec60ec9688d`。
+
+验证说明：已通过 GitHub 文件回读确认修改位于 `gptdev`。此前一次更新因遗漏 branch 参数短暂创建在 `main` 的文件提交，已立即通过带 expected SHA 的 ref 回退恢复 `main` 原 HEAD；该修改没有保留在 main。今后所有写操作均显式指定 `branch: "gptdev"`。
