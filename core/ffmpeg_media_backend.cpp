@@ -537,7 +537,6 @@ public:
 
         if (!opened_ || !audio_decoder_ || !audio_packet_ || !audio_frame_)
             return failure("No decodable audio stream is open.");
-        audio_consumer_active_ = true;
 
         for (;;)
         {
@@ -645,7 +644,10 @@ public:
 
         if (!opened_ || !video_decoder_ || !video_packet_ || !video_frame_)
             return failure("No decodable video stream is open.");
-        video_consumer_active_ = true;
+        {
+            std::lock_guard<std::mutex> demux_lock(demux_mutex_);
+            video_consumer_active_ = true;
+        }
 
         for (;;)
         {
@@ -656,6 +658,10 @@ public:
             if (result == AVERROR_EOF)
             {
                 end_of_stream = true;
+                {
+                    std::lock_guard<std::mutex> demux_lock(demux_mutex_);
+                    video_consumer_active_ = false;
+                }
                 if (!audio_decoder_)
                 {
                     playback_ended_.store(true, std::memory_order_relaxed);
