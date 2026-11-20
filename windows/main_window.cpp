@@ -96,6 +96,8 @@ MainWindow::MainWindow(
         playback_rate_ = std::clamp(
             settings.value(QStringLiteral("Video/PlaybackRate"), 1.0).toFloat(),
             0.25f, 4.0f);
+        playlist_panel_visible_ = settings.value(
+            QStringLiteral("Video/UI/PlaylistVisible"), true).toBool();
     }
     setAcceptDrops(true);
     resize(mode_ == PlayerMode::Video ? QSize(960, 600) : QSize(720, 480));
