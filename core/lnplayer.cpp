@@ -220,6 +220,71 @@ public:
         output->generation = session_snapshot.generation;
     }
 
+    lnplayer_result_t read_video_frame(
+        lnplayer_video_frame_callback_t callback,
+        void* user_data,
+        int* end_of_stream)
+    {
+        if (runtime_.running_in_io_thread())
+            return LNPLAYER_RESULT_WOULD_DEADLOCK;
+
+        struct ReadResult
+        {
+            lnplayer::MediaBackendResult result;
+            lnplayer::VideoFrame frame;
+            bool end_of_stream = false;
+        };
+
+        auto completion = std::make_shared<std::promise<ReadResult>>();
+        auto future = completion->get_future();
+        try
+        {
+            asio::post(runtime_.io_context(), [this, completion]
+            {
+                asio::post(worker_strand_, [this, completion]
+                {
+                    ReadResult read;
+                    try
+                    {
+                        read.result = session_.read_video_frame(read.frame, read.end_of_stream);
+                    }
+                    catch (...)
+                    {
+                        read.result = {false, "Unexpected error while decoding a video frame."};
+                    }
+                    asio::post(runtime_.io_context(), [completion, read = std::move(read)]() mutable
+                    {
+                        completion->set_value(std::move(read));
+                    });
+                });
+            });
+        }
+        catch (...)
+        {
+            return LNPLAYER_RESULT_OUT_OF_MEMORY;
+        }
+
+        ReadResult read = future.get();
+        if (!read.result.success)
+            return set_error(LNPLAYER_RESULT_INTERNAL_ERROR, read.result.message.c_str());
+
+        *end_of_stream = read.end_of_stream ? 1 : 0;
+        if (!read.end_of_stream && callback && !read.frame.bgra.empty())
+        {
+            const lnplayer_video_frame_t frame{
+                sizeof(lnplayer_video_frame_t),
+                read.frame.bgra.data(),
+                read.frame.width,
+                read.frame.height,
+                read.frame.stride,
+                read.frame.pts_ms
+            };
+            callback(&frame, user_data);
+        }
+
+        return finish_result(LNPLAYER_RESULT_OK);
+    }
+
     void set_volume(uint32_t volume)
     {
         session_.set_volume(static_cast<float>(volume) / 1000.0f);
@@ -653,6 +718,20 @@ lnplayer_result_t lnplayer_library_search_tracks(
     {
         return set_error(LNPLAYER_RESULT_INTERNAL_ERROR, "Unexpected error while querying music library.");
     }
+}
+
+lnplayer_result_t lnplayer_read_video_frame(
+    lnplayer_t* player,
+    lnplayer_video_frame_callback_t callback,
+    void* user_data,
+    int* end_of_stream)
+{
+    if (!is_current_player(player))
+        return set_error(LNPLAYER_RESULT_INVALID_HANDLE, "Invalid Player handle.");
+    if (!end_of_stream)
+        return set_error(LNPLAYER_RESULT_INVALID_ARGUMENT, "End-of-stream output is null.");
+
+    return player->controller.read_video_frame(callback, user_data, end_of_stream);
 }
 
 lnplayer_result_t lnplayer_get_snapshot(
