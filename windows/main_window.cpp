@@ -482,6 +482,7 @@ MainWindow::MainWindow(PlayerMode mode, const QString& initial_media, QWidget* p
             QAction* subtitle_delay = subtitle_menu->addAction(QStringLiteral("字幕延迟 +500 ms"));
             QAction* subtitle_advance = subtitle_menu->addAction(QStringLiteral("字幕提前 500 ms"));
             QAction* subtitle_reset = subtitle_menu->addAction(QStringLiteral("重置字幕时间"));
+            QAction* previous_frame = menu.addAction(QStringLiteral("上一帧"));
             QAction* next_frame = menu.addAction(QStringLiteral("下一帧"));
             QMenu* speed_menu = menu.addMenu(QStringLiteral("播放速度"));
             const float speeds[] = {0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f};
@@ -536,6 +537,8 @@ MainWindow::MainWindow(PlayerMode mode, const QString& initial_media, QWidget* p
                 requestVideoFrame();
                 statusBar()->showMessage(QStringLiteral("字幕时间偏移：%1 ms").arg(subtitle_offset_ms_));
             }
+            else if (selected == previous_frame)
+                stepVideoFrame(true);
             else if (selected == next_frame)
                 stepVideoFrame();
             else if (selected && selected->parent() == speed_menu)
@@ -640,6 +643,8 @@ MainWindow::MainWindow(PlayerMode mode, const QString& initial_media, QWidget* p
         });
         bind_shortcut(Qt::Key_Left, [this] { seekRelative(-5000); });
         bind_shortcut(Qt::Key_Right, [this] { seekRelative(5000); });
+        bind_shortcut(Qt::Key_Comma, [this] { stepVideoFrame(true); });
+        bind_shortcut(Qt::Key_Period, [this] { stepVideoFrame(); });
         bind_shortcut(Qt::Key_Up, [this]
         {
             volume_slider_->setValue(std::min(1000, volume_slider_->value() + 50));
@@ -1070,6 +1075,8 @@ void MainWindow::openPlaylistIndex(int index)
         return;
 
     subtitle_cues_.clear();
+    video_frame_history_.clear();
+    video_frame_history_index_ = -1;
     pending_video_frame_valid_ = false;
     pending_hardware_frame_owner_.reset();
     pending_hardware_texture_ = nullptr;
@@ -1653,6 +1660,15 @@ void MainWindow::presentPendingVideoFrame()
     }
 
     QImage frame = pending_video_frame_;
+    if (video_frame_history_index_ + 1 < video_frame_history_.size())
+        video_frame_history_.erase(
+            video_frame_history_.begin() + video_frame_history_index_ + 1,
+            video_frame_history_.end());
+    video_frame_history_.append(frame);
+    constexpr int maximum_history_frames = 120;
+    if (video_frame_history_.size() > maximum_history_frames)
+        video_frame_history_.removeFirst();
+    video_frame_history_index_ = video_frame_history_.size() - 1;
     const QString subtitle = subtitleAt(pending_video_pts_ms_);
     if (!subtitle.isEmpty())
     {
@@ -1763,19 +1779,90 @@ void MainWindow::setPlaybackRate(float rate)
     }, Qt::QueuedConnection);
 }
 
-void MainWindow::stepVideoFrame()
+void MainWindow::stepVideoFrame(bool backwards)
 {
     if (mode_ != PlayerMode::Video || !has_video_ || video_frame_pending_)
         return;
 
-    QMetaObject::invokeMethod(command_worker_, [this]
+    if (is_playing_)
     {
-        if (player_)
-            lnplayer_pause(player_);
-    }, Qt::QueuedConnection);
-    video_frame_pending_ = false;
-    pending_video_frame_valid_ = false;
+        QMetaObject::invokeMethod(command_worker_, [this]
+        {
+            if (player_)
+                lnplayer_pause(player_);
+        }, Qt::QueuedConnection);
+        is_playing_ = false;
+        video_timer_->stop();
+    }
+
+    if (pending_video_frame_valid_)
+    {
+        presentPendingVideoFrame();
+        if (video_frame_pending_)
+            return;
+    }
+
+    if (backwards)
+    {
+        if (video_frame_history_index_ > 0)
+        {
+            --video_frame_history_index_;
+            presentHistoricalVideoFrame();
+        }
+        return;
+    }
+
+    if (video_frame_history_index_ + 1 < video_frame_history_.size())
+    {
+        ++video_frame_history_index_;
+        presentHistoricalVideoFrame();
+        return;
+    }
+
     requestVideoFrame();
+}
+
+void MainWindow::presentHistoricalVideoFrame()
+{
+    if (!video_surface_ ||
+        video_frame_history_index_ < 0 ||
+        video_frame_history_index_ >= video_frame_history_.size())
+        return;
+
+    QImage frame = video_frame_history_[video_frame_history_index_];
+    const QString subtitle = subtitleAt(current_position_ms_);
+    if (!subtitle.isEmpty())
+    {
+        QPainter painter(&frame);
+        painter.setRenderHint(QPainter::TextAntialiasing, true);
+        QFont font(QStringLiteral("Segoe UI"));
+        font.setPixelSize(std::max(20, frame.width() / 40));
+        font.setWeight(QFont::DemiBold);
+        painter.setFont(font);
+        const QRect text_rect(
+            frame.width() / 20,
+            frame.height() * 4 / 5,
+            frame.width() * 9 / 10,
+            frame.height() / 6);
+        const int offsets[][2] = {
+            {-2, -2}, {0, -2}, {2, -2}, {-2, 0},
+            {2, 0}, {-2, 2}, {0, 2}, {2, 2}
+        };
+        painter.setPen(Qt::black);
+        for (const auto& offset : offsets)
+            painter.drawText(
+                text_rect.translated(offset[0], offset[1]),
+                Qt::AlignHCenter | Qt::AlignVCenter | Qt::TextWordWrap,
+                subtitle);
+        painter.setPen(Qt::white);
+        painter.drawText(
+            text_rect,
+            Qt::AlignHCenter | Qt::AlignVCenter | Qt::TextWordWrap,
+            subtitle);
+    }
+
+    last_video_frame_ = frame;
+    video_surface_->set_frame(frame);
 }
 
 void MainWindow::handleCoreEvent(
