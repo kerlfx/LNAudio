@@ -1,4 +1,4 @@
-#include "lnplayer/lnplayer.h"
+#include "lnplayer.h"
 
 unsigned int lnplayer_get_abi_version(void)
 {
