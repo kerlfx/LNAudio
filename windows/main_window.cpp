@@ -2331,6 +2331,16 @@ void MainWindow::openPlaylistIndex(int index)
     if (source.isEmpty())
         return;
     current_media_path_ = QFileInfo(source).absoluteFilePath();
+    has_video_ = false;
+    has_audio_ = false;
+    is_playing_ = false;
+    duration_ms_ = -1;
+    current_position_ms_ = 0;
+    if (seek_slider_)
+    {
+        seek_slider_->setEnabled(false);
+        seek_slider_->setValue(0);
+    }
 
     subtitle_manager_.clear();
     loop_a_ms_ = -1;
@@ -3467,6 +3477,18 @@ void MainWindow::handleCoreEvent(
                 ? QStringLiteral("媒体打开失败")
                 : message);
             statusBar()->showMessage(QStringLiteral("打开失败"));
+            if (empty_state_label_)
+            {
+                empty_state_label_->setText(message.isEmpty()
+                    ? QStringLiteral("无法打开此视频文件")
+                    : message);
+                empty_state_label_->adjustSize();
+                empty_state_label_->move(
+                    (video_surface_->width() - empty_state_label_->width()) / 2,
+                    (video_surface_->height() - empty_state_label_->height()) / 2);
+                empty_state_label_->show();
+                empty_state_label_->raise();
+            }
         }
         break;
 
@@ -3539,6 +3561,17 @@ void MainWindow::refreshSnapshot()
             has_audio_ = has_audio;
             has_video_ = has_video;
             updatePlaybackState(state, position_ms, duration_ms);
+            if (mode_ == PlayerMode::Video && !has_video_ &&
+                !playlist_open_pending_ && empty_state_label_)
+            {
+                empty_state_label_->setText(QStringLiteral("当前媒体没有可播放的视频流"));
+                empty_state_label_->adjustSize();
+                empty_state_label_->move(
+                    (video_surface_->width() - empty_state_label_->width()) / 2,
+                    (video_surface_->height() - empty_state_label_->height()) / 2);
+                empty_state_label_->show();
+                empty_state_label_->raise();
+            }
             if (has_video_ && !video_first_frame_received_ &&
                 !pending_video_frame_valid_ && !video_frame_pending_)
                 requestVideoFrame();
