@@ -846,7 +846,7 @@ void MainWindow::handleCoreEvent(
     uint64_t generation,
     const QString& message)
 {
-    media_generation_ = generation;
+    media_generation_ = std::max(media_generation_, generation);
     updatePlaybackState(state, position_ms, duration_ms);
 
     switch (type)
@@ -925,7 +925,7 @@ void MainWindow::refreshSnapshot()
 
         QMetaObject::invokeMethod(this, [this, state, position_ms, duration_ms, generation, has_audio, has_video]
         {
-            media_generation_ = generation;
+            media_generation_ = std::max(media_generation_, generation);
             has_audio_ = has_audio;
             has_video_ = has_video;
             updatePlaybackState(state, position_ms, duration_ms);
