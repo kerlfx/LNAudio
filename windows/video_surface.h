@@ -42,12 +42,14 @@ public:
     QImage capture_frame() const;
     void set_interaction_callbacks(
         std::function<void()> double_click,
-        std::function<void(int)> wheel);
+        std::function<void(int)> wheel,
+        std::function<void()> middle_click);
 
 protected:
     void paintEvent(QPaintEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
     void mouseDoubleClickEvent(QMouseEvent* event) override;
+    void mousePressEvent(QMouseEvent* event) override;
     void wheelEvent(QWheelEvent* event) override;
 
 private:
@@ -58,6 +60,7 @@ private:
     float source_aspect_ratio_ = 0.0f;
     std::function<void()> double_click_callback_;
     std::function<void(int)> wheel_callback_;
+    std::function<void()> middle_click_callback_;
 };
 
 #endif
