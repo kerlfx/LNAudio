@@ -231,7 +231,7 @@ MainWindow::MainWindow(
         {
             const QStringList files = QFileDialog::getOpenFileNames(
                 this, QStringLiteral("添加到播放队列"), QString(),
-                QStringLiteral("视频文件 (*.mp4 *.mkv *.mov *.avi *.webm *.wmv *.flv *.mpeg *.mpg);;所有文件 (*)"));
+                QStringLiteral("视频文件 (*.mp4 *.mkv *.mov *.avi *.webm *.wmv *.flv *.mpeg *.mpg *.m4v *.ts *.mts *.m2ts *.3gp *.3g2 *.vob *.ogv *.mxf *.asf *.f4v *.divx *.mpe *.mpv);;所有文件 (*)"));
             QList<QUrl> urls;
             for (const QString& file : files)
                 urls.append(QUrl::fromLocalFile(file));
@@ -1048,7 +1048,7 @@ void MainWindow::openFile()
         this,
         QStringLiteral("打开媒体文件"),
         QString(),
-        QStringLiteral("媒体文件 (*.mp3 *.flac *.wav *.aac *.m4a *.ogg *.opus *.wma *.aiff *.aif *.mp4 *.mkv *.mov *.avi *.webm);;所有文件 (*)"));
+        QStringLiteral("媒体文件 (*.mp3 *.flac *.wav *.aac *.m4a *.ogg *.opus *.wma *.aiff *.aif *.mp4 *.mkv *.mov *.avi *.webm *.wmv *.flv *.mpeg *.mpg *.m4v *.ts *.mts *.m2ts *.3gp *.3g2 *.vob *.ogv *.mxf *.asf *.f4v *.divx *.mpe *.mpv);;所有文件 (*)"));
 
     QList<QUrl> urls;
     for (const QString& file : files)
