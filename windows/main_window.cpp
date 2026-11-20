@@ -75,6 +75,7 @@
 #include <QRandomGenerator>
 #include <QStringDecoder>
 #include <QSlider>
+#include <QStackedWidget>
 #include <QStatusBar>
 #include <QStandardPaths>
 #include <QSettings>
@@ -2766,11 +2767,47 @@ void MainWindow::openVideoSettings()
 
     QDialog dialog(this);
     dialog.setWindowTitle(QStringLiteral("LNPlayer 播放器设置"));
-    dialog.setMinimumSize(680, 520);
+    dialog.setMinimumSize(820, 600);
     auto* root = new QVBoxLayout(&dialog);
-    auto* tabs = new QTabWidget(&dialog);
+    root->setContentsMargins(16, 16, 16, 12);
+    root->setSpacing(12);
 
-    auto* general_page = new QWidget(tabs);
+    auto* content = new QHBoxLayout();
+    content->setSpacing(14);
+    auto* navigation = new QListWidget(&dialog);
+    navigation->setObjectName(QStringLiteral("settingsNavigation"));
+    navigation->setSelectionMode(QAbstractItemView::SingleSelection);
+    navigation->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    navigation->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    navigation->setFixedWidth(156);
+    navigation->setSpacing(3);
+    auto* pages = new QStackedWidget(&dialog);
+    pages->setObjectName(QStringLiteral("settingsPages"));
+    content->addWidget(navigation);
+    content->addWidget(pages, 1);
+    root->addLayout(content, 1);
+
+    auto add_settings_page = [navigation, pages](const QString& title, QWidget* page)
+    {
+        auto* item = new QListWidgetItem(title, navigation);
+        item->setSizeHint(QSize(136, 38));
+        auto* scroll = new QScrollArea(pages);
+        scroll->setWidgetResizable(true);
+        scroll->setFrameShape(QFrame::NoFrame);
+        scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+        scroll->setWidget(page);
+        pages->addWidget(scroll);
+    };
+    connect(navigation, &QListWidget::currentRowChanged,
+        pages, &QStackedWidget::setCurrentIndex);
+    navigation->setStyleSheet(QStringLiteral(
+        "QListWidget { background: #20252d; border: 1px solid #343c49; "
+        "border-radius: 7px; padding: 5px; outline: 0; }"
+        "QListWidget::item { padding: 8px 12px; border-radius: 5px; }"
+        "QListWidget::item:hover { background: #303846; }"
+        "QListWidget::item:selected { background: #345b86; color: #ffffff; }"));
+
+    auto* general_page = new QWidget(pages);
     auto* general_form = new QFormLayout(general_page);
     auto* settings_path = new QLineEdit(settings_file_path(), general_page);
     settings_path->setReadOnly(true);
@@ -2798,9 +2835,9 @@ void MainWindow::openVideoSettings()
     });
     general_form->addRow(QStringLiteral("视频文件关联"), association_info);
     general_form->addRow(open_default_apps);
-    tabs->addTab(general_page, QStringLiteral("常规"));
+    add_settings_page(QStringLiteral("常规"), general_page);
 
-    auto* playback_page = new QWidget(tabs);
+    auto* playback_page = new QWidget(pages);
     auto* playback_form = new QFormLayout(playback_page);
     auto* remember_position = new QCheckBox(
         QStringLiteral("记住每个视频上次播放位置"), playback_page);
@@ -2817,9 +2854,9 @@ void MainWindow::openVideoSettings()
     playback_form->addRow(remember_position);
     playback_form->addRow(auto_play_next);
     playback_form->addRow(QStringLiteral("默认播放速度"), default_playback_rate);
-    tabs->addTab(playback_page, QStringLiteral("播放"));
+    add_settings_page(QStringLiteral("播放"), playback_page);
 
-    auto* interface_page = new QWidget(tabs);
+    auto* interface_page = new QWidget(pages);
     auto* interface_form = new QFormLayout(interface_page);
     auto* hide_delay = new QSpinBox(interface_page);
     hide_delay->setRange(0, 10);
@@ -2855,9 +2892,9 @@ void MainWindow::openVideoSettings()
     interface_form->addRow(always_on_top);
     interface_form->addRow(QStringLiteral("画面中键操作"), middle_click);
     interface_form->addRow(mouse_gestures);
-    tabs->addTab(interface_page, QStringLiteral("界面"));
+    add_settings_page(QStringLiteral("界面"), interface_page);
 
-    auto* video_page = new QWidget(tabs);
+    auto* video_page = new QWidget(pages);
     auto* video_form = new QFormLayout(video_page);
     auto* aspect = new QComboBox(video_page);
     aspect->addItem(QStringLiteral("原始比例"), 0);
@@ -2898,9 +2935,9 @@ void MainWindow::openVideoSettings()
     video_form->addRow(QStringLiteral("锐化"), sharpness);
     video_form->addRow(QStringLiteral("降噪"), denoise);
     video_form->addRow(grayscale);
-    tabs->addTab(video_page, QStringLiteral("视频"));
+    add_settings_page(QStringLiteral("视频"), video_page);
 
-    auto* subtitle_page = new QWidget(tabs);
+    auto* subtitle_page = new QWidget(pages);
     auto* subtitle_form = new QFormLayout(subtitle_page);
     auto* subtitle_enabled = new QCheckBox(
         QStringLiteral("启用字幕显示"), subtitle_page);
@@ -2938,9 +2975,9 @@ void MainWindow::openVideoSettings()
     subtitle_form->addRow(QStringLiteral("字号"), subtitle_size);
     subtitle_form->addRow(QStringLiteral("颜色"), subtitle_color);
     subtitle_form->addRow(QStringLiteral("垂直位置"), subtitle_position);
-    tabs->addTab(subtitle_page, QStringLiteral("字幕"));
+    add_settings_page(QStringLiteral("字幕"), subtitle_page);
 
-    auto* shortcut_page = new QWidget(tabs);
+    auto* shortcut_page = new QWidget(pages);
     auto* shortcut_layout = new QVBoxLayout(shortcut_page);
     auto* shortcut_form = new QFormLayout();
     QHash<QString, QKeySequenceEdit*> shortcut_edits;
@@ -2956,9 +2993,9 @@ void MainWindow::openVideoSettings()
     shortcut_scroll->setWidgetResizable(true);
     shortcut_scroll->setWidget(shortcut_form_widget);
     shortcut_layout->addWidget(shortcut_scroll);
-    tabs->addTab(shortcut_page, QStringLiteral("快捷键"));
+    add_settings_page(QStringLiteral("快捷键"), shortcut_page);
 
-    auto* screenshot_page = new QWidget(tabs);
+    auto* screenshot_page = new QWidget(pages);
     auto* screenshot_form = new QFormLayout(screenshot_page);
     auto* screenshot_directory = new QLineEdit(screenshot_directory_, screenshot_page);
     auto* browse_screenshot_directory = new QPushButton(
@@ -2988,9 +3025,9 @@ void MainWindow::openVideoSettings()
         ? screenshot_format_index : 0);
     screenshot_form->addRow(QStringLiteral("默认保存目录"), screenshot_directory_row);
     screenshot_form->addRow(QStringLiteral("默认图片格式"), screenshot_format);
-    tabs->addTab(screenshot_page, QStringLiteral("截图"));
+    add_settings_page(QStringLiteral("截图"), screenshot_page);
 
-    auto* performance_page = new QWidget(tabs);
+    auto* performance_page = new QWidget(pages);
     auto* performance_form = new QFormLayout(performance_page);
     const QString renderer_description = video_surface_ && video_surface_->has_renderer()
         ? QStringLiteral("D3D11 renderer 已初始化")
@@ -3002,9 +3039,10 @@ void MainWindow::openVideoSettings()
             : QStringLiteral("尚未取得首帧"), performance_page));
     performance_form->addRow(QStringLiteral("说明"),
         new QLabel(QStringLiteral("解码器和硬件加速由 Core/FFmpeg 根据媒体与设备自动选择。"), performance_page));
-    tabs->addTab(performance_page, QStringLiteral("性能"));
+    add_settings_page(QStringLiteral("性能"), performance_page);
 
-    root->addWidget(tabs, 1);
+    navigation->setCurrentRow(0);
+
     auto* buttons = new QDialogButtonBox(
         QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
     auto* defaults = buttons->addButton(QStringLiteral("恢复默认"), QDialogButtonBox::ResetRole);
