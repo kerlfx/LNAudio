@@ -7,6 +7,7 @@
 #include <QStringList>
 
 #include <algorithm>
+#include <iterator>
 #include <utility>
 
 bool SubtitleManager::load_file(const QString& path, QString& error)
