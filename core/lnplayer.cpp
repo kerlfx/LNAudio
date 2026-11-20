@@ -96,28 +96,46 @@ public:
             asio::post(runtime_.io_context(), [this, id, source_copy]
             {
                 update_state(LNPLAYER_STATE_OPENING);
-                asio::post(worker_strand_, [this, id, source_copy]
+                try
                 {
-                    lnplayer::SessionResult result;
-                    try
+                    asio::post(worker_strand_, [this, id, source_copy]
                     {
-                        result = session_.open(source_copy);
-                    }
-                    catch (...)
-                    {
-                        result = {false, "Unexpected error while opening media.", session_.snapshot()};
-                    }
+                        lnplayer::SessionResult result;
+                        try
+                        {
+                            result = session_.open(source_copy);
+                        }
+                        catch (...)
+                        {
+                            result = {false, "Unexpected error while opening media.", session_.snapshot()};
+                        }
 
-                    asio::post(runtime_.io_context(), [this, id, result = std::move(result)]() mutable
-                    {
-                        publish_snapshot(result.snapshot, pending_seek_count_ > 0);
-                        emit(
-                            LNPLAYER_EVENT_OPEN_COMPLETED,
-                            result.success ? LNPLAYER_RESULT_OK : LNPLAYER_RESULT_INTERNAL_ERROR,
-                            id,
-                            result.message.empty() ? nullptr : result.message.c_str());
+                        try
+                        {
+                            asio::post(runtime_.io_context(), [this, id, result = std::move(result)]() mutable
+                            {
+                                publish_snapshot(result.snapshot, pending_seek_count_ > 0);
+                                emit(
+                                    LNPLAYER_EVENT_OPEN_COMPLETED,
+                                    result.success ? LNPLAYER_RESULT_OK : LNPLAYER_RESULT_INTERNAL_ERROR,
+                                    id,
+                                    result.message.empty() ? nullptr : result.message.c_str());
+                            });
+                        }
+                        catch (...)
+                        {
+                        }
                     });
-                });
+                }
+                catch (...)
+                {
+                    update_state(LNPLAYER_STATE_ERROR);
+                    emit(
+                        LNPLAYER_EVENT_OPEN_COMPLETED,
+                        LNPLAYER_RESULT_OUT_OF_MEMORY,
+                        id,
+                        "Unable to queue the media open operation.");
+                }
             });
         }
         catch (...)
@@ -139,30 +157,50 @@ public:
             {
                 ++pending_seek_count_;
                 update_state(LNPLAYER_STATE_SEEKING);
-                asio::post(worker_strand_, [this, id, position_ms]
+                try
                 {
-                    lnplayer::SessionResult result;
-                    try
+                    asio::post(worker_strand_, [this, id, position_ms]
                     {
-                        result = session_.seek(position_ms);
-                    }
-                    catch (...)
-                    {
-                        result = {false, "Unexpected error while seeking media.", session_.snapshot()};
-                    }
+                        lnplayer::SessionResult result;
+                        try
+                        {
+                            result = session_.seek(position_ms);
+                        }
+                        catch (...)
+                        {
+                            result = {false, "Unexpected error while seeking media.", session_.snapshot()};
+                        }
 
-                    asio::post(runtime_.io_context(), [this, id, result = std::move(result)]() mutable
-                    {
-                        if (pending_seek_count_ > 0)
-                            --pending_seek_count_;
-                        publish_snapshot(result.snapshot, pending_seek_count_ > 0);
-                        emit(
-                            LNPLAYER_EVENT_SEEK_COMPLETED,
-                            result.success ? LNPLAYER_RESULT_OK : LNPLAYER_RESULT_INVALID_STATE,
-                            id,
-                            result.message.empty() ? nullptr : result.message.c_str());
+                        try
+                        {
+                            asio::post(runtime_.io_context(), [this, id, result = std::move(result)]() mutable
+                            {
+                                if (pending_seek_count_ > 0)
+                                    --pending_seek_count_;
+                                publish_snapshot(result.snapshot, pending_seek_count_ > 0);
+                                emit(
+                                    LNPLAYER_EVENT_SEEK_COMPLETED,
+                                    result.success ? LNPLAYER_RESULT_OK : LNPLAYER_RESULT_INVALID_STATE,
+                                    id,
+                                    result.message.empty() ? nullptr : result.message.c_str());
+                            });
+                        }
+                        catch (...)
+                        {
+                        }
                     });
-                });
+                }
+                catch (...)
+                {
+                    if (pending_seek_count_ > 0)
+                        --pending_seek_count_;
+                    publish_snapshot(session_.snapshot(), pending_seek_count_ > 0);
+                    emit(
+                        LNPLAYER_EVENT_SEEK_COMPLETED,
+                        LNPLAYER_RESULT_OUT_OF_MEMORY,
+                        id,
+                        "Unable to queue the media seek operation.");
+                }
             });
         }
         catch (...)
