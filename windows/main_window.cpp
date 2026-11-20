@@ -626,6 +626,8 @@ void MainWindow::handleCoreEvent(
         if (result == LNPLAYER_RESULT_OK && mode_ == PlayerMode::Video)
         {
             pending_video_frame_valid_ = false;
+            video_first_frame_received_ = false;
+            video_end_of_stream_ = false;
             video_clock_.invalidate();
             requestVideoFrame();
         }
