@@ -912,8 +912,8 @@ void MainWindow::refreshSnapshot()
         const lnplayer_state_t state = snapshot.state;
         const int64_t position_ms = snapshot.position_ms;
         const int64_t duration_ms = snapshot.duration_ms;
-        const bool has_audio = (snapshot.reserved & 0x1u) != 0;
-        const bool has_video = (snapshot.reserved & 0x2u) != 0;
+        const bool has_audio = (snapshot.reserved & LNPLAYER_MEDIA_HAS_AUDIO) != 0;
+        const bool has_video = (snapshot.reserved & LNPLAYER_MEDIA_HAS_VIDEO) != 0;
 
         QMetaObject::invokeMethod(this, [this, state, position_ms, duration_ms, has_audio, has_video]
         {
