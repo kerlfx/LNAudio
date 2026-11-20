@@ -1165,6 +1165,26 @@ void MainWindow::loadExternalSubtitle()
     {
         subtitle_text = QString::fromUtf8(subtitle_data.constData() + 3, subtitle_data.size() - 3);
     }
+    else if (subtitle_data.startsWith("\\xFF\\xFE\\x00\\x00"))
+    {
+        QStringDecoder decoder("UTF-32LE");
+        subtitle_text = decoder(subtitle_data.mid(4));
+        if (decoder.hasError())
+        {
+            status_label_->setText(QStringLiteral("UTF-32LE 字幕编码无效"));
+            return;
+        }
+    }
+    else if (subtitle_data.startsWith("\\x00\\x00\\xFE\\xFF"))
+    {
+        QStringDecoder decoder("UTF-32BE");
+        subtitle_text = decoder(subtitle_data.mid(4));
+        if (decoder.hasError())
+        {
+            status_label_->setText(QStringLiteral("UTF-32BE 字幕编码无效"));
+            return;
+        }
+    }
     else if (subtitle_data.startsWith("\\xFF\\xFE"))
     {
         QStringDecoder decoder("UTF-16LE");
