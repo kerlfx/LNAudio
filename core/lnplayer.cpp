@@ -185,6 +185,19 @@ public:
         return invoke_sync([this] { return session_.close(); });
     }
 
+    lnplayer_result_t select_audio_track(int stream_index)
+    {
+        return invoke_sync([this, stream_index]
+        {
+            return session_.select_audio_track(stream_index);
+        });
+    }
+
+    std::vector<lnplayer::MediaTrackInfo> audio_tracks() const
+    {
+        return session_.audio_tracks();
+    }
+
     lnplayer_result_t shutdown()
     {
         const lnplayer_result_t result =
@@ -903,6 +916,50 @@ lnplayer_result_t lnplayer_set_playback_rate(lnplayer_t* player, float rate)
 
     player->controller->set_playback_rate(rate);
     return finish_result(LNPLAYER_RESULT_OK);
+}
+
+lnplayer_result_t lnplayer_enumerate_audio_tracks(
+    lnplayer_t* player,
+    lnplayer_audio_track_callback_t callback,
+    void* user_data)
+{
+    if (!is_current_player(player))
+        return set_error(LNPLAYER_RESULT_INVALID_HANDLE, "Invalid Player handle.");
+    if (!callback)
+        return set_error(LNPLAYER_RESULT_INVALID_ARGUMENT, "Audio track callback is null.");
+
+    try
+    {
+        const auto tracks = player->controller->audio_tracks();
+        for (const auto& track : tracks)
+        {
+            const lnplayer_audio_track_info_t item{
+                sizeof(lnplayer_audio_track_info_t),
+                track.stream_index,
+                track.channels,
+                track.sample_rate,
+                track.is_default ? 1 : 0,
+                track.title.c_str(),
+                track.language.c_str(),
+                track.codec.c_str()
+            };
+            callback(&item, user_data);
+        }
+        return finish_result(LNPLAYER_RESULT_OK);
+    }
+    catch (...)
+    {
+        return set_error(LNPLAYER_RESULT_INTERNAL_ERROR, "Unable to enumerate media audio tracks.");
+    }
+}
+
+lnplayer_result_t lnplayer_select_audio_track(lnplayer_t* player, int32_t stream_index)
+{
+    if (!is_current_player(player))
+        return set_error(LNPLAYER_RESULT_INVALID_HANDLE, "Invalid Player handle.");
+    if (stream_index < 0)
+        return set_error(LNPLAYER_RESULT_INVALID_ARGUMENT, "Audio stream index is invalid.");
+    return finish_result(player->controller->select_audio_track(stream_index));
 }
 
 lnplayer_result_t lnplayer_get_last_error(
