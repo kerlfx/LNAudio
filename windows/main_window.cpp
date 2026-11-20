@@ -1053,7 +1053,7 @@ MainWindow::MainWindow(
                 settings.setValue(QStringLiteral("Video/Filter/Brightness"), video_brightness_);
                 settings.setValue(QStringLiteral("Video/Filter/Contrast"), video_contrast_);
                 settings.setValue(QStringLiteral("Video/Filter/Saturation"), video_saturation_);
-    settings.setValue(QStringLiteral("Video/Filter/Hue"), video_hue_degrees_);
+    settings.setValue(QStringLiteral("Video/Filter/HueDegrees"), video_hue_degrees_);
     settings.setValue(QStringLiteral("Video/Filter/Sharpness"), video_sharpness_);
     settings.setValue(QStringLiteral("Video/Filter/Denoise"), video_denoise_);
     settings.setValue(QStringLiteral("Video/Filter/Grayscale"), video_grayscale_);
