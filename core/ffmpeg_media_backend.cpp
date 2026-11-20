@@ -473,7 +473,6 @@ public:
         swr_free(&resampler_);
         sws_freeContext(video_scaler_);
         video_scaler_ = nullptr;
-        av_frame_free(&transfer_frame_);
         av_frame_free(&video_frame_);
         av_packet_free(&video_packet_);
         avcodec_free_context(&video_decoder_);
@@ -897,33 +896,63 @@ private:
 #ifdef _WIN32
         if (video_frame_->format == AV_PIX_FMT_D3D11)
         {
-            if (!transfer_frame_)
-                transfer_frame_ = av_frame_alloc();
-            if (!transfer_frame_)
+            AVFrame* retained_frame = av_frame_clone(video_frame_);
+            if (!retained_frame)
             {
                 av_frame_unref(video_frame_);
-                return failure("Unable to allocate a D3D11 video transfer frame.");
+                return failure("Unable to retain the D3D11 video frame.");
             }
 
-            av_frame_unref(transfer_frame_);
-            const int transfer_result = av_hwframe_transfer_data(
-                transfer_frame_, video_frame_, 0);
-            if (transfer_result < 0)
+            ID3D11Texture2D* texture =
+                reinterpret_cast<ID3D11Texture2D*>(retained_frame->data[0]);
+            if (!texture)
             {
-                av_frame_unref(transfer_frame_);
+                av_frame_free(&retained_frame);
                 av_frame_unref(video_frame_);
-                return failure("Unable to transfer a D3D11 video frame: " +
-                    ffmpeg_error(transfer_result));
+                return failure("The D3D11 video frame has no texture.");
             }
-            source_frame = transfer_frame_;
+
+            D3D11_TEXTURE2D_DESC texture_desc{};
+            texture->GetDesc(&texture_desc);
+            output.width = retained_frame->width;
+            output.height = retained_frame->height;
+            output.d3d11_texture = texture;
+            output.d3d11_array_slice = static_cast<uint32_t>(
+                reinterpret_cast<uintptr_t>(retained_frame->data[1]));
+            output.dxgi_format = static_cast<uint32_t>(texture_desc.Format);
+            output.hardware_frame_owner = std::shared_ptr<void>(
+                retained_frame,
+                [](void* frame)
+                {
+                    AVFrame* owned_frame = static_cast<AVFrame*>(frame);
+                    av_frame_free(&owned_frame);
+                });
+
+            const AVStream* stream = format_context_->streams[video_stream_index_];
+            AVRational sample_aspect_ratio = retained_frame->sample_aspect_ratio;
+            if (sample_aspect_ratio.num <= 0 || sample_aspect_ratio.den <= 0)
+                sample_aspect_ratio = stream->sample_aspect_ratio;
+            output.display_aspect_ratio =
+                sample_aspect_ratio.num > 0 && sample_aspect_ratio.den > 0
+                    ? static_cast<float>(output.width) * sample_aspect_ratio.num /
+                        (static_cast<float>(output.height) * sample_aspect_ratio.den)
+                    : static_cast<float>(output.width) / static_cast<float>(output.height);
+            const int64_t timestamp = retained_frame->best_effort_timestamp;
+            output.pts_ms = timestamp == AV_NOPTS_VALUE
+                ? position_ms_.load(std::memory_order_relaxed)
+                : av_rescale_q(timestamp, stream->time_base, AVRational{1, 1000}) -
+                    start_time_ms_;
+            if (!audio_decoder_)
+                position_ms_.store(output.pts_ms, std::memory_order_relaxed);
+
+            av_frame_unref(video_frame_);
+            return success();
         }
 #endif
         const int width = source_frame->width;
         const int height = source_frame->height;
         if (width <= 0 || height <= 0)
         {
-            if (source_frame == transfer_frame_)
-                av_frame_unref(transfer_frame_);
             av_frame_unref(video_frame_);
             return failure("Decoded video frame has invalid dimensions.");
         }
@@ -942,8 +971,6 @@ private:
             nullptr);
         if (!video_scaler_)
         {
-            if (source_frame == transfer_frame_)
-                av_frame_unref(transfer_frame_);
             av_frame_unref(video_frame_);
             return failure("Unable to initialize video pixel format conversion.");
         }
@@ -965,8 +992,6 @@ private:
         if (rows != height)
         {
             output.bgra.clear();
-            if (source_frame == transfer_frame_)
-                av_frame_unref(transfer_frame_);
             av_frame_unref(video_frame_);
             return failure("Unable to convert decoded video frame.");
         }
@@ -987,12 +1012,9 @@ private:
                 start_time_ms_;
         if (!audio_decoder_)
             position_ms_.store(output.pts_ms, std::memory_order_relaxed);
-        if (source_frame == transfer_frame_)
-            av_frame_unref(transfer_frame_);
         av_frame_unref(video_frame_);
         return success();
     }
-
 #ifdef _WIN32
     void audio_playback_loop()
     {
@@ -1370,7 +1392,6 @@ private:
     AVPacket* video_packet_ = nullptr;
     AVFrame* video_frame_ = nullptr;
     SwsContext* video_scaler_ = nullptr;
-    AVFrame* transfer_frame_ = nullptr;
     AVBufferRef* hw_device_context_ = nullptr;
     bool video_hardware_decode_ = false;
     std::deque<AVPacket*> audio_packet_queue_;
