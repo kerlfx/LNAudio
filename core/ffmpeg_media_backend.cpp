@@ -684,6 +684,35 @@ private:
             return 0;
         }
 
+        if (deferred_packet_)
+        {
+            if (deferred_packet_->stream_index == stream_index)
+            {
+                av_packet_move_ref(output_packet, deferred_packet_);
+                av_packet_free(&deferred_packet_);
+                return 0;
+            }
+
+            std::deque<AVPacket*>* destination = nullptr;
+            if (deferred_packet_->stream_index == audio_stream_index_ && audio_consumer_active_)
+                destination = &audio_packet_queue_;
+            else if (deferred_packet_->stream_index == video_stream_index_ && video_consumer_active_)
+                destination = &video_packet_queue_;
+
+            if (destination)
+            {
+                constexpr size_t kMaximumQueuedPackets = 512;
+                if (destination->size() >= kMaximumQueuedPackets)
+                    return AVERROR(EAGAIN);
+                destination->push_back(deferred_packet_);
+                deferred_packet_ = nullptr;
+            }
+            else
+            {
+                av_packet_free(&deferred_packet_);
+            }
+        }
+
         for (;;)
         {
             AVPacket* packet = av_packet_alloc();
@@ -714,7 +743,7 @@ private:
                 constexpr size_t kMaximumQueuedPackets = 512;
                 if (destination->size() >= kMaximumQueuedPackets)
                 {
-                    av_packet_free(&packet);
+                    deferred_packet_ = packet;
                     return AVERROR(EAGAIN);
                 }
                 destination->push_back(packet);
@@ -735,6 +764,7 @@ private:
             av_packet_free(&packet);
         for (AVPacket* packet : video_packet_queue_)
             av_packet_free(&packet);
+        av_packet_free(&deferred_packet_);
         audio_packet_queue_.clear();
         video_packet_queue_.clear();
     }
@@ -753,10 +783,12 @@ private:
                 return failure("Unable to allocate a D3D11 video transfer frame.");
             }
 
+            av_frame_unref(transfer_frame_);
             const int transfer_result = av_hwframe_transfer_data(
                 transfer_frame_, video_frame_, 0);
             if (transfer_result < 0)
             {
+                av_frame_unref(transfer_frame_);
                 av_frame_unref(video_frame_);
                 return failure("Unable to transfer a D3D11 video frame: " +
                     ffmpeg_error(transfer_result));
@@ -768,6 +800,8 @@ private:
         const int height = source_frame->height;
         if (width <= 0 || height <= 0)
         {
+            if (source_frame == transfer_frame_)
+                av_frame_unref(transfer_frame_);
             av_frame_unref(video_frame_);
             return failure("Decoded video frame has invalid dimensions.");
         }
@@ -786,6 +820,8 @@ private:
             nullptr);
         if (!video_scaler_)
         {
+            if (source_frame == transfer_frame_)
+                av_frame_unref(transfer_frame_);
             av_frame_unref(video_frame_);
             return failure("Unable to initialize video pixel format conversion.");
         }
@@ -1092,6 +1128,7 @@ private:
     bool video_hardware_decode_ = false;
     std::deque<AVPacket*> audio_packet_queue_;
     std::deque<AVPacket*> video_packet_queue_;
+    AVPacket* deferred_packet_ = nullptr;
     int audio_stream_index_ = -1;
     int video_stream_index_ = -1;
     bool opened_ = false;
