@@ -1706,7 +1706,7 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event)
         }
         else if (event->type() == QEvent::Hide && is_menu_widget)
         {
-            if (fullscreen_hide_delay_ms_ > 0)
+            if (!QApplication::activePopupWidget() && fullscreen_hide_delay_ms_ > 0)
                 fullscreen_hide_timer_->start(fullscreen_hide_delay_ms_);
         }
         else if (event->type() == QEvent::MouseMove)
