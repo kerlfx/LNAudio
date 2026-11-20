@@ -3618,41 +3618,64 @@ void MainWindow::loadExternalSubtitlePath(const QString& path, bool remember)
             : LNPLAYER_RESULT_INVALID_HANDLE;
         if (result != LNPLAYER_RESULT_OK && player_)
             lnplayer_set_external_subtitle(player_, "");
-        QMetaObject::invokeMethod(this, [this, path, media_path, remember, result]
+
+        if (result == LNPLAYER_RESULT_OK)
         {
-            bool loaded = false;
-            if (result == LNPLAYER_RESULT_OK)
+            QMetaObject::invokeMethod(this, [this, path, media_path, remember]
             {
+                if (current_media_path_ != media_path)
+                    return;
                 subtitle_manager_.clear();
                 status_label_->setText(
                     QStringLiteral("已加载外挂字幕：%1").arg(QFileInfo(path).fileName()));
-                loaded = true;
-            }
-            else
+                if (remember && !media_path.isEmpty())
+                {
+                    QSettings settings(settings_file_path(), QSettings::IniFormat);
+                    settings.setValue(
+                        mediaPreferenceKey(QStringLiteral("ExternalSubtitle"), media_path), path);
+                    settings.remove(
+                        mediaPreferenceKey(QStringLiteral("SubtitleTrack"), media_path));
+                    settings.sync();
+                }
+                pending_video_frame_valid_ = false;
+                requestVideoFrame();
+            }, Qt::QueuedConnection);
+            return;
+        }
+
+        postBackground([this, path, media_path, remember]
+        {
+            auto fallback_manager = std::make_shared<SubtitleManager>();
+            QString error;
+            const bool loaded = fallback_manager->load_file(path, error);
+            QMetaObject::invokeMethod(this,
+                [this, path, media_path, remember, fallback_manager, error, loaded]
             {
-                QString error;
-                if (!subtitle_manager_.load_file(path, error))
+                if (current_media_path_ != media_path)
+                    return;
+                if (!loaded)
                 {
                     status_label_->setText(error);
                     return;
                 }
+
+                subtitle_manager_ = std::move(*fallback_manager);
                 status_label_->setText(
                     QStringLiteral("已加载外挂字幕（基础文本回退）：%1")
                         .arg(QFileInfo(path).fileName()));
-                loaded = true;
-            }
-
-            if (loaded && remember && !media_path.isEmpty())
-            {
-                QSettings settings(settings_file_path(), QSettings::IniFormat);
-                settings.setValue(mediaPreferenceKey(QStringLiteral("ExternalSubtitle"), media_path), path);
-                settings.remove(mediaPreferenceKey(QStringLiteral("SubtitleTrack"), media_path));
-                settings.sync();
-            }
-
-            pending_video_frame_valid_ = false;
-            requestVideoFrame();
-        }, Qt::QueuedConnection);
+                if (remember && !media_path.isEmpty())
+                {
+                    QSettings settings(settings_file_path(), QSettings::IniFormat);
+                    settings.setValue(
+                        mediaPreferenceKey(QStringLiteral("ExternalSubtitle"), media_path), path);
+                    settings.remove(
+                        mediaPreferenceKey(QStringLiteral("SubtitleTrack"), media_path));
+                    settings.sync();
+                }
+                pending_video_frame_valid_ = false;
+                requestVideoFrame();
+            }, Qt::QueuedConnection);
+        });
     });
 }
 
