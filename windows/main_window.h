@@ -52,6 +52,9 @@ private:
     void loadExternalSubtitle();
     QString subtitleAt(int64_t position_ms) const;
     void openFiles(const QList<QUrl>& urls);
+    void openPlaylistIndex(int index);
+    void playPrevious();
+    void playNext();
     void refreshLibrary();
     void requestVideoFrame();
     void presentPendingVideoFrame();
@@ -77,6 +80,7 @@ private:
     QLabel* media_title_label_;
     QLineEdit* library_search_;
     QListWidget* library_list_;
+    QListWidget* playlist_widget_ = nullptr;
     VideoSurface* video_surface_ = nullptr;
     QSlider* seek_slider_;
     QSlider* volume_slider_;
@@ -115,6 +119,9 @@ private:
     float playback_rate_ = 1.0f;
     uint64_t media_generation_ = 0;
     std::vector<SubtitleCue> subtitle_cues_;
+    QList<QUrl> playlist_;
+    int playlist_index_ = -1;
+    bool playlist_open_pending_ = false;
 };
 
 #endif
