@@ -177,6 +177,8 @@ private:
     int fullscreen_hide_delay_ms_ = 2000;
     int osd_duration_ms_ = 1500;
     int osd_position_ = 1;
+    QString screenshot_directory_;
+    QString screenshot_format_ = QStringLiteral("png");
     QString subtitle_font_family_ = QStringLiteral("Segoe UI");
     QString subtitle_color_ = QStringLiteral("#ffffff");
     int subtitle_font_size_ = 0;
