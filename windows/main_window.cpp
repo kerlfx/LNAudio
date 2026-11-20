@@ -3024,6 +3024,8 @@ void MainWindow::openVideoSettings()
 
     auto* shortcut_page = new QWidget(pages);
     auto* shortcut_layout = new QVBoxLayout(shortcut_page);
+    auto* shortcut_search = new QLineEdit(shortcut_page);
+    shortcut_search->setPlaceholderText(QStringLiteral("搜索快捷键名称或按键..."));
     auto* shortcut_form = new QFormLayout();
     QHash<QString, QKeySequenceEdit*> shortcut_edits;
     for (auto it = shortcuts_.cbegin(); it != shortcuts_.cend(); ++it)
@@ -3034,9 +3036,32 @@ void MainWindow::openVideoSettings()
     }
     auto* shortcut_form_widget = new QWidget(shortcut_page);
     shortcut_form_widget->setLayout(shortcut_form);
+    connect(shortcut_search, &QLineEdit::textChanged, shortcut_page,
+        [shortcut_form, shortcut_edits](const QString& text)
+        {
+            const QString query = text.trimmed();
+            for (auto it = shortcut_edits.cbegin(); it != shortcut_edits.cend(); ++it)
+            {
+                QWidget* label = shortcut_form->labelForField(it.value());
+                const QString searchable = (label ? label->windowTitle() : QString()) +
+                    (label ? label->accessibleName() : QString()) +
+                    (label ? label->property("commandLabel").toString() : QString()) +
+                    (label ? label->metaObject()->className() : QString());
+                const QString command = label ? qobject_cast<QLabel*>(label)->text() : QString();
+                const QString sequence = it.value()->keySequence().toString(
+                    QKeySequence::NativeText);
+                const bool visible = query.isEmpty() ||
+                    command.contains(query, Qt::CaseInsensitive) ||
+                    sequence.contains(query, Qt::CaseInsensitive);
+                if (label)
+                    label->setVisible(visible);
+                it.value()->setVisible(visible);
+            }
+        });
     auto* shortcut_scroll = new QScrollArea(shortcut_page);
     shortcut_scroll->setWidgetResizable(true);
     shortcut_scroll->setWidget(shortcut_form_widget);
+    shortcut_layout->addWidget(shortcut_search);
     shortcut_layout->addWidget(shortcut_scroll);
     add_settings_page(QStringLiteral("快捷键"), shortcut_page);
 
