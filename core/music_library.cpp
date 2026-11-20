@@ -2,7 +2,19 @@
 
 #include <sqlite3.h>
 
+extern "C"
+{
+#include <libavformat/avformat.h>
+#include <libavutil/dict.h>
+#include <libavutil/sha.h>
+}
+
+#include <array>
+#include <chrono>
 #include <cstdlib>
+#include <fstream>
+#include <iomanip>
+#include <sstream>
 #include <filesystem>
 #include <string>
 #include <utility>
@@ -249,6 +261,161 @@ bool MusicLibrary::remove_directory(const std::string& path, std::string& error)
     const bool success = sqlite3_step(statement) == SQLITE_DONE;
     if (!success)
         error = sqlite3_errmsg(database_);
+    sqlite3_finalize(statement);
+    return success;
+}
+
+
+bool MusicLibrary::scan_directory(
+    const std::string& path,
+    bool recursive,
+    int& imported_count,
+    std::string& error)
+{
+    imported_count = 0;
+    if (!add_directory(path, recursive, error))
+        return false;
+
+    const std::filesystem::path root = std::filesystem::u8path(path);
+    const auto options = std::filesystem::directory_options::skip_permission_denied;
+    auto import_file = [this, &imported_count, &error](const std::filesystem::directory_entry& entry)
+    {
+        if (!entry.is_regular_file())
+            return;
+
+        const std::string extension = entry.path().extension().string();
+        static const std::vector<std::string> supported = {
+            ".mp3", ".flac", ".wav", ".aac", ".m4a", ".ogg", ".opus",
+            ".wma", ".aiff", ".aif", ".ape", ".mp4", ".mkv", ".mov",
+            ".avi", ".webm"
+        };
+        bool accepted = false;
+        for (const auto& item : supported)
+        {
+            if (extension.size() == item.size()
+                && std::equal(extension.begin(), extension.end(), item.begin(),
+                    [](unsigned char left, unsigned char right)
+                    {
+                        return std::tolower(left) == right;
+                    }))
+            {
+                accepted = true;
+                break;
+            }
+        }
+        if (!accepted)
+            return;
+
+        const std::filesystem::path file_path = entry.path();
+        const std::string utf8_path = file_path.generic_u8string().empty()
+            ? std::string()
+            : [&file_path]
+              {
+                  const auto value = file_path.generic_u8string();
+                  return std::string(reinterpret_cast<const char*>(value.data()), value.size());
+              }();
+
+        std::ifstream file(file_path, std::ios::binary);
+        if (!file)
+            return;
+
+        AVSHA* sha = av_sha_alloc();
+        if (!sha)
+            return;
+        if (av_sha_init(sha, 256) < 0)
+        {
+            av_free(sha);
+            return;
+        }
+
+        std::array<uint8_t, 64 * 1024> buffer{};
+        while (file)
+        {
+            file.read(reinterpret_cast<char*>(buffer.data()), buffer.size());
+            const std::streamsize count = file.gcount();
+            if (count > 0)
+                av_sha_update(sha, buffer.data(), static_cast<unsigned int>(count));
+        }
+        if (!file.eof())
+        {
+            av_free(sha);
+            return;
+        }
+
+        std::array<uint8_t, 32> digest{};
+        av_sha_final(sha, digest.data());
+        av_free(sha);
+
+        std::ostringstream hash;
+        hash << std::hex << std::setfill('0');
+        for (uint8_t byte : digest)
+            hash << std::setw(2) << static_cast<unsigned int>(byte);
+
+        AVFormatContext* format = nullptr;
+        if (avformat_open_input(&format, utf8_path.c_str(), nullptr, nullptr) < 0)
+            return;
+        if (avformat_find_stream_info(format, nullptr) < 0)
+        {
+            avformat_close_input(&format);
+            return;
+        }
+
+        auto metadata = [format](const char* key)
+        {
+            const AVDictionaryEntry* value = av_dict_get(format->metadata, key, nullptr, 0);
+            return value && value->value ? std::string(value->value) : std::string();
+        };
+
+        const std::string title = metadata("title").empty()
+            ? file_path.stem().string()
+            : metadata("title");
+        const std::string artist = metadata("artist");
+        const std::string album = metadata("album");
+        const std::string genre = metadata("genre");
+        const int64_t duration_ms = format->duration == AV_NOPTS_VALUE
+            ? -1
+            : av_rescale_q(format->duration, AVRational{1, AV_TIME_BASE}, AVRational{1, 1000});
+        avformat_close_input(&format);
+
+        const auto size = entry.file_size();
+        const auto modified = entry.last_write_time();
+        const auto system_modified = std::chrono::time_point_cast<std::chrono::seconds>(
+            modified - std::filesystem::file_time_type::clock::now()
+            + std::chrono::system_clock::now());
+        const int64_t modified_time = system_modified.time_since_epoch().count();
+
+        int64_t track_id = 0;
+        std::string import_error;
+        if (upsert_track(
+            utf8_path, hash.str(), title, artist, album, genre,
+            duration_ms, static_cast<int64_t>(size), modified_time,
+            track_id, import_error))
+            ++imported_count;
+        else
+            error = std::move(import_error);
+    };
+
+    if (recursive)
+    {
+        for (std::filesystem::recursive_directory_iterator iterator(root, options), end;
+             iterator != end; ++iterator)
+            import_file(*iterator);
+    }
+    else
+    {
+        for (std::filesystem::directory_iterator iterator(root, options), end;
+             iterator != end; ++iterator)
+            import_file(*iterator);
+    }
+
+    std::lock_guard<std::mutex> lock(mutex_);
+    sqlite3_stmt* statement = nullptr;
+    if (!prepare(database_,
+        "UPDATE library_directories SET last_scan_at=unixepoch(), last_scan_status=1 WHERE path=?;",
+        &statement, error))
+        return false;
+    bind_text(statement, 1, path);
+    const bool success = sqlite3_step(statement) == SQLITE_DONE;
     sqlite3_finalize(statement);
     return success;
 }
