@@ -492,7 +492,7 @@ void MainWindow::refreshLibrary()
 
 void MainWindow::requestVideoFrame()
 {
-    if (mode_ != PlayerMode::Video || !has_video_ || video_frame_pending_)
+    if (mode_ != PlayerMode::Video || !has_video_ || video_frame_pending_ || video_end_of_stream_)
         return;
 
     video_frame_pending_ = true;
@@ -544,12 +544,14 @@ void MainWindow::requestVideoFrame()
 
             if (end_of_stream)
             {
+                video_end_of_stream_ = true;
                 video_timer_->stop();
                 return;
             }
 
             if (!image.isNull())
             {
+                video_first_frame_received_ = true;
                 pending_video_frame_ = image;
                 pending_video_pts_ms_ = pts_ms;
                 pending_video_frame_valid_ = true;
@@ -605,6 +607,8 @@ void MainWindow::handleCoreEvent(
             snapshot_timer_->setInterval(mode_ == PlayerMode::Video ? 16 : 250);
             snapshot_timer_->start();
             pending_video_frame_valid_ = false;
+            video_first_frame_received_ = false;
+            video_end_of_stream_ = false;
             video_clock_.invalidate();
             if (video_surface_)
                 video_surface_->set_frame(QImage());
@@ -667,7 +671,8 @@ void MainWindow::refreshSnapshot()
             has_audio_ = has_audio;
             has_video_ = has_video;
             updatePlaybackState(state, position_ms, duration_ms);
-            if (has_video_ && !pending_video_frame_valid_ && !video_frame_pending_)
+            if (has_video_ && !video_first_frame_received_ &&
+                !pending_video_frame_valid_ && !video_frame_pending_)
                 requestVideoFrame();
         }, Qt::QueuedConnection);
     }, Qt::QueuedConnection);
