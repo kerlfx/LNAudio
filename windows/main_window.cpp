@@ -3042,12 +3042,8 @@ void MainWindow::openVideoSettings()
             const QString query = text.trimmed();
             for (auto it = shortcut_edits.cbegin(); it != shortcut_edits.cend(); ++it)
             {
-                QWidget* label = shortcut_form->labelForField(it.value());
-                const QString searchable = (label ? label->windowTitle() : QString()) +
-                    (label ? label->accessibleName() : QString()) +
-                    (label ? label->property("commandLabel").toString() : QString()) +
-                    (label ? label->metaObject()->className() : QString());
-                const QString command = label ? qobject_cast<QLabel*>(label)->text() : QString();
+                auto* label = qobject_cast<QLabel*>(shortcut_form->labelForField(it.value()));
+                const QString command = label ? label->text() : QString();
                 const QString sequence = it.value()->keySequence().toString(
                     QKeySequence::NativeText);
                 const bool visible = query.isEmpty() ||
