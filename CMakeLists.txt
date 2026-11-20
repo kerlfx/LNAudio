@@ -18,6 +18,12 @@ add_subdirectory(core)
 if(WIN32)
     add_subdirectory(windows)
 
+    option(LNPLAYER_BUILD_TESTS "Build LNPlayer native tests" OFF)
+    if(LNPLAYER_BUILD_TESTS)
+        enable_testing()
+        add_subdirectory(tests)
+    endif()
+
     set(CMAKE_INSTALL_SYSTEM_RUNTIME_DESTINATION .)
     include(InstallRequiredSystemLibraries)
 
