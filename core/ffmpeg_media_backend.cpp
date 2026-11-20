@@ -15,6 +15,7 @@ extern "C"
 }
 
 #include <atomic>
+#include <cerrno>
 #include <condition_variable>
 #include <limits>
 #include <mutex>
