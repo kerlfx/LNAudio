@@ -31,6 +31,15 @@ struct AudioFrame
     int64_t pts_ms = 0;
 };
 
+struct VideoFrame
+{
+    std::vector<uint8_t> bgra;
+    int width = 0;
+    int height = 0;
+    int stride = 0;
+    int64_t pts_ms = 0;
+};
+
 class MediaBackend
 {
 public:
@@ -43,6 +52,7 @@ public:
     virtual MediaBackendResult stop() = 0;
     virtual MediaBackendResult close() = 0;
     virtual MediaBackendResult read_audio_frame(AudioFrame& frame, bool& end_of_stream) = 0;
+    virtual MediaBackendResult read_video_frame(VideoFrame& frame, bool& end_of_stream) = 0;
     virtual int64_t position_ms() const = 0;
     virtual bool playback_ended() const = 0;
     virtual void set_volume(float volume) = 0;
