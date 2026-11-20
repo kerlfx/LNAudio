@@ -345,6 +345,49 @@ MainWindow::MainWindow(
                 action->setChecked(std::abs(action->data().toFloat() - playback_rate_) < 0.001f);
         });
 
+        auto* audio_menu = menuBar()->addMenu(QStringLiteral("音轨"));
+        connect(audio_menu, &QMenu::aboutToShow, this, [this, audio_menu]
+        {
+            audio_menu->clear();
+            std::vector<std::pair<int, QString>> tracks;
+            if (player_)
+            {
+                lnplayer_enumerate_audio_tracks(
+                    player_,
+                    [](const lnplayer_audio_track_info_t* track, void* user_data)
+                    {
+                        auto* entries = static_cast<std::vector<std::pair<int, QString>>*>(user_data);
+                        QString label = track->title_utf8 && track->title_utf8[0]
+                            ? QString::fromUtf8(track->title_utf8)
+                            : QString::fromUtf8(track->language_utf8 ? track->language_utf8 : "");
+                        if (label.isEmpty())
+                            label = QString::fromUtf8(track->codec_utf8 ? track->codec_utf8 : "Audio");
+                        if (track->channels > 0)
+                            label += QStringLiteral(" (%1 ch)").arg(track->channels);
+                        if (track->is_default)
+                            label.prepend(QStringLiteral("[默认] "));
+                        if (track->is_selected)
+                            label.prepend(QStringLiteral("✓ "));
+                        entries->emplace_back(track->stream_index, label);
+                    },
+                    &tracks);
+            }
+            for (const auto& track : tracks)
+            {
+                QAction* action = audio_menu->addAction(track.second);
+                action->setData(track.first);
+                connect(action, &QAction::triggered, this, [this, index = track.first]
+                {
+                    selectAudioTrack(index);
+                });
+            }
+            if (tracks.empty())
+            {
+                QAction* unavailable = audio_menu->addAction(QStringLiteral("无可用音轨"));
+                unavailable->setEnabled(false);
+            }
+        });
+
         auto* subtitle_menu = menuBar()->addMenu(QStringLiteral("字幕"));
         auto* load_subtitle_action = subtitle_menu->addAction(QStringLiteral("加载外挂字幕..."));
         connect(load_subtitle_action, &QAction::triggered, this, [this] { loadExternalSubtitle(); });
@@ -817,49 +860,7 @@ MainWindow::MainWindow(
             else if (selected == screenshot)
                 takeScreenshot();
             else if (selected && selected->parent() == audio_track_menu)
-            {
-                const int stream_index = selected->data().toInt();
-                QMetaObject::invokeMethod(command_worker_, [this, stream_index]
-                {
-                    if (!player_)
-                        return;
-
-                    lnplayer_snapshot_t snapshot{};
-                    snapshot.struct_size = sizeof(snapshot);
-                    if (lnplayer_get_snapshot(player_, &snapshot) != LNPLAYER_RESULT_OK)
-                        return;
-
-                    const bool resume_playback = snapshot.state == LNPLAYER_STATE_PLAYING;
-                    if (resume_playback && lnplayer_pause(player_) != LNPLAYER_RESULT_OK)
-                        return;
-
-                    const lnplayer_result_t result =
-                        lnplayer_select_audio_track(player_, stream_index);
-                    const lnplayer_result_t resume_result = resume_playback
-                        ? lnplayer_play(player_)
-                        : LNPLAYER_RESULT_OK;
-
-                    QMetaObject::invokeMethod(this, [this, result, resume_playback, resume_result]
-                    {
-                        is_playing_ = resume_playback && resume_result == LNPLAYER_RESULT_OK;
-                        if (result == LNPLAYER_RESULT_OK)
-                        {
-                            video_frame_history_.clear();
-                            video_frame_history_index_ = -1;
-                            pending_video_frame_valid_ = false;
-                            requestVideoFrame();
-                            statusBar()->showMessage(
-                                resume_result == LNPLAYER_RESULT_OK
-                                    ? QStringLiteral("音轨已切换")
-                                    : QStringLiteral("音轨已切换，但恢复播放失败"));
-                        }
-                        else
-                        {
-                            statusBar()->showMessage(QStringLiteral("音轨切换失败"));
-                        }
-                    }, Qt::QueuedConnection);
-                }, Qt::QueuedConnection);
-            }
+                selectAudioTrack(selected->data().toInt());
             else if (selected == disable_embedded_subtitle ||
                 (selected && selected->parent() == embedded_subtitle_menu))
             {
@@ -2533,6 +2534,48 @@ void MainWindow::loadExternalSubtitlePath(const QString& path)
 
             pending_video_frame_valid_ = false;
             requestVideoFrame();
+        }, Qt::QueuedConnection);
+    }, Qt::QueuedConnection);
+}
+
+void MainWindow::selectAudioTrack(int stream_index)
+{
+    QMetaObject::invokeMethod(command_worker_, [this, stream_index]
+    {
+        if (!player_)
+            return;
+
+        lnplayer_snapshot_t snapshot{};
+        snapshot.struct_size = sizeof(snapshot);
+        if (lnplayer_get_snapshot(player_, &snapshot) != LNPLAYER_RESULT_OK)
+            return;
+
+        const bool resume_playback = snapshot.state == LNPLAYER_STATE_PLAYING;
+        if (resume_playback && lnplayer_pause(player_) != LNPLAYER_RESULT_OK)
+            return;
+
+        const lnplayer_result_t result = lnplayer_select_audio_track(player_, stream_index);
+        const lnplayer_result_t resume_result = resume_playback
+            ? lnplayer_play(player_)
+            : LNPLAYER_RESULT_OK;
+
+        QMetaObject::invokeMethod(this, [this, result, resume_playback, resume_result]
+        {
+            is_playing_ = resume_playback && resume_result == LNPLAYER_RESULT_OK;
+            if (result == LNPLAYER_RESULT_OK)
+            {
+                video_frame_history_.clear();
+                video_frame_history_index_ = -1;
+                pending_video_frame_valid_ = false;
+                requestVideoFrame();
+                showOsd(resume_result == LNPLAYER_RESULT_OK
+                    ? QStringLiteral("音轨已切换")
+                    : QStringLiteral("音轨已切换，但恢复播放失败"));
+            }
+            else
+            {
+                statusBar()->showMessage(QStringLiteral("音轨切换失败"));
+            }
         }, Qt::QueuedConnection);
     }, Qt::QueuedConnection);
 }
