@@ -229,7 +229,8 @@ public:
     lnplayer_result_t read_video_frame(
         lnplayer_windows_video_frame_callback_t callback,
         void* user_data,
-        int* end_of_stream)
+        int* end_of_stream,
+        std::string& error)
     {
         if (runtime_.running_in_io_thread())
             return LNPLAYER_RESULT_WOULD_DEADLOCK;
@@ -272,7 +273,10 @@ public:
 
         ReadResult read = future.get();
         if (!read.result.success)
-            return set_error(LNPLAYER_RESULT_INTERNAL_ERROR, read.result.message.c_str());
+        {
+            error = read.result.message;
+            return LNPLAYER_RESULT_INTERNAL_ERROR;
+        }
 
         *end_of_stream = read.end_of_stream ? 1 : 0;
         if (!read.end_of_stream && callback && !read.frame.bgra.empty())
@@ -288,7 +292,7 @@ public:
             callback(&frame, user_data);
         }
 
-        return finish_result(LNPLAYER_RESULT_OK);
+        return LNPLAYER_RESULT_OK;
     }
 #endif
 
@@ -741,11 +745,17 @@ lnplayer_result_t lnplayer_windows_read_video_frame(
 
     try
     {
+        std::string error;
         const lnplayer_result_t result =
-            player->controller->read_video_frame(callback, user_data, end_of_stream);
+            player->controller->read_video_frame(callback, user_data, end_of_stream, error);
         if (result == LNPLAYER_RESULT_OK)
+        {
             g_last_error.clear();
-        return result;
+            return result;
+        }
+        return set_error(
+            result,
+            error.empty() ? "Unable to read a video frame." : error.c_str());
     }
     catch (...)
     {
