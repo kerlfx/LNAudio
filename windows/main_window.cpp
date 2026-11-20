@@ -1276,8 +1276,9 @@ void MainWindow::loadVideoPlaylist()
 
     playlist_index_ = playlist_.isEmpty()
         ? -1
-        : std::clamp(settings.value(QStringLiteral("VideoPlaylist/CurrentIndex"), 0).toInt(),
-            0, playlist_.size() - 1);
+        : std::clamp(
+            settings.value(QStringLiteral("VideoPlaylist/CurrentIndex"), 0).toInt(),
+            0, static_cast<int>(playlist_.size()) - 1);
     shuffle_enabled_ = settings.value(QStringLiteral("VideoPlaylist/Shuffle"), false).toBool();
     repeat_mode_ = std::clamp(
         settings.value(QStringLiteral("VideoPlaylist/RepeatMode"), 0).toInt(), 0, 2);
@@ -1345,7 +1346,7 @@ void MainWindow::removeSelectedPlaylistItem()
         }
         else
         {
-            openPlaylistIndex(std::min(row, playlist_.size() - 1));
+            openPlaylistIndex(std::min(row, static_cast<int>(playlist_.size()) - 1));
         }
     }
     saveVideoPlaylist();
