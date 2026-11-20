@@ -49,6 +49,19 @@ private:
         QString text;
     };
 
+    struct VideoFrameHistoryEntry
+    {
+        QImage image;
+        std::shared_ptr<void> hardware_owner;
+        void* hardware_texture = nullptr;
+        uint32_t hardware_array_slice = 0;
+        uint32_t hardware_format = 0;
+        int hardware_width = 0;
+        int hardware_height = 0;
+        int64_t pts_ms = 0;
+        uint64_t generation = 0;
+    };
+
     void openFile();
     void loadExternalSubtitle();
     QString subtitleAt(int64_t position_ms) const;
@@ -121,7 +134,7 @@ private:
     int pending_hardware_width_ = 0;
     int pending_hardware_height_ = 0;
     QImage last_video_frame_;
-    QList<QImage> video_frame_history_;
+    QList<VideoFrameHistoryEntry> video_frame_history_;
     int video_frame_history_index_ = -1;
     int64_t pending_video_pts_ms_ = 0;
     uint64_t pending_video_generation_ = 0;
