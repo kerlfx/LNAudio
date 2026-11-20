@@ -368,10 +368,12 @@ public:
             bool end_of_stream = false;
         };
 
-        auto completion = std::make_shared<std::promise<ReadResult>>();
-        auto future = completion->get_future();
+        std::shared_ptr<std::promise<ReadResult>> completion;
+        std::future<ReadResult> future;
         try
         {
+            completion = std::make_shared<std::promise<ReadResult>>();
+            future = completion->get_future();
             asio::post(runtime_.io_context(), [this, completion]
             {
                 try
@@ -417,7 +419,15 @@ public:
             return LNPLAYER_RESULT_OUT_OF_MEMORY;
         }
 
-        ReadResult read = future.get();
+        ReadResult read;
+        try
+        {
+            read = future.get();
+        }
+        catch (...)
+        {
+            return LNPLAYER_RESULT_INTERNAL_ERROR;
+        }
         if (!read.result.success)
         {
             error = read.result.message;
@@ -1267,7 +1277,18 @@ lnplayer_result_t lnplayer_set_external_subtitle(
         return set_error(LNPLAYER_RESULT_INVALID_HANDLE, "Invalid Player handle.");
     if (!path_utf8)
         return set_error(LNPLAYER_RESULT_INVALID_ARGUMENT, "External subtitle path is null.");
-    return finish_result(player->controller->set_external_subtitle(path_utf8));
+    try
+    {
+        return finish_result(player->controller->set_external_subtitle(path_utf8));
+    }
+    catch (const std::bad_alloc&)
+    {
+        return set_error(LNPLAYER_RESULT_OUT_OF_MEMORY, "Unable to allocate external subtitle path.");
+    }
+    catch (...)
+    {
+        return set_error(LNPLAYER_RESULT_INTERNAL_ERROR, "Unable to set external subtitle.");
+    }
 }
 
 lnplayer_result_t lnplayer_set_subtitles_enabled(lnplayer_t* player, int enabled)
