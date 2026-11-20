@@ -764,3 +764,18 @@
 
 - [x] 最终静态审查补回媒体打开完成时的音轨偏好恢复调用，保证已保存的 per-video AudioTrack 设置实际生效。
 提交：`36def3d44ba35db842ee0fd98294863e9a6750bb`。
+
+
+### 2026-11-21 — Ctrl+滚轮画面缩放
+
+- [x] 视频画布 Ctrl+滚轮按 10% 步进缩放，范围 100%–300%。
+- [x] 普通滚轮仍保持音量调节，不改变既有行为。
+- [x] 缩放应用于 D3D11 软件帧呈现、硬件视频处理输出及无 D3D11 renderer 的 QPainter 回退路径。
+- [x] 右键菜单增加“重置画面缩放”，并通过 OSD 显示当前缩放比例。
+- [ ] 尚未在 Windows/MSVC/Qt 环境构建；需验证硬件解码与软件回退、不同窗口尺寸、旋转比例及高 DPI 下的裁剪效果。
+
+实现提交：
+- `62e78e6d3d9c16609be49082bd1eca2a78339e9c`、`0b8a3c510c4cbed6c34f943f69aba37581ce89fa` — D3D11 renderer 缩放参数和输出视口。
+- `d711b020a4ec3bc0921d32e0aabc16e86afc0d13`、`f729bdddef8778ee916e54fc88131ca1e90d769b` — VideoSurface 缩放状态和 Ctrl+滚轮识别。
+- `9289b89c9201762d3e7d57b76e671de693e873d7` — MainWindow 音量/缩放分流、OSD 和重置入口。
+
