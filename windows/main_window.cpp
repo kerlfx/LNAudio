@@ -1804,7 +1804,7 @@ void MainWindow::setPlaybackRate(float rate)
 
 void MainWindow::stepVideoFrame(bool backwards)
 {
-    if (mode_ != PlayerMode::Video || !has_video_ || video_frame_pending_)
+    if (mode_ != PlayerMode::Video || !has_video_)
         return;
 
     if (is_playing_)
@@ -1817,6 +1817,9 @@ void MainWindow::stepVideoFrame(bool backwards)
         is_playing_ = false;
         video_timer_->stop();
     }
+
+    if (video_frame_pending_)
+        return;
 
     if (pending_video_frame_valid_)
     {
