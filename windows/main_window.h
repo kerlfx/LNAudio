@@ -57,6 +57,7 @@ private:
     QObject* command_worker_;
     QThread* command_thread_;
     QTimer* snapshot_timer_;
+    lnplayer_t* player_ = nullptr;
     int64_t duration_ms_ = -1;
     bool slider_dragging_ = false;
 };
