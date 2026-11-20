@@ -1114,16 +1114,84 @@ void MainWindow::presentPendingVideoFrame()
                 snapshot.generation != generation)
                 return;
 
+            const auto fallback_owner = owner;
             const bool presented = video_surface_ &&
                 video_surface_->present_hardware_frame(
                     texture, array_slice, format, width, height,
                     std::move(owner), overlay);
             if (!presented)
             {
-                QMetaObject::invokeMethod(this, [this]
+                struct FallbackFrame
                 {
-                    status_label_->setText(QStringLiteral("GPU 视频帧渲染失败"));
-                }, Qt::QueuedConnection);
+                    QImage image;
+                    float display_aspect_ratio = 0.0f;
+                } fallback;
+
+                const lnplayer_result_t fallback_result =
+                    lnplayer_windows_convert_video_frame(
+                        fallback_owner.get(),
+                        generation,
+                        pending_video_pts_ms_,
+                        +[](const lnplayer_windows_video_frame_t* frame, void* user_data)
+                        {
+                            auto* output = static_cast<FallbackFrame*>(user_data);
+                            output->image = QImage(
+                                frame->bgra,
+                                frame->width,
+                                frame->height,
+                                frame->stride,
+                                QImage::Format_ARGB32).copy();
+                            output->display_aspect_ratio = frame->display_aspect_ratio;
+                        },
+                        &fallback);
+
+                if (fallback_result == LNPLAYER_RESULT_OK && !fallback.image.isNull())
+                {
+                    const QString subtitle = subtitleAt(pending_video_pts_ms_);
+                    if (!subtitle.isEmpty())
+                    {
+                        QPainter painter(&fallback.image);
+                        painter.setRenderHint(QPainter::TextAntialiasing, true);
+                        QFont font(QStringLiteral("Segoe UI"));
+                        font.setPixelSize(std::max(20, fallback.image.width() / 40));
+                        font.setWeight(QFont::DemiBold);
+                        painter.setFont(font);
+                        const QRect text_rect(
+                            fallback.image.width() / 20,
+                            fallback.image.height() * 4 / 5,
+                            fallback.image.width() * 9 / 10,
+                            fallback.image.height() / 6);
+                        const int offsets[][2] = {
+                            {-2, -2}, {0, -2}, {2, -2}, {-2, 0},
+                            {2, 0}, {-2, 2}, {0, 2}, {2, 2}
+                        };
+                        painter.setPen(Qt::black);
+                        for (const auto& offset : offsets)
+                            painter.drawText(
+                                text_rect.translated(offset[0], offset[1]),
+                                Qt::AlignHCenter | Qt::AlignVCenter | Qt::TextWordWrap,
+                                subtitle);
+                        painter.setPen(Qt::white);
+                        painter.drawText(
+                            text_rect,
+                            Qt::AlignHCenter | Qt::AlignVCenter | Qt::TextWordWrap,
+                            subtitle);
+                    }
+
+                    if (video_surface_)
+                        video_surface_->present_frame_threadsafe(fallback.image);
+                    QMetaObject::invokeMethod(this, [this, image = fallback.image]
+                    {
+                        last_video_frame_ = image;
+                    }, Qt::QueuedConnection);
+                }
+                else
+                {
+                    QMetaObject::invokeMethod(this, [this]
+                    {
+                        status_label_->setText(QStringLiteral("硬件视频帧渲染失败，软件回退也失败"));
+                    }, Qt::QueuedConnection);
+                }
             }
         }, Qt::QueuedConnection);
         return;
