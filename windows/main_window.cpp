@@ -2642,7 +2642,7 @@ void MainWindow::handleCoreEvent(
         break;
 
     case LNPLAYER_EVENT_PLAYBACK_ENDED:
-        if (playlist_open_pending_)
+        if (playlist_open_pending_ || video_seek_pending_)
             break;
         if (repeat_mode_ == 2 && playlist_index_ >= 0)
         {
