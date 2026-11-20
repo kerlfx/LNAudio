@@ -28,7 +28,9 @@ public:
     void set_stretch(bool enabled);
     void set_aspect_ratio(float ratio);
     bool present(const uint8_t* bgra, int width, int height, int stride);
-    bool present_hardware(void* texture, uint32_t array_slice, uint32_t format, int width, int height);
+    bool present_hardware(
+        void* texture, uint32_t array_slice, uint32_t format,
+        int width, int height, std::shared_ptr<void> frame_owner);
     void clear();
     void shutdown();
 
