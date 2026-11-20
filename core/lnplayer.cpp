@@ -344,7 +344,9 @@ public:
                 read.frame.subtitle_height,
                 read.frame.subtitle_stride,
                 read.frame.hdr_transfer,
-                read.frame.color_primaries
+                read.frame.color_primaries,
+                read.frame.ycbcr_matrix,
+                read.frame.ycbcr_full_range
             };
             callback(&frame, user_data);
         }

@@ -30,6 +30,8 @@ typedef struct lnplayer_windows_video_frame
     int32_t subtitle_stride;
     int32_t hdr_transfer;
     int32_t color_primaries;
+    int32_t ycbcr_matrix;
+    int32_t ycbcr_full_range;
 } lnplayer_windows_video_frame_t;
 
 typedef void (*lnplayer_windows_video_frame_callback_t)(

@@ -1564,9 +1564,21 @@ private:
             ? 1
             : transfer == AVCOL_TRC_ARIB_STD_B67 ? 2 : 0;
         output.color_primaries = primaries == AVCOL_PRI_BT2020 ? 1 : 0;
+        const AVColorSpace frame_color_space =
+            video_frame_->colorspace != AVCOL_SPC_UNSPECIFIED
+                ? video_frame_->colorspace
+                : video_stream->codecpar->color_space;
+        const AVColorRange frame_color_range =
+            video_frame_->color_range != AVCOL_RANGE_UNSPECIFIED
+                ? video_frame_->color_range
+                : video_stream->codecpar->color_range;
+        output.ycbcr_matrix = frame_color_space == AVCOL_SPC_BT709 ? 1 : 0;
+        output.ycbcr_full_range = frame_color_range == AVCOL_RANGE_JPEG ? 1 : 0;
 #ifdef _WIN32
         if (video_frame_->format == AV_PIX_FMT_D3D11 &&
-            video_device_shared_ && frame_rotation == 0 && output.hdr_transfer == 0)
+            video_device_shared_ && frame_rotation == 0 && output.hdr_transfer == 0 &&
+            frame_color_space != AVCOL_SPC_BT2020_NCL &&
+            frame_color_space != AVCOL_SPC_BT2020_CL)
         {
             AVFrame* retained_frame = av_frame_clone(video_frame_);
             if (!retained_frame)
@@ -1675,28 +1687,20 @@ private:
             return failure("Unable to initialize video pixel format conversion.");
         }
 
-        AVColorSpace color_space =
-            video_frame_->colorspace != AVCOL_SPC_UNSPECIFIED
-                ? video_frame_->colorspace
-                : stream->codecpar->color_space;
         int sws_color_space = SWS_CS_DEFAULT;
-        if (color_space == AVCOL_SPC_BT709)
+        if (frame_color_space == AVCOL_SPC_BT709)
             sws_color_space = SWS_CS_ITU709;
-        else if (color_space == AVCOL_SPC_BT2020_NCL ||
-                 color_space == AVCOL_SPC_BT2020_CL)
+        else if (frame_color_space == AVCOL_SPC_BT2020_NCL ||
+                 frame_color_space == AVCOL_SPC_BT2020_CL)
             sws_color_space = SWS_CS_BT2020;
-        else if (color_space == AVCOL_SPC_SMPTE240M)
+        else if (frame_color_space == AVCOL_SPC_SMPTE240M)
             sws_color_space = SWS_CS_SMPTE240M;
-        else if (color_space == AVCOL_SPC_FCC)
+        else if (frame_color_space == AVCOL_SPC_FCC)
             sws_color_space = SWS_CS_FCC;
-        else if (color_space == AVCOL_SPC_BT470BG ||
-                 color_space == AVCOL_SPC_SMPTE170M)
+        else if (frame_color_space == AVCOL_SPC_BT470BG ||
+                 frame_color_space == AVCOL_SPC_SMPTE170M)
             sws_color_space = SWS_CS_ITU601;
-        const AVColorRange color_range =
-            video_frame_->color_range != AVCOL_RANGE_UNSPECIFIED
-                ? video_frame_->color_range
-                : stream->codecpar->color_range;
-        const int source_full_range = color_range == AVCOL_RANGE_JPEG ? 1 : 0;
+        const int source_full_range = frame_color_range == AVCOL_RANGE_JPEG ? 1 : 0;
         sws_setColorspaceDetails(
             video_scaler_,
             sws_getCoefficients(sws_color_space),

@@ -65,6 +65,8 @@ struct VideoFrame
     int rotation_degrees = 0;
     int hdr_transfer = 0;
     int color_primaries = 0;
+    int ycbcr_matrix = 0;
+    int ycbcr_full_range = 0;
     std::string subtitle_text;
     std::vector<uint8_t> subtitle_bgra;
     int subtitle_width = 0;
