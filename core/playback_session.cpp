@@ -49,6 +49,7 @@ SessionResult PlaybackSession::open(const std::string& source)
     }
 
     backend_->set_volume(volume_);
+    backend_->set_playback_end_callback(playback_end_callback_);
 
     MediaInfo info;
     const MediaBackendResult result = backend_->open(source, info);
@@ -177,6 +178,14 @@ void PlaybackSession::set_volume(float volume)
     volume_ = volume;
     if (backend_)
         backend_->set_volume(volume_);
+}
+
+void PlaybackSession::set_playback_end_callback(std::function<void()> callback)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    playback_end_callback_ = std::move(callback);
+    if (backend_)
+        backend_->set_playback_end_callback(playback_end_callback_);
 }
 
 SessionSnapshot PlaybackSession::snapshot() const
