@@ -824,3 +824,12 @@
 - `41a0232c77abb36a1ed2521f37e9e10a84c0ea04` — 章节 API 契约测试。
 
 - [x] 增加按媒体路径 SHA-1 键隔离的持久化书签：可命名添加当前播放位置、从书签菜单跳转、删除单项或清空当前视频书签。提交：`fccf27de6d1e8316b59c6ba6b88219f5b3301c44`。Windows UI 和跨重启持久化仍待运行验收。
+
+### 2026-11-21 — Backend 帧读取与命令互斥
+
+- [x] 修复 PlaybackSession::read_video_frame() 在释放 Session mutex 后继续访问 FFmpeg Backend 的竞态。此前 shared_ptr 仅保护 Backend 对象生命周期，不能阻止并发 open/seek/close、流切换或参数更新修改同一 Backend。
+- [x] 现在帧 Pull 在持有 Session mutex 的完整区间内执行，所有同样通过该 mutex 的 Backend 操作均等待帧读取结束；帧 generation 与当前 Session 状态保持一致。
+- [ ] 仍需在 Windows 验证长 GOP、慢速媒体、连续 Seek 与关闭期间的响应时间；当前策略优先保证 Backend 线程安全，帧 Pull 期间其他 Session 操作会等待。
+- [ ] 本次只完成源码修改和静态审查，未运行构建、CTest 或 CI。
+
+提交：6d30ff6b38006f46ae28b8f7c400f1f08a8d2fd5。
