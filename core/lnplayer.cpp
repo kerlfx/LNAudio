@@ -372,32 +372,42 @@ public:
         {
             asio::post(runtime_.io_context(), [this, completion]
             {
-                asio::post(worker_strand_, [this, completion]
+                try
                 {
-                    ReadResult read;
-                    try
+                    asio::post(worker_strand_, [this, completion]
                     {
-                        read.result = session_.read_video_frame(read.frame, read.end_of_stream);
-                    }
-                    catch (...)
-                    {
-                        read.result = {false, "Unexpected error while decoding a video frame."};
-                    }
-                    try
-                    {
-                        asio::post(runtime_.io_context(), [completion, read = std::move(read)]() mutable
+                        ReadResult read;
+                        try
                         {
-                            completion->set_value(std::move(read));
-                        });
-                    }
-                    catch (...)
-                    {
-                        completion->set_value(ReadResult{
-                            {false, "Unable to queue video frame completion."},
-                            {},
-                            false});
-                    }
-                });
+                            read.result = session_.read_video_frame(read.frame, read.end_of_stream);
+                        }
+                        catch (...)
+                        {
+                            read.result = {false, "Unexpected error while decoding a video frame."};
+                        }
+                        try
+                        {
+                            asio::post(runtime_.io_context(), [completion, read = std::move(read)]() mutable
+                            {
+                                completion->set_value(std::move(read));
+                            });
+                        }
+                        catch (...)
+                        {
+                            completion->set_value(ReadResult{
+                                {false, "Unable to queue video frame completion."},
+                                {},
+                                false});
+                        }
+                    });
+                }
+                catch (...)
+                {
+                    completion->set_value(ReadResult{
+                        {false, "Unable to queue video frame decoding."},
+                        {},
+                        false});
+                }
             });
         }
         catch (...)
