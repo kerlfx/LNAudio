@@ -906,3 +906,12 @@ Windows Qt 与 Android JNI 共用同一套 C ABI 语义：
    - 复用已稳定的 Core 播放、音乐库和媒体处理逻辑。
 
 每完成一个专题，应同步更新需求与架构文档，并明确区分已实现、已确认但未实现、待验证和不在当前范围的内容。不得为了赶进度将未实现能力标记为完成。
+
+### Windows D3D11 hardware-frame presentation
+
+- D3D11VA decoded frames are cloned with `av_frame_clone()` and exposed as a D3D11 texture plus array-slice index and DXGI format.
+- The Windows C ABI extension allows callers to retain/release the AVFrame-backed texture lifetime independently of the synchronous read callback.
+- Qt retains each hardware frame until the renderer's synchronous GPU submission/presentation completes.
+- The renderer uses `ID3D11VideoDevice` / `ID3D11VideoContext` and a D3D11 Video Processor to convert NV12/P010 hardware surfaces directly into the swap-chain back buffer. No CPU BGRA transfer/upload is used on this path.
+- Software-decoded frames continue through the existing BGRA upload path.
+- The hardware path currently supports NV12 and P010 input surfaces. Unsupported video-processor formats or device capabilities report a render failure; per-frame hardware-to-software conversion fallback, subtitle composition on GPU frames, screenshot readback, and device-loss re-injection are not yet implemented.
