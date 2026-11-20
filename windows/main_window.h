@@ -9,6 +9,8 @@
 #include "lnplayer.h"
 
 class QLabel;
+class QLineEdit;
+class QListWidget;
 class QObject;
 class QPushButton;
 class QSlider;
@@ -35,6 +37,7 @@ protected:
 private:
     void openFile();
     void openFiles(const QList<QUrl>& urls);
+    void refreshLibrary();
     void handleCoreEvent(
         lnplayer_event_type_t type,
         lnplayer_result_t result,
@@ -49,6 +52,8 @@ private:
     QLabel* status_label_;
     QLabel* position_label_;
     QLabel* media_title_label_;
+    QLineEdit* library_search_;
+    QListWidget* library_list_;
     QSlider* seek_slider_;
     QSlider* volume_slider_;
     QPushButton* play_button_;
