@@ -1818,15 +1818,17 @@ MainWindow::MainWindow(
         };
         config.user_data = this;
 
-        const lnplayer_result_t result = lnplayer_create(&config, &player_);
+        lnplayer_t* created_player = nullptr;
+        const lnplayer_result_t result = lnplayer_create(&config, &created_player);
         if (result == LNPLAYER_RESULT_OK)
         {
-            lnplayer_set_volume(player_, initial_volume);
+            player_.store(created_player, std::memory_order_release);
+            lnplayer_set_volume(created_player, initial_volume);
             if (mode_ == PlayerMode::Video)
             {
-                lnplayer_set_playback_rate(player_, initial_playback_rate);
-                lnplayer_set_subtitle_offset(player_, initial_subtitle_offset_ms);
-                lnplayer_set_subtitles_enabled(player_, initial_subtitles_enabled ? 1 : 0);
+                lnplayer_set_playback_rate(created_player, initial_playback_rate);
+                lnplayer_set_subtitle_offset(created_player, initial_subtitle_offset_ms);
+                lnplayer_set_subtitles_enabled(created_player, initial_subtitles_enabled ? 1 : 0);
             }
         }
 
@@ -1835,7 +1837,7 @@ MainWindow::MainWindow(
             if (result == LNPLAYER_RESULT_OK)
             {
                 const lnplayer_result_t device_result =
-                    lnplayer_windows_set_d3d11_device(player_, initial_video_device);
+                    lnplayer_windows_set_d3d11_device(created_player, initial_video_device);
                 if (device_result != LNPLAYER_RESULT_OK)
                 {
                     static_cast<ID3D11Device*>(initial_video_device)->Release();
