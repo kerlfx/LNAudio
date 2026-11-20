@@ -157,6 +157,32 @@ MainWindow::MainWindow(
     if (mode_ == PlayerMode::Video)
     {
         video_surface_ = new VideoSurface(content);
+        {
+            QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+            video_brightness_ = std::clamp(
+                settings.value(QStringLiteral("Video/Filter/Brightness"), 0.0).toFloat(),
+                -1.0f, 1.0f);
+            video_contrast_ = std::clamp(
+                settings.value(QStringLiteral("Video/Filter/Contrast"), 1.0).toFloat(),
+                0.0f, 2.0f);
+            video_saturation_ = std::clamp(
+                settings.value(QStringLiteral("Video/Filter/Saturation"), 1.0).toFloat(),
+                0.0f, 2.0f);
+            video_hue_degrees_ = std::clamp(
+                settings.value(QStringLiteral("Video/Filter/HueDegrees"), 0.0).toFloat(),
+                -180.0f, 180.0f);
+            video_sharpness_ = std::clamp(
+                settings.value(QStringLiteral("Video/Filter/Sharpness"), 0.0).toFloat(),
+                0.0f, 2.0f);
+            video_denoise_ = std::clamp(
+                settings.value(QStringLiteral("Video/Filter/Denoise"), 0.0).toFloat(),
+                0.0f, 1.0f);
+            video_grayscale_ = settings.value(
+                QStringLiteral("Video/Filter/Grayscale"), false).toBool();
+        }
+        video_surface_->set_video_filter(
+            video_brightness_, video_contrast_, video_saturation_,
+            video_hue_degrees_, video_sharpness_, video_denoise_, video_grayscale_);
         playlist_widget_ = new QListWidget(content);
         playlist_widget_->setMaximumWidth(280);
         playlist_widget_->setDragDropMode(QAbstractItemView::InternalMove);
@@ -612,6 +638,15 @@ MainWindow::MainWindow(
                 video_surface_->set_video_filter(
                     video_brightness_, video_contrast_, video_saturation_,
                     video_hue_degrees_, video_sharpness_, video_denoise_, video_grayscale_);
+                QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+                settings.setValue(QStringLiteral("Video/Filter/Brightness"), video_brightness_);
+                settings.setValue(QStringLiteral("Video/Filter/Contrast"), video_contrast_);
+                settings.setValue(QStringLiteral("Video/Filter/Saturation"), video_saturation_);
+                settings.setValue(QStringLiteral("Video/Filter/HueDegrees"), video_hue_degrees_);
+                settings.setValue(QStringLiteral("Video/Filter/Sharpness"), video_sharpness_);
+                settings.setValue(QStringLiteral("Video/Filter/Denoise"), video_denoise_);
+                settings.setValue(QStringLiteral("Video/Filter/Grayscale"), video_grayscale_);
+                settings.sync();
                 pending_video_frame_valid_ = false;
                 requestVideoFrame();
                 statusBar()->showMessage(QStringLiteral("视频滤镜已更新"));
