@@ -855,6 +855,34 @@ public:
         return success();
     }
 
+    std::vector<MediaChapterInfo> chapters() const override
+    {
+        std::vector<MediaChapterInfo> result;
+        if (!format_context_)
+            return result;
+
+        result.reserve(format_context_->nb_chapters);
+        for (unsigned int index = 0; index < format_context_->nb_chapters; ++index)
+        {
+            const AVChapter* chapter = format_context_->chapters[index];
+            MediaChapterInfo item;
+            item.index = static_cast<int>(index);
+            item.start_ms = av_rescale_q(
+                chapter->start, chapter->time_base, AVRational{1, 1000}) - start_time_ms_;
+            item.end_ms = av_rescale_q(
+                chapter->end, chapter->time_base, AVRational{1, 1000}) - start_time_ms_;
+            item.start_ms = std::max<int64_t>(0, item.start_ms);
+            if (item.end_ms < item.start_ms)
+                item.end_ms = -1;
+            AVDictionaryEntry* title = av_dict_get(chapter->metadata, "title", nullptr, 0);
+            item.title = title && title->value && title->value[0]
+                ? title->value
+                : "Chapter " + std::to_string(index + 1);
+            result.push_back(std::move(item));
+        }
+        return result;
+    }
+
     std::vector<MediaSubtitleTrackInfo> subtitle_tracks() const override
     {
         std::vector<MediaSubtitleTrackInfo> tracks;
