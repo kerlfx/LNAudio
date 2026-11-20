@@ -2541,6 +2541,89 @@ std::unique_ptr<MediaBackend> create_ffmpeg_media_backend()
     return std::make_unique<FFmpegMediaBackend>();
 }
 
+bool probe_ffmpeg_media(const std::string& source, MediaInfo& info, std::string& error)
+{
+    AVFormatContext* context = nullptr;
+    int result = avformat_open_input(&context, source.c_str(), nullptr, nullptr);
+    if (result < 0)
+    {
+        error = "Unable to open media source: " + ffmpeg_error(result);
+        return false;
+    }
+
+    result = avformat_find_stream_info(context, nullptr);
+    if (result < 0)
+    {
+        error = "Unable to read media stream information: " + ffmpeg_error(result);
+        avformat_close_input(&context);
+        return false;
+    }
+
+    info = {};
+    info.duration_ms = context->duration == AV_NOPTS_VALUE
+        ? -1
+        : av_rescale_q(context->duration, AVRational{1, AV_TIME_BASE}, AVRational{1, 1000});
+    info.has_audio = av_find_best_stream(
+        context, AVMEDIA_TYPE_AUDIO, -1, -1, nullptr, 0) >= 0;
+    const int video_index = av_find_best_stream(
+        context, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
+    info.has_video = video_index >= 0;
+
+    if (context->iformat)
+    {
+        info.video.container_format = context->iformat->name
+            ? context->iformat->name : "";
+        info.video.container_long_name = context->iformat->long_name
+            ? context->iformat->long_name : "";
+    }
+
+    if (video_index >= 0)
+    {
+        AVStream* stream = context->streams[video_index];
+        const AVCodecParameters* parameters = stream->codecpar;
+        const AVCodec* decoder = avcodec_find_decoder(parameters->codec_id);
+        const AVRational frame_rate =
+            stream->avg_frame_rate.num > 0 && stream->avg_frame_rate.den > 0
+            ? stream->avg_frame_rate : stream->r_frame_rate;
+        const AVRational sample_aspect_ratio =
+            stream->sample_aspect_ratio.num > 0 && stream->sample_aspect_ratio.den > 0
+            ? stream->sample_aspect_ratio : parameters->sample_aspect_ratio;
+        const AVPixFmtDescriptor* pixel_descriptor =
+            av_pix_fmt_desc_get(static_cast<AVPixelFormat>(parameters->format));
+
+        info.video.codec_name = avcodec_get_name(parameters->codec_id);
+        info.video.codec_long_name = decoder && decoder->long_name
+            ? decoder->long_name : info.video.codec_name;
+        info.video.decoder_name = decoder && decoder->name ? decoder->name : "";
+        const char* profile = avcodec_profile_name(parameters->codec_id, parameters->profile);
+        info.video.profile = profile ? profile : "";
+        const char* pixel_format = av_get_pix_fmt_name(
+            static_cast<AVPixelFormat>(parameters->format));
+        info.video.pixel_format = pixel_format ? pixel_format : "";
+        info.video.width = parameters->width;
+        info.video.height = parameters->height;
+        info.video.bit_rate = parameters->bit_rate > 0
+            ? parameters->bit_rate : context->bit_rate;
+        info.video.frame_rate_num = frame_rate.num;
+        info.video.frame_rate_den = frame_rate.den > 0 ? frame_rate.den : 1;
+        info.video.sample_aspect_ratio_num = sample_aspect_ratio.num > 0
+            ? sample_aspect_ratio.num : 1;
+        info.video.sample_aspect_ratio_den = sample_aspect_ratio.den > 0
+            ? sample_aspect_ratio.den : 1;
+        info.video.rotation_degrees = get_stream_rotation_degrees(stream);
+        info.video.color_range = parameters->color_range;
+        info.video.color_primaries = parameters->color_primaries;
+        info.video.color_transfer = parameters->color_trc;
+        info.video.color_space = parameters->color_space;
+        info.video.bit_depth = pixel_descriptor && pixel_descriptor->nb_components > 0
+            ? pixel_descriptor->comp[0].depth : 0;
+    }
+
+    avformat_close_input(&context);
+    error.clear();
+    return true;
+}
+
 bool convert_d3d11_frame_to_bgra(
     const std::shared_ptr<void>& frame_owner,
     std::vector<uint8_t>& pixels,
