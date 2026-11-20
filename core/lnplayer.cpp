@@ -100,15 +100,14 @@ lnplayer_result_t lnplayer_create(
 
 lnplayer_result_t lnplayer_destroy(lnplayer_t* player)
 {
-    if (!is_current_player(player))
+    std::lock_guard<std::mutex> lock(g_player_mutex);
+
+    if (!player || player != g_player)
         return set_error(LNPLAYER_RESULT_INVALID_HANDLE, "Invalid Player handle.");
 
-    {
-        std::lock_guard<std::mutex> lock(g_player_mutex);
-        g_player = nullptr;
-    }
-
+    player->state.store(LNPLAYER_STATE_CLOSING, std::memory_order_relaxed);
     delete player;
+    g_player = nullptr;
     g_last_error.clear();
     return LNPLAYER_RESULT_OK;
 }
@@ -122,6 +121,7 @@ lnplayer_result_t lnplayer_open(
         return set_error(LNPLAYER_RESULT_INVALID_HANDLE, "Invalid Player handle.");
     if (!source_utf8 || !source_utf8[0] || !operation_id)
         return set_error(LNPLAYER_RESULT_INVALID_ARGUMENT, "Invalid open arguments.");
+    *operation_id = 0;
     return not_implemented();
 }
 
@@ -134,6 +134,7 @@ lnplayer_result_t lnplayer_seek(
         return set_error(LNPLAYER_RESULT_INVALID_HANDLE, "Invalid Player handle.");
     if (position_ms < 0 || !operation_id)
         return set_error(LNPLAYER_RESULT_INVALID_ARGUMENT, "Invalid seek arguments.");
+    *operation_id = 0;
     return not_implemented();
 }
 
