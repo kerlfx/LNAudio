@@ -1574,6 +1574,17 @@ MainWindow::MainWindow(
         child->setMouseTracking(true);
         child->installEventFilter(this);
     }
+    if (playlist_panel_)
+    {
+        playlist_panel_->setMouseTracking(true);
+        playlist_panel_->installEventFilter(this);
+        const auto playlist_children = playlist_panel_->findChildren<QWidget*>();
+        for (QWidget* child : playlist_children)
+        {
+            child->setMouseTracking(true);
+            child->installEventFilter(this);
+        }
+    }
 
     if (mode_ == PlayerMode::Video)
     {
@@ -2202,6 +2213,8 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event)
             is_menu_widget = qobject_cast<QMenu*>(parent) != nullptr;
         const bool is_control_widget = watched == control_panel_ ||
             (control_panel_ && watched_widget && control_panel_->isAncestorOf(watched_widget)) ||
+            watched == playlist_panel_ ||
+            (playlist_panel_ && watched_widget && playlist_panel_->isAncestorOf(watched_widget)) ||
             watched == menuBar() || (menuBar() && watched_widget && menuBar()->isAncestorOf(watched_widget)) ||
             is_menu_widget;
         if (watched == video_surface_ && event->type() == QEvent::Resize &&
