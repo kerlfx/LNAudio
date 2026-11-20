@@ -1645,8 +1645,8 @@ void MainWindow::showPlaybackInfo()
         : 0.0;
     const QString metadata = QStringLiteral(
         "容器：%1\n编码：%2（%3）\n解码器：%4\n帧率：%5\n码率：%6\n"
-        "像素格式：%7 / %8-bit\nSAR：%9:%10\n旋转：%11°\n"
-        "色彩：range=%12 primaries=%13 transfer=%14 matrix=%15")
+        "像素格式：%7 / %8-bit\n硬件解码：%9\nSAR：%10:%11\n旋转：%12°\n"
+        "色彩：range=%13 primaries=%14 transfer=%15 matrix=%16")
         .arg(QString::fromUtf8(video_info_.container_long_name))
         .arg(QString::fromUtf8(video_info_.codec_name))
         .arg(QString::fromUtf8(video_info_.profile))
@@ -1659,6 +1659,8 @@ void MainWindow::showPlaybackInfo()
             : QStringLiteral("未知"))
         .arg(QString::fromUtf8(video_info_.pixel_format))
         .arg(video_info_.bit_depth)
+        .arg(video_info_.hardware_decoding
+            ? QStringLiteral("D3D11VA") : QStringLiteral("软件/未启用"))
         .arg(video_info_.sample_aspect_ratio_num)
         .arg(video_info_.sample_aspect_ratio_den)
         .arg(video_info_.rotation_degrees)
