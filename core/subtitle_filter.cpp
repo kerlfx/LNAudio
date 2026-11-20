@@ -12,6 +12,7 @@ extern "C"
 }
 
 #include <algorithm>
+#include <cerrno>
 #include <cstring>
 #include <string>
 
@@ -43,6 +44,17 @@ bool SubtitleFilter::open(
         error = "Unable to allocate FFmpeg subtitle filter graph.";
         return false;
     }
+    graph_->nb_threads = 1;
+
+    const AVFilter* buffer_filter = avfilter_get_by_name("buffer");
+    const AVFilter* subtitles_filter = avfilter_get_by_name("subtitles");
+    const AVFilter* sink_filter = avfilter_get_by_name("buffersink");
+    if (!buffer_filter || !subtitles_filter || !sink_filter)
+    {
+        error = "FFmpeg was built without the required libass subtitle filters.";
+        close();
+        return false;
+    }
 
     const std::string source_args =
         "video_size=" + std::to_string(width) + "x" + std::to_string(height) +
@@ -51,7 +63,7 @@ bool SubtitleFilter::open(
 
     int result = avfilter_graph_create_filter(
         &source_,
-        avfilter_get_by_name("buffer"),
+        buffer_filter,
         "subtitle_input",
         source_args.c_str(),
         nullptr,
@@ -72,7 +84,7 @@ bool SubtitleFilter::open(
     AVFilterContext* subtitles = nullptr;
     result = avfilter_graph_create_filter(
         &subtitles,
-        avfilter_get_by_name("subtitles"),
+        subtitles_filter,
         "libass_subtitles",
         nullptr,
         &options,
@@ -87,7 +99,7 @@ bool SubtitleFilter::open(
 
     result = avfilter_graph_create_filter(
         &sink_,
-        avfilter_get_by_name("buffersink"),
+        sink_filter,
         "subtitle_output",
         nullptr,
         nullptr,
