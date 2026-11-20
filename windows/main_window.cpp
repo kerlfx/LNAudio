@@ -744,8 +744,15 @@ MainWindow::MainWindow(
                 else
                     showFullScreen();
             },
-            [this](int direction)
+            [this](int direction, bool control)
             {
+                if (control)
+                {
+                    video_surface_->adjust_zoom(direction);
+                    showOsd(QStringLiteral("画面缩放 %1%")
+                        .arg(static_cast<int>(video_surface_->zoom() * 100.0f)));
+                    return;
+                }
                 volume_slider_->setValue(std::clamp(
                     volume_slider_->value() + direction * 50, 0, 1000));
             },
@@ -783,6 +790,7 @@ MainWindow::MainWindow(
                 : QStringLiteral("播放"));
             QAction* stop = menu.addAction(QStringLiteral("停止"));
             menu.addSeparator();
+            QAction* reset_zoom = menu.addAction(QStringLiteral("重置画面缩放"));
             QAction* fullscreen = menu.addAction(isFullScreen()
                 ? QStringLiteral("退出全屏")
                 : QStringLiteral("全屏"));
@@ -934,6 +942,11 @@ MainWindow::MainWindow(
             QAction* selected = menu.exec(video_surface_->mapToGlobal(point));
             if (selected == play_pause)
                 togglePlayback();
+            else if (selected == reset_zoom)
+            {
+                video_surface_->adjust_zoom(-100);
+                showOsd(QStringLiteral("画面缩放 100%"));
+            }
             else if (selected == stop)
                 QMetaObject::invokeMethod(command_worker_, [this]
                 {
