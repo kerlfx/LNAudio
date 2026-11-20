@@ -98,7 +98,16 @@ Windows 端同时提供音频和视频播放界面，两套 UI 属于同一个 L
 - C ABI 已有初版，PlaybackSession/MediaBackend 抽象已建立；FFmpeg Backend、Controller 任务调度接入、Windows 音频输出、D3D11 视频输出和完整 UI 尚未完成。
 - 本节描述的是当前工程状态，不代表 Windows 功能范围仅限于首期骨架；Windows 完整版本范围由第 1.1、1.2 节和后续 Windows 功能章节共同定义。
 
-### 3.5 Windows 进程与窗口模型
+### 3.5 第三方依赖获取与集成
+
+- CMake 使用官方 `FetchContent` 管理需要下载的第三方依赖；依赖统一缓存到仓库根目录的 `3rd_cache/`，不放入普通构建目录。
+- `FetchContent` 既用于获取源码依赖，也用于下载已经编译完成的预编译 SDK。预编译 SDK 只下载和解压，不作为当前工程的子项目重新编译。
+- FFmpeg 使用固定版本的 Windows MSVC x64 LGPL Shared 预编译 SDK，下载并解压到 `3rd_cache/ffmpeg`，通过头文件和导入库链接，运行时需要部署对应 DLL。
+- SQLite 使用官方 SQLite Amalgamation（当前固定版本 3.50.4），从官方 ZIP 获取 `sqlite3.c` 和 `sqlite3.h`，将 `sqlite3.c` 直接编译进 Core 动态库；不单独部署或链接 `sqlite3.dll`。
+- 下载地址和版本必须固定，并使用官方发布的哈希值校验归档文件。已有依赖目录时应复用本地内容，避免每次 CMake 配置重复下载。
+- SQLite 头文件只供 Core 内部使用，不加入公共 C ABI，也不向平台 UI 暴露 SQLite 类型。
+
+### 3.6 Windows 进程与窗口模型
 
 - 音频 UI 和视频 UI 属于同一个 LNPlayer 应用程序，使用同一个应用程序可执行文件。
 - 应用程序允许同时运行多个进程，不采用强制单实例限制。
