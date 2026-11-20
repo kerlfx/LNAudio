@@ -4269,12 +4269,19 @@ void MainWindow::presentPendingVideoFrame()
             subtitle_aspect, font_family, subtitle_color, font_size, vertical_position,
             media_path]() mutable
         {
-            QImage overlay(overlay_size, QImage::Format_ARGB32);
-            overlay.fill(Qt::transparent);
-            if (render_subtitles && !embedded_subtitle_bitmap.isNull())
-                draw_subtitle_bitmap(overlay, embedded_subtitle_bitmap, true, subtitle_aspect);
-            draw_subtitle_text(
-                overlay, subtitle, font_family, subtitle_color, font_size, vertical_position);
+            QImage overlay;
+            if (render_subtitles &&
+                (!subtitle.isEmpty() || !embedded_subtitle_bitmap.isNull()))
+            {
+                overlay = QImage(overlay_size, QImage::Format_ARGB32);
+                overlay.fill(Qt::transparent);
+                if (!embedded_subtitle_bitmap.isNull())
+                    draw_subtitle_bitmap(
+                        overlay, embedded_subtitle_bitmap, true, subtitle_aspect);
+                draw_subtitle_text(
+                    overlay, subtitle, font_family, subtitle_color,
+                    font_size, vertical_position);
+            }
 
             postFrame([this, owner = std::move(owner), texture, array_slice, format,
                 width, height, generation, pts_ms, subtitle, embedded_subtitle_bitmap,
@@ -4429,7 +4436,7 @@ void MainWindow::presentPendingVideoFrame()
             last_video_frame_ = frame;
             if (use_renderer && video_surface_->has_renderer())
             {
-                postCommand([this, frame = std::move(frame), generation, media_path]
+                postFrame([this, frame = std::move(frame), generation, media_path]
                 {
                     lnplayer_t* player = player_.load(std::memory_order_acquire);
                     lnplayer_snapshot_t snapshot{};
