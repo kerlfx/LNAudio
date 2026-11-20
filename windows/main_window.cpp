@@ -10,6 +10,9 @@
 #include <QFileInfo>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QLineEdit>
+#include <QListWidget>
+#include <QListWidgetItem>
 #include <QMenuBar>
 #include <QMetaObject>
 #include <QMimeData>
@@ -43,6 +46,8 @@ MainWindow::MainWindow(PlayerMode mode, const QString& initial_media, QWidget* p
     , status_label_(new QLabel(this))
     , position_label_(new QLabel(QStringLiteral("00:00 / --:--"), this))
     , media_title_label_(new QLabel(QStringLiteral("未打开媒体"), this))
+    , library_search_(new QLineEdit(this))
+    , library_list_(new QListWidget(this))
     , seek_slider_(new QSlider(Qt::Horizontal, this))
     , volume_slider_(new QSlider(Qt::Horizontal, this))
     , play_button_(new QPushButton(QStringLiteral("播放"), this))
@@ -135,6 +140,26 @@ MainWindow::MainWindow(PlayerMode mode, const QString& initial_media, QWidget* p
         media_title_label_->setFont(title_font);
         audio_layout->addWidget(media_title_label_);
         audio_layout->addStretch(1);
+        library_search_->setPlaceholderText(QStringLiteral("搜索标题、艺术家或专辑"));
+        auto* search_button = new QPushButton(QStringLiteral("搜索"), audio_view);
+        auto* search_layout = new QHBoxLayout();
+        search_layout->addWidget(library_search_, 1);
+        search_layout->addWidget(search_button);
+        audio_layout->addLayout(search_layout);
+        audio_layout->addWidget(library_list_, 2);
+        connect(search_button, &QPushButton::clicked, this, [this]
+        {
+            refreshLibrary();
+        });
+        connect(library_search_, &QLineEdit::returnPressed, this, [this]
+        {
+            refreshLibrary();
+        });
+        connect(library_list_, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem* item)
+        {
+            const QString path = item->data(Qt::UserRole).toString();
+            openFiles({QUrl::fromLocalFile(path)});
+        });
         layout->addWidget(audio_view, 1);
     }
 
@@ -368,6 +393,55 @@ void MainWindow::openFiles(const QList<QUrl>& urls)
                 status_label_->setText(QStringLiteral("媒体打开请求失败"));
             }, Qt::QueuedConnection);
         }
+    }, Qt::QueuedConnection);
+}
+
+void MainWindow::refreshLibrary()
+{
+    lnplayer_t* player_handle = nullptr;
+    QMetaObject::invokeMethod(command_worker_, [this, &player_handle]
+    {
+        player_handle = player_;
+    }, Qt::BlockingQueuedConnection);
+    if (!player_handle)
+        return;
+
+    const QByteArray query_utf8 = library_search_->text().toUtf8();
+    library_list_->clear();
+
+    QMetaObject::invokeMethod(library_worker_, [this, player_handle, query_utf8]
+    {
+        struct SearchContext
+        {
+            MainWindow* window;
+        } context{this};
+
+        const lnplayer_result_t result = lnplayer_library_search_tracks(
+            player_handle,
+            query_utf8.constData(),
+            500,
+            +[](const lnplayer_library_track_t* track, void* user_data)
+            {
+                auto* context = static_cast<SearchContext*>(user_data);
+                const QString title = QString::fromUtf8(track->title_utf8);
+                const QString artist = QString::fromUtf8(track->artist_utf8);
+                const QString path = QString::fromUtf8(track->path_utf8);
+                const QString label = artist.isEmpty()
+                    ? title
+                    : QStringLiteral("%1 — %2").arg(title, artist);
+                QMetaObject::invokeMethod(context->window, [window = context->window, label, path]
+                {
+                    auto* item = new QListWidgetItem(label, window->library_list_);
+                    item->setData(Qt::UserRole, path);
+                }, Qt::QueuedConnection);
+            },
+            &context);
+
+        QMetaObject::invokeMethod(this, [this, result]
+        {
+            if (result != LNPLAYER_RESULT_OK)
+                status_label_->setText(QStringLiteral("音乐库查询失败"));
+        }, Qt::QueuedConnection);
     }, Qt::QueuedConnection);
 }
 
