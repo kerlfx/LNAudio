@@ -226,3 +226,6 @@
 提交：`1acb3a351159e975fe63305626ec3e38d048cd8a`。
 
 字幕实现说明：当前代码通过 FFmpeg 的 `subtitles` libavfilter 调用 libass，覆盖 ASS/SSA 的样式和动画能力；不应再开发自定义 ASS parser/renderer。是否能在发布包启用该功能取决于 FFmpeg SDK 是否编入 libass filter，必须在 Windows 发布构建中确认。
+
+- [x] 播放音量及静音前音量使用 QSettings 持久化；Player 创建后在 Core 命令线程恢复音量，UI 控件只在 GUI 线程读取。
+提交：`992550cbffa056523d9003b612a78e5d807c19be`（后续线程边界修正：`501cfef55d1d93ea22ec07d27efb44c15c075dfe`）。
