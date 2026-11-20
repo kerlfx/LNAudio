@@ -1872,6 +1872,7 @@ void MainWindow::togglePlayback()
         pending_video_frame_valid_ = false;
         video_end_of_stream_ = false;
         video_seek_pending_ = true;
+        seek_slider_->setEnabled(false);
         video_timer_->start();
     }
 
@@ -1884,6 +1885,7 @@ void MainWindow::togglePlayback()
                 QMetaObject::invokeMethod(this, [this]
                 {
                     video_seek_pending_ = false;
+                    seek_slider_->setEnabled(duration_ms_ > 0);
                 }, Qt::QueuedConnection);
             return;
         }
@@ -1900,6 +1902,7 @@ void MainWindow::togglePlayback()
                 QMetaObject::invokeMethod(this, [this]
                 {
                     video_seek_pending_ = false;
+                    seek_slider_->setEnabled(duration_ms_ > 0);
                     requestVideoFrame();
                 }, Qt::QueuedConnection);
                 return;
