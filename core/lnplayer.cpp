@@ -41,6 +41,21 @@ public:
         , user_data_(user_data)
         , session_(lnplayer::create_ffmpeg_media_backend)
     {
+        session_.set_playback_end_callback([this]
+        {
+            try
+            {
+                asio::post(runtime_.io_context(), [this]
+                {
+                    const lnplayer::SessionSnapshot snapshot = session_.snapshot();
+                    publish_snapshot(snapshot);
+                    emit(LNPLAYER_EVENT_PLAYBACK_ENDED, LNPLAYER_RESULT_OK, 0, nullptr);
+                });
+            }
+            catch (...)
+            {
+            }
+        });
     }
 
     lnplayer_result_t open(const char* source, uint64_t* operation_id)
