@@ -91,3 +91,21 @@
 - 已存在视频播放队列 QSettings 持久化、逐帧和截图基础能力。
 - 上述“已存在”只表示代码路径存在；除非补充验证记录，不视为验收通过。
 - GPU 设备拔出、驱动重置、多显卡切换恢复暂不纳入本阶段。
+
+## 接管开发记录
+
+### 已修正
+
+- [x] 将 Windows D3D11 Device 变更操作从直接调用 PlaybackSession 改为通过 PlaybackController 的同步命令入口，并在其 worker strand 上执行。此前该平台操作绕过命令执行器，可能与帧读取或其他媒体操作竞争；现已统一串行化。
+
+提交：`addbfb0b3293711c8d6c79b817aa6454b875126b`。
+
+### 仍需重点审查
+
+- Controller 当前使用 `std::promise/std::future` 适配同步 C ABI；需检查异常路径是否总能完成 promise，避免调用线程永久等待。
+- `is_current_player()` 仅在全局锁内验证句柄，锁释放后调用者继续使用裸指针。需要明确并实现 API 调用与 `lnplayer_destroy()` 并发时的生命周期契约。
+- 音轨/字幕枚举、快照读取和音量/速度设置直接访问 Session；虽然 Session mutex 提供数据互斥，仍需确认与 Controller 命令顺序的语义要求。
+- `PlaybackSession::set_video_device()` 在持有 Session mutex 时执行 backend close/open/seek/play，操作耗时；需评估是否阻塞其他查询或回调，以及是否存在回调重入。
+- `Runtime::shutdown()` 当前先 join thread_pool，再释放 work guard 并 join io thread；需通过生命周期测试证明 worker completion handler 能被完整 drain，且不会等待已停止的执行器。
+- 当前代码审查未发现上述项目均已解决；不得将它们标记为完成。
+
