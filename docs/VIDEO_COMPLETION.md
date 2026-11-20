@@ -960,3 +960,13 @@ Windows UI 的正式完成条件统一由 [`docs/WINDOWS_UI_ACCEPTANCE.md`](WIND
 - [ ] Windows 实机检查输入焦点、搜索后编辑、清空搜索和快捷键冲突检查。
 
 提交：`d81cf3f2b290ca7d505507fa36bf0124731fe55d`、`2780741a105cb90ca387a2b1c093ea1fe1f38598`。
+
+
+### 2026-11-21 — 画面双击行为设置
+
+- [x] 界面设置增加画面双击行为：切换全屏、播放/暂停、无动作。
+- [x] 默认保持原有双击切换全屏行为。
+- [x] 设置写入 `Video/Mouse/DoubleClickAction`，与中键和滚轮配置分开。
+- [ ] Windows 实机验证双击事件和三种行为，尤其列表/控制栏焦点下不误触发。
+
+提交：`bc3e3984375ba4581bb8357fa1f237b033a13969`、`afd0da21179cf9d8d8d1a192f5ccf0e88ae03e43`。
