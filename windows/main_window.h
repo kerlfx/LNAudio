@@ -2,6 +2,8 @@
 #define LNPLAYER_MAIN_WINDOW_H
 
 #include <QMainWindow>
+#include <QImage>
+#include <QElapsedTimer>
 #include <QString>
 #include <QList>
 #include <QUrl>
@@ -9,6 +11,7 @@
 #include "lnplayer.h"
 
 class QLabel;
+class VideoSurface;
 class QLineEdit;
 class QListWidget;
 class QObject;
@@ -38,6 +41,8 @@ private:
     void openFile();
     void openFiles(const QList<QUrl>& urls);
     void refreshLibrary();
+    void requestVideoFrame();
+    void presentPendingVideoFrame();
     void handleCoreEvent(
         lnplayer_event_type_t type,
         lnplayer_result_t result,
@@ -54,6 +59,7 @@ private:
     QLabel* media_title_label_;
     QLineEdit* library_search_;
     QListWidget* library_list_;
+    VideoSurface* video_surface_ = nullptr;
     QSlider* seek_slider_;
     QSlider* volume_slider_;
     QPushButton* play_button_;
@@ -64,9 +70,20 @@ private:
     QObject* library_worker_;
     QThread* library_thread_;
     QTimer* snapshot_timer_;
+    QTimer* video_timer_;
     lnplayer_t* player_ = nullptr;
     int64_t duration_ms_ = -1;
     bool slider_dragging_ = false;
+    bool has_video_ = false;
+    bool has_audio_ = false;
+    bool is_playing_ = false;
+    bool video_frame_pending_ = false;
+    bool pending_video_frame_valid_ = false;
+    QImage pending_video_frame_;
+    int64_t pending_video_pts_ms_ = 0;
+    int64_t current_position_ms_ = 0;
+    int64_t video_clock_base_pts_ms_ = 0;
+    QElapsedTimer video_clock_;
 };
 
 #endif
