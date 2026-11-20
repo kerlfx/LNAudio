@@ -207,3 +207,15 @@
 - `4cf417d1cc37119e32459f0f2b49550e3e2ec544` — 画面比例与拉伸模式持久化。
 - `aea8e1147339a5e1fc7409949008e14bac1bf0dd` — 视频文件选择过滤器扩展。
 - `940718b61a5c6cc3b1e65740eec88a97ff90b8a3` — 安装包文件关联扩展。
+
+### 2026-11-21 — Runtime 两阶段关闭排空
+
+- [x] Runtime 关闭前先在 io_context 建立屏障，确保已排队的 io handler 不会在 thread_pool join 开始后继续提交新 worker 任务。
+- [x] 屏障成功后等待 thread_pool 完成并投递完成回调，再释放 work guard，让 io_context 排空剩余完成回调。
+- [x] 屏障投递失败时先停止并 join io worker，再 join thread_pool，避免 io handler 在 join 期间继续生产任务。
+- [x] 生命周期测试增加“异步 open 尚未完成时 destroy，确保 OPEN_COMPLETED 回调在 Controller 销毁前排空”的用例。
+- [ ] 上述关闭路径仍需 Windows Debug/Release 下运行压力测试与故障注入。
+
+提交：
+- `c4d99cd43c7bf99ff5e56d00e466d7b4c729b873` — Runtime 两阶段排空。
+- `03897d786b29f076181c03cbd20a7021af616048` — 异步 open 与 destroy 竞态测试。
