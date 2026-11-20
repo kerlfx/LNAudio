@@ -331,6 +331,11 @@ public:
         volume_.store(volume, std::memory_order_relaxed);
     }
 
+    void set_playback_end_callback(std::function<void()> callback) override
+    {
+        playback_end_callback_ = std::move(callback);
+    }
+
     MediaBackendResult read_audio_frame(AudioFrame& output, bool& end_of_stream) override
     {
         std::lock_guard<std::mutex> decode_lock(decode_mutex_);
@@ -437,12 +442,17 @@ private:
             const MediaBackendResult decode_result = read_audio_frame(frame, end_of_stream);
             if (!decode_result.success || end_of_stream)
             {
-                std::lock_guard<std::mutex> lock(playback_mutex_);
-                playback_active_ = false;
-                playing_ = false;
-                if (decode_result.success && end_of_stream)
-                    playback_ended_.store(true, std::memory_order_relaxed);
-                playback_condition_.notify_all();
+                {
+                    std::lock_guard<std::mutex> lock(playback_mutex_);
+                    playback_active_ = false;
+                    playing_ = false;
+                    if (decode_result.success && end_of_stream)
+                        playback_ended_.store(true, std::memory_order_relaxed);
+                    playback_condition_.notify_all();
+                }
+
+                if (decode_result.success && end_of_stream && playback_end_callback_)
+                    playback_end_callback_();
                 continue;
             }
 
@@ -590,6 +600,7 @@ private:
     std::atomic<int64_t> position_ms_{0};
     std::atomic<bool> playback_ended_{false};
     std::atomic<float> volume_{1.0f};
+    std::function<void()> playback_end_callback_;
     AVCodecContext* audio_decoder_ = nullptr;
     AVPacket* audio_packet_ = nullptr;
     AVFrame* audio_frame_ = nullptr;
