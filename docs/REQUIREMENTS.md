@@ -53,7 +53,7 @@ Windows 端同时提供音频和视频播放界面，两套 UI 属于同一个 L
 - 提交型接口：首期 `open`、`seek`。请求成功进入唯一 Player 的受管理命令队列后立即返回提交结果及 operation_id；最终结果通过完成事件通知。
 - 同步完成型接口：首期 `play`、`pause`、`stop`、`close`。调用线程等待实际操作完成后返回最终结果，不只是返回请求入队结果。
 - 快速查询型接口：如 `get_state`、`get_position`、`get_duration`、`get_media_info`，只读取线程安全状态快照或缓存，不等待媒体探测、解码或阻塞式文件 I/O。
-- 每个进程只有一个 Player。每个进程内的 Core Runtime 维护一个 `boost::asio::io_context`、一套共享 `boost::asio::thread_pool` 和唯一 Player。
+- 每个进程只有一个 Player。每个进程内的 Core Runtime 维护一个 `asio::io_context`、一套共享 `asio::thread_pool` 和唯一 Player。
 - `io_context` 负责命令协调、任务分发、结果回收、状态更新、事件排序和同步等待者唤醒；共享 `thread_pool` 执行实际业务任务。
 - 同步完成型接口的等待发生在调用 C ABI 的线程，`io_context` worker 不得阻塞等待线程池业务任务。快速查询直接读取线程安全快照，是不经过 `io_context` 的明确例外。
 - `open/seek` 的最终成功或失败通过携带 operation_id 的完成事件报告；`play/pause/stop/close` 的最终结果由函数返回。独立状态变化、播放结束和运行时错误通过事件通知。视频帧交付保持独立实时数据通道。
