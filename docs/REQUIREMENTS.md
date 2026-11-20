@@ -277,7 +277,7 @@ UI 通过 Core 对外接口执行播放操作，不直接访问 FFmpeg 上下文
 ### 12.4 平台集成
 
 - C ABI v1 已冻结公开头文件与基础契约：不透明句柄、每进程唯一 Player、UTF-8 媒体源、固定返回码、快照、事件回调和线程局部错误读取。接口细节见 `core/include/lnplayer.h`。
-- 当前 C ABI 的生命周期、快照和音量接口已实现；播放命令目前保留接口并返回 `NOT_IMPLEMENTED`，待 Playback Controller 接入。
+- C ABI 的唯一实例生命周期、Playback Controller 命令入口、open/seek 异步完成事件、同步完成型接口等待、线程安全快照和音量接口已实现初版；FFmpeg/音频输出后端尚未接入，依赖媒体后端的操作明确返回 `NOT_IMPLEMENTED`，不伪报播放成功。
 - Android JNI 接口边界和 Native 生命周期管理。
 - Android 后台播放、前台服务、通知和 MediaSession 要求。
 - Windows 系统媒体按键、任务栏控制及快捷键要求。
