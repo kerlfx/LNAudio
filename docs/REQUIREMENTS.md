@@ -359,3 +359,8 @@ UI 通过 Core 对外接口执行播放操作，不直接访问 FFmpeg 上下文
 9. `play/pause/stop/close` 必须等待操作完成后返回；`open/seek` 首期采用提交后返回并通过完成事件报告最终结果。
 10. 本文随需求确认持续更新，并作为后续实现的需求依据。
 
+- [x] Windows D3D11VA decoded-frame lifetime retention and D3D11 Video Processor presentation for NV12/P010 surfaces.
+- [x] Keep the software BGRA rendering path for software-decoded video.
+- [ ] Add capability-based fallback when a D3D11 Video Processor cannot consume a hardware frame.
+- [ ] Composite subtitles on the GPU hardware-frame path and support screenshot capture/readback.
+- [ ] Re-inject the renderer device after D3D11 device recreation and validate device-loss recovery.
