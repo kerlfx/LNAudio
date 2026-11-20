@@ -16,6 +16,7 @@
 #include <QAbstractItemView>
 #include <QByteArray>
 #include <QFont>
+#include <QFontComboBox>
 #include <QApplication>
 #include <QCursor>
 #include <QDragEnterEvent>
@@ -111,6 +112,14 @@ MainWindow::MainWindow(
         fullscreen_hide_delay_ms_ = std::clamp(
             settings.value(QStringLiteral("Video/UI/FullscreenHideDelayMs"), 2000).toInt(),
             0, 10000);
+        subtitle_font_family_ = settings.value(
+            QStringLiteral("Video/Subtitle/FontFamily"), QStringLiteral("Segoe UI")).toString();
+        subtitle_color_ = settings.value(
+            QStringLiteral("Video/Subtitle/Color"), QStringLiteral("#ffffff")).toString();
+        subtitle_font_size_ = std::clamp(
+            settings.value(QStringLiteral("Video/Subtitle/FontSize"), 0).toInt(), 0, 96);
+        subtitle_vertical_position_ = std::clamp(
+            settings.value(QStringLiteral("Video/Subtitle/VerticalPosition"), 80).toInt(), 60, 95);
     }
     setAcceptDrops(true);
     resize(mode_ == PlayerMode::Video ? QSize(960, 600) : QSize(720, 480));
@@ -765,6 +774,10 @@ MainWindow::MainWindow(
                 settings.setValue(QStringLiteral("Video/Filter/Brightness"), video_brightness_);
                 settings.setValue(QStringLiteral("Video/Filter/Contrast"), video_contrast_);
                 settings.setValue(QStringLiteral("Video/Filter/Saturation"), video_saturation_);
+    settings.setValue(QStringLiteral("Video/Subtitle/FontFamily"), subtitle_font_family_);
+    settings.setValue(QStringLiteral("Video/Subtitle/FontSize"), subtitle_font_size_);
+    settings.setValue(QStringLiteral("Video/Subtitle/Color"), subtitle_color_);
+    settings.setValue(QStringLiteral("Video/Subtitle/VerticalPosition"), subtitle_vertical_position_);
                 settings.setValue(QStringLiteral("Video/Filter/HueDegrees"), video_hue_degrees_);
                 settings.setValue(QStringLiteral("Video/Filter/Sharpness"), video_sharpness_);
                 settings.setValue(QStringLiteral("Video/Filter/Denoise"), video_denoise_);
@@ -1610,6 +1623,32 @@ void MainWindow::openVideoSettings()
     video_form->addRow(QStringLiteral("饱和度"), saturation);
     tabs->addTab(video_page, QStringLiteral("视频"));
 
+    auto* subtitle_page = new QWidget(tabs);
+    auto* subtitle_form = new QFormLayout(subtitle_page);
+    auto* subtitle_font = new QFontComboBox(subtitle_page);
+    subtitle_font->setCurrentFont(QFont(subtitle_font_family_));
+    auto* subtitle_size = new QSpinBox(subtitle_page);
+    subtitle_size->setRange(0, 96);
+    subtitle_size->setSpecialValueText(QStringLiteral("自动"));
+    subtitle_size->setSuffix(QStringLiteral(" px"));
+    subtitle_size->setValue(subtitle_font_size_);
+    auto* subtitle_color = new QComboBox(subtitle_page);
+    subtitle_color->addItem(QStringLiteral("白色"), QStringLiteral("#ffffff"));
+    subtitle_color->addItem(QStringLiteral("黄色"), QStringLiteral("#ffff00"));
+    subtitle_color->addItem(QStringLiteral("青色"), QStringLiteral("#00ffff"));
+    subtitle_color->addItem(QStringLiteral("绿色"), QStringLiteral("#00ff00"));
+    int subtitle_color_index = subtitle_color->findData(subtitle_color_);
+    subtitle_color->setCurrentIndex(subtitle_color_index >= 0 ? subtitle_color_index : 0);
+    auto* subtitle_position = new QSpinBox(subtitle_page);
+    subtitle_position->setRange(60, 95);
+    subtitle_position->setSuffix(QStringLiteral(" %"));
+    subtitle_position->setValue(subtitle_vertical_position_);
+    subtitle_form->addRow(QStringLiteral("字体"), subtitle_font);
+    subtitle_form->addRow(QStringLiteral("字号"), subtitle_size);
+    subtitle_form->addRow(QStringLiteral("颜色"), subtitle_color);
+    subtitle_form->addRow(QStringLiteral("垂直位置"), subtitle_position);
+    tabs->addTab(subtitle_page, QStringLiteral("字幕"));
+
     auto* shortcut_page = new QWidget(tabs);
     auto* shortcut_layout = new QVBoxLayout(shortcut_page);
     auto* shortcut_list = new QListWidget(shortcut_page);
@@ -1650,6 +1689,10 @@ void MainWindow::openVideoSettings()
         brightness->setValue(0.0);
         contrast->setValue(1.0);
         saturation->setValue(1.0);
+        subtitle_font->setCurrentFont(QFont(QStringLiteral("Segoe UI")));
+        subtitle_size->setValue(0);
+        subtitle_color->setCurrentIndex(0);
+        subtitle_position->setValue(80);
     });
     connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
     connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
@@ -1671,6 +1714,10 @@ void MainWindow::openVideoSettings()
     video_brightness_ = static_cast<float>(brightness->value());
     video_contrast_ = static_cast<float>(contrast->value());
     video_saturation_ = static_cast<float>(saturation->value());
+    subtitle_font_family_ = subtitle_font->currentFont().family();
+    subtitle_font_size_ = subtitle_size->value();
+    subtitle_color_ = subtitle_color->currentData().toString();
+    subtitle_vertical_position_ = subtitle_position->value();
     video_surface_->set_aspect_ratio(video_aspect_ratio_override_);
     video_surface_->set_stretch(video_stretch_);
     video_surface_->set_video_filter(
@@ -2268,13 +2315,15 @@ void MainWindow::presentPendingVideoFrame()
         {
             QPainter painter(&overlay);
             painter.setRenderHint(QPainter::TextAntialiasing, true);
-            QFont font(QStringLiteral("Segoe UI"));
-            font.setPixelSize(std::max(20, overlay.width() / 40));
+            QFont font(subtitle_font_family_);
+            font.setPixelSize(subtitle_font_size_ > 0
+                ? subtitle_font_size_
+                : std::max(20, overlay.width() / 40));
             font.setWeight(QFont::DemiBold);
             painter.setFont(font);
             const QRect text_rect(
                 overlay.width() / 20,
-                overlay.height() * 4 / 5,
+                overlay.height() * subtitle_vertical_position_ / 100,
                 overlay.width() * 9 / 10,
                 overlay.height() / 6);
             const int offsets[][2] = {
@@ -2287,7 +2336,7 @@ void MainWindow::presentPendingVideoFrame()
                     text_rect.translated(offset[0], offset[1]),
                     Qt::AlignHCenter | Qt::AlignVCenter | Qt::TextWordWrap,
                     subtitle);
-            painter.setPen(Qt::white);
+            painter.setPen(QColor(subtitle_color_));
             painter.drawText(
                 text_rect,
                 Qt::AlignHCenter | Qt::AlignVCenter | Qt::TextWordWrap,
