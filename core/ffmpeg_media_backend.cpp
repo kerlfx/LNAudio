@@ -520,7 +520,7 @@ public:
                 if (resampler_ && !resampler_drained_)
                 {
                     const int target_sample_rate = static_cast<int>(std::lround(
-                        output_sample_rate_ * playback_rate_.load(std::memory_order_relaxed)));
+                        output_sample_rate_ / playback_rate_.load(std::memory_order_relaxed)));
                     const int capacity = static_cast<int>(
                         swr_get_delay(resampler_, target_sample_rate));
                     if (capacity > 0)
@@ -1091,7 +1091,7 @@ private:
         }
 
         output.samples.resize(static_cast<size_t>(converted) * kOutputChannels);
-        output.sample_rate = output_sample_rate_;
+        output.sample_rate = target_sample_rate;
         output.channels = kOutputChannels;
 
         const AVStream* stream = format_context_->streams[audio_stream_index_];
