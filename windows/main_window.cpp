@@ -1191,7 +1191,7 @@ void MainWindow::updateFullscreenUi()
     if (menuBar())
         menuBar()->show();
     if (playlist_panel_)
-        playlist_panel_->show();
+        playlist_panel_->setVisible(playlist_panel_visible_);
     fullscreen_controls_visible_ = true;
     fullscreen_hide_timer_->start();
 }
@@ -1381,6 +1381,16 @@ void MainWindow::clearPlaylist()
     playlist_open_pending_ = false;
     video_seek_pending_ = false;
     video_end_of_stream_ = false;
+    has_video_ = false;
+    has_audio_ = false;
+    is_playing_ = false;
+    duration_ms_ = -1;
+    current_position_ms_ = 0;
+    if (seek_slider_)
+    {
+        seek_slider_->setEnabled(false);
+        seek_slider_->setValue(0);
+    }
     video_first_frame_received_ = false;
     video_frame_history_.clear();
     video_frame_history_index_ = -1;
