@@ -2,6 +2,8 @@
 #include "d3d11_video_renderer.h"
 
 #include <algorithm>
+#include <functional>
+#include <utility>
 
 #include <QByteArray>
 #include <QFont>
@@ -743,6 +745,7 @@ void MainWindow::presentPendingVideoFrame()
     }
 
     const QImage frame = pending_video_frame_;
+    last_video_frame_ = frame;
     if (video_surface_->has_renderer())
     {
         QMetaObject::invokeMethod(command_worker_, [this, frame]
@@ -767,11 +770,12 @@ void MainWindow::presentPendingVideoFrame()
 
 void MainWindow::togglePlayback()
 {
-    QMetaObject::invokeMethod(command_worker_, [this]
+    const bool should_pause = is_playing_;
+    QMetaObject::invokeMethod(command_worker_, [this, should_pause]
     {
         if (!player_)
             return;
-        if (is_playing_)
+        if (should_pause)
             lnplayer_pause(player_);
         else
             lnplayer_play(player_);
@@ -810,7 +814,7 @@ void MainWindow::takeScreenshot()
 
 void MainWindow::stepVideoFrame()
 {
-    if (mode_ != PlayerMode::Video || !has_video_)
+    if (mode_ != PlayerMode::Video || !has_video_ || video_frame_pending_)
         return;
 
     QMetaObject::invokeMethod(command_worker_, [this]
@@ -846,6 +850,7 @@ void MainWindow::handleCoreEvent(
             pending_video_frame_valid_ = false;
             video_first_frame_received_ = false;
             video_end_of_stream_ = false;
+            last_video_frame_ = {};
             video_clock_.invalidate();
             if (video_surface_)
                 video_surface_->set_frame(QImage());
