@@ -136,6 +136,7 @@ private:
     bool pending_video_frame_valid_ = false;
     bool video_first_frame_received_ = false;
     bool video_end_of_stream_ = false;
+    bool viewing_historical_frame_ = false;
     QImage pending_video_frame_;
     QString pending_embedded_subtitle_;
     QImage pending_embedded_subtitle_bitmap_;

@@ -1423,6 +1423,7 @@ void MainWindow::openPlaylistIndex(int index)
         return;
 
     subtitle_cues_.clear();
+    viewing_historical_frame_ = false;
     pending_embedded_subtitle_.clear();
     pending_embedded_subtitle_bitmap_ = {};
     video_frame_history_.clear();
@@ -1927,6 +1928,7 @@ void MainWindow::presentPendingVideoFrame()
             return;
     }
 
+    viewing_historical_frame_ = false;
     if (pending_hardware_frame_owner_)
     {
         QString subtitle = subtitleAt(pending_video_pts_ms_);
@@ -2222,6 +2224,7 @@ void MainWindow::seekRelative(int64_t offset_ms)
     if (duration_ms_ <= 0)
         return;
 
+    viewing_historical_frame_ = false;
     const int64_t target = std::clamp<int64_t>(
         current_position_ms_ + offset_ms, 0, duration_ms_);
     QMetaObject::invokeMethod(command_worker_, [this, target]
@@ -2315,6 +2318,16 @@ void MainWindow::presentHistoricalVideoFrame()
         return;
 
     const VideoFrameHistoryEntry entry = video_frame_history_[video_frame_history_index_];
+    viewing_historical_frame_ = true;
+    current_position_ms_ = entry.pts_ms;
+    const QString duration_text = duration_ms_ < 0
+        ? QStringLiteral("--:--")
+        : format_position(duration_ms_);
+    position_label_->setText(
+        QStringLiteral("%1 / %2").arg(format_position(entry.pts_ms), duration_text));
+    if (!slider_dragging_ && duration_ms_ > 0)
+        seek_slider_->setValue(static_cast<int>(
+            std::clamp<int64_t>(entry.pts_ms * 1000 / duration_ms_, 0, 1000)));
     if (video_surface_)
     {
         video_surface_->set_hdr_metadata(entry.hdr_transfer, entry.color_primaries);
@@ -2572,6 +2585,12 @@ void MainWindow::updatePlaybackState(
     int64_t duration_ms)
 {
     duration_ms_ = duration_ms;
+    if (viewing_historical_frame_ && state != LNPLAYER_STATE_PLAYING &&
+        video_frame_history_index_ >= 0 &&
+        video_frame_history_index_ < video_frame_history_.size())
+        position_ms = video_frame_history_[video_frame_history_index_].pts_ms;
+    else if (state == LNPLAYER_STATE_PLAYING)
+        viewing_historical_frame_ = false;
     current_position_ms_ = position_ms;
 
     const bool was_playing = is_playing_;
