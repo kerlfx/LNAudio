@@ -52,6 +52,7 @@ public:
     bool has_renderer() const;
     void set_stretch(bool enabled);
     void set_aspect_ratio(float ratio);
+    void set_source_aspect_ratio(float ratio);
     bool present_frame_threadsafe(const QImage& frame);
     void set_interaction_callbacks(
         std::function<void()> double_click,
@@ -68,6 +69,7 @@ private:
     lnplayer::windows::D3D11VideoRenderer* renderer_ = nullptr;
     bool stretch_ = false;
     float aspect_ratio_ = 0.0f;
+    float source_aspect_ratio_ = 0.0f;
     std::function<void()> double_click_callback_;
     std::function<void(int)> wheel_callback_;
 };
@@ -134,7 +136,16 @@ void VideoSurface::set_aspect_ratio(float ratio)
     aspect_ratio_ = ratio;
     stretch_ = false;
     if (renderer_)
-        renderer_->set_aspect_ratio(ratio);
+        renderer_->set_aspect_ratio(ratio > 0.0f ? ratio : source_aspect_ratio_);
+    else
+        update();
+}
+
+void VideoSurface::set_source_aspect_ratio(float ratio)
+{
+    source_aspect_ratio_ = ratio;
+    if (aspect_ratio_ <= 0.0f && renderer_)
+        renderer_->set_aspect_ratio(source_aspect_ratio_);
     else
         update();
 }
@@ -181,8 +192,11 @@ void VideoSurface::paintEvent(QPaintEvent* event)
     if (frame_.isNull())
         return;
 
-    const QSize source_size = aspect_ratio_ > 0.0f
-        ? QSize(static_cast<int>(frame_.height() * aspect_ratio_), frame_.height())
+    const float display_aspect = aspect_ratio_ > 0.0f
+        ? aspect_ratio_
+        : source_aspect_ratio_;
+    const QSize source_size = display_aspect > 0.0f
+        ? QSize(static_cast<int>(frame_.height() * display_aspect), frame_.height())
         : frame_.size();
     const QSize fitted = source_size.scaled(
         size(), stretch_ ? Qt::IgnoreAspectRatio : Qt::KeepAspectRatio);
@@ -777,6 +791,7 @@ void MainWindow::requestVideoFrame()
             QImage image;
             int64_t pts_ms = 0;
             uint64_t generation = 0;
+            float display_aspect_ratio = 0.0f;
         } context;
 
         int end_of_stream = 0;
@@ -793,6 +808,7 @@ void MainWindow::requestVideoFrame()
                     QImage::Format_ARGB32).copy();
                 context->pts_ms = frame->pts_ms;
                 context->generation = frame->generation;
+                context->display_aspect_ratio = frame->display_aspect_ratio;
             },
             &context,
             &end_of_stream);
@@ -800,7 +816,8 @@ void MainWindow::requestVideoFrame()
         const QImage image = context.image;
         const int64_t pts_ms = context.pts_ms;
         const uint64_t generation = context.generation;
-        QMetaObject::invokeMethod(this, [this, result, end_of_stream, image, pts_ms, generation]
+        const float display_aspect_ratio = context.display_aspect_ratio;
+        QMetaObject::invokeMethod(this, [this, result, end_of_stream, image, pts_ms, generation, display_aspect_ratio]
         {
             video_frame_pending_ = false;
             if (result != LNPLAYER_RESULT_OK)
@@ -820,6 +837,8 @@ void MainWindow::requestVideoFrame()
             if (!image.isNull() && generation == media_generation_)
             {
                 video_first_frame_received_ = true;
+                if (video_surface_)
+                    video_surface_->set_source_aspect_ratio(display_aspect_ratio);
                 pending_video_frame_ = image;
                 pending_video_pts_ms_ = pts_ms;
                 pending_video_frame_valid_ = true;
