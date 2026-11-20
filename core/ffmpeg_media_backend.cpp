@@ -679,6 +679,10 @@ private:
         {
             AVPacket* queued = queue.front();
             queue.pop_front();
+            size_t& queued_bytes = stream_index == audio_stream_index_
+                ? audio_packet_queue_bytes_
+                : video_packet_queue_bytes_;
+            queued_bytes -= static_cast<size_t>(std::max(queued->size, 0));
             av_packet_move_ref(output_packet, queued);
             av_packet_free(&queued);
             return 0;
@@ -702,9 +706,17 @@ private:
             if (destination)
             {
                 constexpr size_t kMaximumQueuedPackets = 512;
-                if (destination->size() >= kMaximumQueuedPackets)
+                constexpr size_t kMaximumQueuedBytes = 64 * 1024 * 1024;
+                size_t& queued_bytes = deferred_packet_->stream_index == audio_stream_index_
+                    ? audio_packet_queue_bytes_
+                    : video_packet_queue_bytes_;
+                const size_t packet_bytes = static_cast<size_t>(
+                    std::max(deferred_packet_->size, 0));
+                if (destination->size() >= kMaximumQueuedPackets ||
+                    queued_bytes + packet_bytes > kMaximumQueuedBytes)
                     return AVERROR(EAGAIN);
                 destination->push_back(deferred_packet_);
+                queued_bytes += packet_bytes;
                 deferred_packet_ = nullptr;
             }
             else
@@ -741,12 +753,20 @@ private:
             if (destination)
             {
                 constexpr size_t kMaximumQueuedPackets = 512;
-                if (destination->size() >= kMaximumQueuedPackets)
+                constexpr size_t kMaximumQueuedBytes = 64 * 1024 * 1024;
+                size_t& queued_bytes = packet->stream_index == audio_stream_index_
+                    ? audio_packet_queue_bytes_
+                    : video_packet_queue_bytes_;
+                const size_t packet_bytes = static_cast<size_t>(
+                    std::max(packet->size, 0));
+                if (destination->size() >= kMaximumQueuedPackets ||
+                    queued_bytes + packet_bytes > kMaximumQueuedBytes)
                 {
                     deferred_packet_ = packet;
                     return AVERROR(EAGAIN);
                 }
                 destination->push_back(packet);
+                queued_bytes += packet_bytes;
             }
             else
             {
@@ -767,6 +787,8 @@ private:
         av_packet_free(&deferred_packet_);
         audio_packet_queue_.clear();
         video_packet_queue_.clear();
+        audio_packet_queue_bytes_ = 0;
+        video_packet_queue_bytes_ = 0;
     }
 
     MediaBackendResult convert_video_frame(VideoFrame& output)
@@ -1129,6 +1151,8 @@ private:
     std::deque<AVPacket*> audio_packet_queue_;
     std::deque<AVPacket*> video_packet_queue_;
     AVPacket* deferred_packet_ = nullptr;
+    size_t audio_packet_queue_bytes_ = 0;
+    size_t video_packet_queue_bytes_ = 0;
     int audio_stream_index_ = -1;
     int video_stream_index_ = -1;
     bool opened_ = false;
