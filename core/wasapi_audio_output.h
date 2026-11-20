@@ -29,6 +29,7 @@ public:
     bool write(const float* interleaved_stereo, uint32_t frames);
     bool flush();
     bool current_padding(uint32_t& frames) const;
+    bool clock_position(uint64_t& frames) const;
     bool drain();
     void close();
 
@@ -42,6 +43,8 @@ private:
     IMMDevice* device_ = nullptr;
     IAudioClient* audio_client_ = nullptr;
     IAudioRenderClient* render_client_ = nullptr;
+    IAudioClock* audio_clock_ = nullptr;
+    UINT64 audio_clock_frequency_ = 0;
     WAVEFORMATEX* mix_format_ = nullptr;
     HANDLE audio_event_ = nullptr;
     UINT32 buffer_frames_ = 0;
