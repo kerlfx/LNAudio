@@ -386,7 +386,7 @@ Windows 应用使用单一 `LNPlayer.exe`，通过启动参数选择音频或视
 - FFmpeg 音视频流探测、视频解码器初始化及同一解封装上下文的音视频 Packet 分流。
 - 有界 Packet Queue；视频帧转换为 BGRA，支持软件解码。
 - Windows 优先尝试 D3D11VA，硬件帧暂时下载到系统内存，再上传至 Renderer；硬件初始化失败时回退软件解码。
-- Windows 原生 QWidget 子窗口 HWND、D3D11 Device/Swap Chain、纹理采样、保持比例/拉伸显示和窗口 resize；ResizeBuffers 失败及 DXGI device removed/reset 时尝试重建 Renderer。
+- Windows 原生 QWidget 子窗口 HWND、D3D11 Device/Swap Chain、纹理采样、原始比例、16:9、4:3、拉伸显示和窗口 resize；ResizeBuffers 失败及 DXGI device removed/reset 时尝试重建 Renderer。
 - Windows 专用 `lnplayer_windows.h` 视频帧 Pull 接口；视频帧传输不加入通用 `lnplayer.h`。
 - 视频 PTS 等待、音频流主时钟的基础调度；音频位置在 PCM 写入后根据 WASAPI 当前待播放缓冲量回算，减少解码领先于扬声器实际播放造成的同步偏差；无音频视频使用独立时钟。
 - 视频 Seek 后刷新解码器和 Packet Queue；暂停保留最后一帧。
