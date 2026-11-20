@@ -1524,8 +1524,10 @@ private:
             std::vector<uint8_t> rendered;
             int rendered_stride = 0;
             std::string error;
+            const int64_t filter_position_ms = position_ms +
+                (subtitle_stream_ordinal >= 0 ? start_time_ms_ : 0);
             if (subtitle_filter_->render(
-                position_ms, subtitle_offset_ms, rendered, rendered_stride, error))
+                filter_position_ms, subtitle_offset_ms, rendered, rendered_stride, error))
             {
                 output.subtitle_text.clear();
                 output.subtitle_bgra = std::move(rendered);
