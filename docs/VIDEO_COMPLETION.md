@@ -21,14 +21,12 @@
 
 ## P1 — 字幕
 
-- [ ] 内嵌文本字幕、ASS、位图字幕格式支持范围确认和验证。
-- [ ] 外挂 SRT/ASS/SSA 格式支持范围确认和验证。
-- [ ] ASS Script Info、V4/V4+ Styles、Events、Dialogue 解析。
-- [ ] 字体、字号、粗斜体、颜色、透明度、描边、阴影。
-- [ ] 对齐、边距、定位、裁剪、换行和绘制区域。
-- [ ] 常用 Override Tags、Transform、Move、Fade、Rotation。
-- [ ] Karaoke 基础效果。
-- [ ] 字体加载与回退策略。
+- [ ] 内嵌文本字幕、ASS/SSA、PGS/DVD/DVB 位图字幕的格式支持范围和样本验证。
+- [ ] 外挂 SRT/ASS/SSA 格式支持范围和编码样本验证。
+- [x] ASS/SSA 渲染采用 FFmpeg libavfilter 的 subtitles/libass filter，不重复实现 ASS Script Info、Styles、Events、Dialogue 自定义解析器。
+- [ ] 验证 libass 字体、字号、粗斜体、颜色、透明度、描边、阴影和字体回退。
+- [ ] 验证对齐、边距、定位、裁剪、换行、常用 Override Tags、Transform、Move、Fade、Rotation。
+- [ ] 验证 Karaoke、容器内嵌字体附件和系统字体回退。
 - [ ] 内嵌/外挂字幕统一轨道、时间轴、延迟、启用状态和渲染接口。
 - [ ] 字幕在 Seek、切换媒体、切换轨道、逐帧和历史帧浏览时正确。
 
@@ -226,3 +224,5 @@
 - [ ] 仍需用不同容器封装的 HDR10 样本验证 side data 的实际布局和单位。
 
 提交：`1acb3a351159e975fe63305626ec3e38d048cd8a`。
+
+字幕实现说明：当前代码通过 FFmpeg 的 `subtitles` libavfilter 调用 libass，覆盖 ASS/SSA 的样式和动画能力；不应再开发自定义 ASS parser/renderer。是否能在发布包启用该功能取决于 FFmpeg SDK 是否编入 libass filter，必须在 Windows 发布构建中确认。
