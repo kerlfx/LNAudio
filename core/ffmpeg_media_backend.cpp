@@ -257,7 +257,11 @@ public:
                 return failure("Unable to reset audio resampler: " + ffmpeg_error(resampler_result));
             }
         }
+
+        position_ms_.store(position_ms, std::memory_order_relaxed);
+        playback_ended_.store(false, std::memory_order_relaxed);
 #ifdef _WIN32
+        seek_succeeded = true;
         restore_playback();
 #endif
         return success();
