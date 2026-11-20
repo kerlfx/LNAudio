@@ -3,7 +3,6 @@
 #endif
 
 #include "main_window.h"
-#include "video_surface.h"
 
 #include <algorithm>
 #include <cmath>
@@ -34,6 +33,7 @@
 #include <QMetaObject>
 #include <QMimeData>
 #include <QPushButton>
+#include <QPainter>
 #include <QRegularExpression>
 #include <QRandomGenerator>
 #include <QStringDecoder>
