@@ -872,15 +872,18 @@ Windows Qt 与 Android JNI 共用同一套 C ABI 语义：
 - 视频多音轨、内嵌字幕文本/位图基础解码、外挂 SRT/ASS/SSA 基础文本读取。
 - 视频旋转软件路径、基础色彩矩阵/范围、基础 PQ/HLG Tone Mapping。
 - 基础 D3D11 画面滤镜、截图、逐帧、播放队列和 QSettings 持久化。
+- Runtime 的 SQLite 音乐库连接按需初始化；视频模式启动不打开数据库，也不创建音乐库 QThread。
+- Windows `VideoSurface` 和外挂字幕 `SubtitleManager` 已从 `MainWindow` 拆分为独立组件。
+- 异步 Seek 提交时对外发布 `SEEKING`，快照按 generation 避免回退到旧位置；视频 UI 阻止重叠 Seek。
 
 ### 11.2 第一优先级：架构收敛
 
 1. 明确 Runtime、Controller、Session、Backend 的生命周期和异步销毁屏障。
 2. 审查命令顺序、operation_id、generation、事件回调和同步接口的竞态。
-3. 保证视频模式不依赖 SQLite/音乐库初始化；音乐库按需初始化。
+3. 已完成视频模式与 SQLite 初始化解耦；仍需验证数据库不可用时的视频启动行为。
 4. 审查 FFmpeg demux/packet queue/decoder 的锁边界、Seek、EOF、关闭中断和资源所有权。
 5. 审查同步视频帧 Pull 对 Windows command worker 和播放控制响应的影响。
-6. 将 MainWindow 中可独立维护的字幕、播放队列和视频帧状态逻辑拆出；不为拆分而引入大量小类。
+6. 已拆分 VideoSurface 和 SubtitleManager；仍需评估播放队列及帧历史协调逻辑是否值得独立成组件。
 7. 对齐 C ABI、Windows 扩展 ABI、错误码、结构体版本及回调生命周期。
 
 ### 11.3 第二优先级：视频高级功能
