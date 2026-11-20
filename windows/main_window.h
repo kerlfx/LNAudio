@@ -23,6 +23,8 @@ class QAction;
 class QLabel;
 class QLineEdit;
 class QListWidget;
+class QListView;
+class QDialog;
 class QListWidgetItem;
 class QObject;
 class QEvent;
@@ -95,6 +97,7 @@ private:
     void removeSelectedPlaylistItem();
     void clearPlaylist();
     void openVideoSettings();
+    void showPlaylistWindow();
     void showOsd(const QString& message);
     void positionOsd();
     void showPlaybackInfo();
@@ -134,6 +137,7 @@ private:
     QLineEdit* library_search_;
     QListWidget* library_list_;
     QListWidget* playlist_widget_ = nullptr;
+    QDialog* playlist_dialog_ = nullptr;
     VideoSurface* video_surface_ = nullptr;
     QWidget* control_panel_ = nullptr;
     QLabel* osd_label_ = nullptr;
