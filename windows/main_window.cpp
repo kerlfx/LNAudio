@@ -187,7 +187,16 @@ MainWindow::MainWindow(
                 0.0f, 1.0f);
             video_grayscale_ = settings.value(
                 QStringLiteral("Video/Filter/Grayscale"), false).toBool();
+            video_aspect_ratio_override_ = settings.value(
+                QStringLiteral("Video/Display/AspectRatio"), 0.0).toFloat();
+            if (video_aspect_ratio_override_ != 16.0f / 9.0f &&
+                video_aspect_ratio_override_ != 4.0f / 3.0f)
+                video_aspect_ratio_override_ = 0.0f;
+            video_stretch_ = settings.value(
+                QStringLiteral("Video/Display/Stretch"), false).toBool();
         }
+        video_surface_->set_aspect_ratio(video_aspect_ratio_override_);
+        video_surface_->set_stretch(video_stretch_);
         video_surface_->set_video_filter(
             video_brightness_, video_contrast_, video_saturation_,
             video_hue_degrees_, video_sharpness_, video_denoise_, video_grayscale_);
@@ -409,6 +418,15 @@ MainWindow::MainWindow(
             QAction* ratio_16_9 = aspect_menu->addAction(QStringLiteral("16:9"));
             QAction* ratio_4_3 = aspect_menu->addAction(QStringLiteral("4:3"));
             QAction* stretch = aspect_menu->addAction(QStringLiteral("拉伸填充"));
+            QAction* aspect_actions[] = {fit, ratio_16_9, ratio_4_3, stretch};
+            for (QAction* action : aspect_actions)
+                action->setCheckable(true);
+            fit->setChecked(video_aspect_ratio_override_ == 0.0f && !video_stretch_);
+            ratio_16_9->setChecked(
+                std::abs(video_aspect_ratio_override_ - 16.0f / 9.0f) < 0.001f);
+            ratio_4_3->setChecked(
+                std::abs(video_aspect_ratio_override_ - 4.0f / 3.0f) < 0.001f);
+            stretch->setChecked(video_stretch_);
 
             QMenu* filter_menu = menu.addMenu(QStringLiteral("视频滤镜"));
             QAction* brightness_down = filter_menu->addAction(QStringLiteral("亮度 -"));
@@ -578,24 +596,21 @@ MainWindow::MainWindow(
                 stepVideoFrame();
             else if (selected && selected->parent() == speed_menu)
                 setPlaybackRate(selected->data().toFloat());
-            else if (selected == fit)
+            else if (selected == fit || selected == ratio_16_9 ||
+                selected == ratio_4_3 || selected == stretch)
             {
-                video_surface_->set_aspect_ratio(0.0f);
-                requestVideoFrame();
-            }
-            else if (selected == ratio_16_9)
-            {
-                video_surface_->set_aspect_ratio(16.0f / 9.0f);
-                requestVideoFrame();
-            }
-            else if (selected == ratio_4_3)
-            {
-                video_surface_->set_aspect_ratio(4.0f / 3.0f);
-                requestVideoFrame();
-            }
-            else if (selected == stretch)
-            {
-                video_surface_->set_stretch(true);
+                video_stretch_ = selected == stretch;
+                video_aspect_ratio_override_ = selected == ratio_16_9
+                    ? 16.0f / 9.0f
+                    : selected == ratio_4_3 ? 4.0f / 3.0f : 0.0f;
+                video_surface_->set_aspect_ratio(video_aspect_ratio_override_);
+                video_surface_->set_stretch(video_stretch_);
+                QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+                settings.setValue(
+                    QStringLiteral("Video/Display/AspectRatio"),
+                    video_aspect_ratio_override_);
+                settings.setValue(QStringLiteral("Video/Display/Stretch"), video_stretch_);
+                settings.sync();
                 requestVideoFrame();
             }
             else if (selected == brightness_down || selected == brightness_up ||
