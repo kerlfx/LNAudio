@@ -1,2 +1,5 @@
 /3rd_cache/
-/build
+/build/staging/
+/_CPack_Packages/
+/.vs/
+*.user
