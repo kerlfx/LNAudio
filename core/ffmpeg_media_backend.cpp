@@ -950,6 +950,13 @@ private:
             const MediaBackendResult decode_result = read_audio_frame(frame, end_of_stream);
             if (!decode_result.success || end_of_stream)
             {
+                if (decode_result.success && end_of_stream && !output.drain())
+                {
+                    playback_failed_.store(true, std::memory_order_relaxed);
+                    if (playback_error_callback_)
+                        playback_error_callback_("Unable to drain the Windows audio output buffer.");
+                }
+
                 bool stale_result = false;
                 {
                     std::lock_guard<std::mutex> lock(playback_mutex_);
