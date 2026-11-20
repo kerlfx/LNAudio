@@ -890,7 +890,7 @@ void MainWindow::handleCoreEvent(
             status_label_->setText(QStringLiteral("媒体已打开"));
             statusBar()->showMessage(QStringLiteral("就绪"));
             seek_slider_->setEnabled(duration_ms > 0);
-            snapshot_timer_->setInterval(mode_ == PlayerMode::Video ? 16 : 250);
+            snapshot_timer_->setInterval(mode_ == PlayerMode::Video ? 50 : 250);
             snapshot_timer_->start();
             pending_video_frame_valid_ = false;
             video_first_frame_received_ = false;
