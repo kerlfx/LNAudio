@@ -494,11 +494,11 @@ MainWindow::MainWindow(
             const QString key = mediaPreferenceKey("Bookmarks", current_media_path_);
             const QVariantList bookmarks = settings.value(key).toList();
             QAction* add_action = bookmarks_menu->addAction(QStringLiteral("添加当前书签..."));
-            connect(add_action, &QAction::triggered, this, [this, key, bookmarks]
+            connect(add_action, &QAction::triggered, this, [this, key, bookmark_count = bookmarks.size()]
             {
                 const int64_t bookmark_position = current_position_ms_;
                 bool accepted = false;
-                const QString default_name = QStringLiteral("书签 %1").arg(bookmarks.size() + 1);
+                const QString default_name = QStringLiteral("书签 %1").arg(bookmark_count + 1);
                 const QString name = QInputDialog::getText(
                     this, QStringLiteral("添加书签"), QStringLiteral("名称"),
                     QLineEdit::Normal,
@@ -507,12 +507,12 @@ MainWindow::MainWindow(
                 if (!accepted || name.isEmpty())
                     return;
 
-                QVariantList updated = bookmarks;
+                QSettings store(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+                QVariantList updated = store.value(key).toList();
                 QVariantMap entry;
                 entry.insert(QStringLiteral("position"), bookmark_position);
                 entry.insert(QStringLiteral("name"), name);
                 updated.append(entry);
-                QSettings store(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
                 store.setValue(key, updated);
                 store.sync();
                 statusBar()->showMessage(QStringLiteral("书签已添加：%1").arg(name));
