@@ -285,7 +285,8 @@ public:
         }
 
         *end_of_stream = read.end_of_stream ? 1 : 0;
-        if (!read.end_of_stream && callback && !read.frame.bgra.empty())
+        if (!read.end_of_stream && callback &&
+            (!read.frame.bgra.empty() || read.frame.d3d11_texture))
         {
             const lnplayer_windows_video_frame_t frame{
                 sizeof(lnplayer_windows_video_frame_t),
@@ -295,7 +296,13 @@ public:
                 read.frame.stride,
                 read.frame.pts_ms,
                 read.frame.generation,
-                read.frame.display_aspect_ratio
+                read.frame.display_aspect_ratio,
+                read.frame.d3d11_texture,
+                read.frame.d3d11_array_slice,
+                read.frame.dxgi_format,
+                read.frame.hardware_frame_owner
+                    ? static_cast<const void*>(&read.frame.hardware_frame_owner)
+                    : nullptr
             };
             callback(&frame, user_data);
         }
@@ -756,6 +763,32 @@ lnplayer_result_t lnplayer_windows_set_d3d11_device(
 
     player->controller->set_video_device(d3d11_device);
     return finish_result(LNPLAYER_RESULT_OK);
+}
+
+lnplayer_result_t lnplayer_windows_retain_video_frame(
+    const lnplayer_windows_video_frame_t* frame,
+    void** retained_owner)
+{
+    if (!frame || frame->struct_size < sizeof(lnplayer_windows_video_frame_t) ||
+        !frame->frame_owner || !retained_owner)
+        return set_error(LNPLAYER_RESULT_INVALID_ARGUMENT, "Video frame cannot be retained.");
+
+    try
+    {
+        const auto* owner =
+            static_cast<const std::shared_ptr<void>*>(frame->frame_owner);
+        *retained_owner = new std::shared_ptr<void>(*owner);
+        return finish_result(LNPLAYER_RESULT_OK);
+    }
+    catch (...)
+    {
+        return set_error(LNPLAYER_RESULT_OUT_OF_MEMORY, "Unable to retain video frame.");
+    }
+}
+
+void lnplayer_windows_release_video_frame(void* retained_owner)
+{
+    delete static_cast<std::shared_ptr<void>*>(retained_owner);
 }
 
 lnplayer_result_t lnplayer_windows_read_video_frame(
