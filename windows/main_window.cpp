@@ -61,6 +61,7 @@
 #include <QSlider>
 #include <QStatusBar>
 #include <QSettings>
+#include <QSignalBlocker>
 #include <QThread>
 #include <QTimer>
 #include <QUrl>
@@ -306,10 +307,10 @@ MainWindow::MainWindow(
         connect(playback_info_action, &QAction::triggered, this, [this] { showPlaybackInfo(); });
         auto* screenshot_action = video_menu->addAction(QStringLiteral("截图..."));
         connect(screenshot_action, &QAction::triggered, this, [this] { takeScreenshot(); });
-        auto* always_on_top_action = video_menu->addAction(QStringLiteral("窗口置顶"));
-        always_on_top_action->setCheckable(true);
-        always_on_top_action->setChecked(always_on_top_);
-        connect(always_on_top_action, &QAction::toggled, this, [this](bool enabled)
+        always_on_top_action_ = video_menu->addAction(QStringLiteral("窗口置顶"));
+        always_on_top_action_->setCheckable(true);
+        always_on_top_action_->setChecked(always_on_top_);
+        connect(always_on_top_action_, &QAction::toggled, this, [this](bool enabled)
         {
             always_on_top_ = enabled;
             const bool was_fullscreen = isFullScreen();
