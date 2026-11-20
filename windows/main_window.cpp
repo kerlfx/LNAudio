@@ -4528,70 +4528,96 @@ void MainWindow::seekToPosition(int64_t position_ms, const QString& message)
 
 void MainWindow::takeScreenshot()
 {
-    QImage screenshot = video_surface_ ? video_surface_->capture_frame() : QImage();
-    if (screenshot.isNull())
-        screenshot = last_video_frame_;
-    if (screenshot.isNull())
+    if (!video_surface_)
         return;
 
-    if (screenshot_directory_.isEmpty())
-        screenshot_directory_ = QDir(application_data_directory()).filePath(
-            QStringLiteral("Screenshots"));
-    QString selected_filter = screenshot_format_ == QStringLiteral("jpg")
-        ? QStringLiteral("JPEG 图片 (*.jpg *.jpeg)")
-        : screenshot_format_ == QStringLiteral("bmp")
-            ? QStringLiteral("BMP 图片 (*.bmp)")
-            : QStringLiteral("PNG 图片 (*.png)");
-    const QString path = QFileDialog::getSaveFileName(
-        this,
-        QStringLiteral("保存视频截图"),
-        QDir(screenshot_directory_).filePath(
-            QStringLiteral("screenshot.%1").arg(screenshot_format_)),
-        QStringLiteral("PNG 图片 (*.png);;JPEG 图片 (*.jpg *.jpeg);;BMP 图片 (*.bmp)"),
-        &selected_filter,
-        QFileDialog::Options());
-    if (path.isEmpty())
-        return;
+    VideoSurface* surface = video_surface_;
+    QImage fallback = last_video_frame_;
+    const QString initial_directory = screenshot_directory_.isEmpty()
+        ? QDir(application_data_directory()).filePath(QStringLiteral("Screenshots"))
+        : screenshot_directory_;
+    const QString initial_format = screenshot_format_;
 
-    if (selected_filter.startsWith(QStringLiteral("JPEG")))
-        screenshot_format_ = QStringLiteral("jpg");
-    else if (selected_filter.startsWith(QStringLiteral("BMP")))
-        screenshot_format_ = QStringLiteral("bmp");
-    else
-        screenshot_format_ = QStringLiteral("png");
-
-    QString output_path = path;
-    const QString suffix = QFileInfo(output_path).suffix().toLower();
-    if (suffix.isEmpty())
-        output_path += QStringLiteral(".") + screenshot_format_;
-    else if (suffix == QStringLiteral("jpg") || suffix == QStringLiteral("jpeg"))
-        screenshot_format_ = QStringLiteral("jpg");
-    else if (suffix == QStringLiteral("bmp"))
-        screenshot_format_ = QStringLiteral("bmp");
-    else if (suffix == QStringLiteral("png"))
-        screenshot_format_ = QStringLiteral("png");
-
-    const QString output_format = screenshot_format_;
-    const QByteArray image_format = output_format.toLatin1();
-    postBackground([this, screenshot = std::move(screenshot), output_path, output_format, image_format]() mutable
+    postBackground([this, surface, fallback = std::move(fallback),
+        initial_directory, initial_format]() mutable
     {
-        QDir().mkpath(QFileInfo(output_path).absolutePath());
-        const bool saved = screenshot.save(output_path, image_format.constData());
-        QMetaObject::invokeMethod(this, [this, saved, output_path, output_format]
+        QDir().mkpath(initial_directory);
+        QImage screenshot = surface->capture_frame();
+        if (screenshot.isNull())
+            screenshot = std::move(fallback);
+
+        QMetaObject::invokeMethod(this,
+            [this, screenshot = std::move(screenshot), initial_directory, initial_format]() mutable
         {
-            if (!saved)
+            if (screenshot.isNull())
             {
-                statusBar()->showMessage(QStringLiteral("截图保存失败"));
+                statusBar()->showMessage(QStringLiteral("当前没有可保存的视频画面"));
                 return;
             }
 
-            screenshot_directory_ = QFileInfo(output_path).absolutePath();
-            QSettings settings(settings_file_path(), QSettings::IniFormat);
-            settings.setValue(QStringLiteral("Video/Screenshot/Directory"), screenshot_directory_);
-            settings.setValue(QStringLiteral("Video/Screenshot/Format"), output_format);
-            settings.sync();
-            statusBar()->showMessage(QStringLiteral("截图已保存：%1").arg(output_path));
-            showOsd(QStringLiteral("截图已保存"));
+            QString selected_filter = initial_format == QStringLiteral("jpg")
+                ? QStringLiteral("JPEG 图片 (*.jpg *.jpeg)")
+                : initial_format == QStringLiteral("bmp")
+                    ? QStringLiteral("BMP 图片 (*.bmp)")
+                    : QStringLiteral("PNG 图片 (*.png)");
+            const QString path = QFileDialog::getSaveFileName(
+                this,
+                QStringLiteral("保存视频截图"),
+                QDir(initial_directory).filePath(
+                    QStringLiteral("screenshot.%1").arg(initial_format)),
+                QStringLiteral("PNG 图片 (*.png);;JPEG 图片 (*.jpg *.jpeg);;BMP 图片 (*.bmp)"),
+                &selected_filter,
+                QFileDialog::Options());
+            if (path.isEmpty())
+                return;
+
+            QString output_format = initial_format;
+            if (selected_filter.startsWith(QStringLiteral("JPEG")))
+                output_format = QStringLiteral("jpg");
+            else if (selected_filter.startsWith(QStringLiteral("BMP")))
+                output_format = QStringLiteral("bmp");
+            else
+                output_format = QStringLiteral("png");
+
+            QString output_path = path;
+            const QString suffix = QFileInfo(output_path).suffix().toLower();
+            if (suffix.isEmpty())
+                output_path += QStringLiteral(".") + output_format;
+            else if (suffix == QStringLiteral("jpg") || suffix == QStringLiteral("jpeg"))
+                output_format = QStringLiteral("jpg");
+            else if (suffix == QStringLiteral("bmp"))
+                output_format = QStringLiteral("bmp");
+            else if (suffix == QStringLiteral("png"))
+                output_format = QStringLiteral("png");
+
+            const QByteArray image_format = output_format.toLatin1();
+            postBackground([this, screenshot = std::move(screenshot),
+                output_path, output_format, image_format]() mutable
+            {
+                QDir().mkpath(QFileInfo(output_path).absolutePath());
+                const bool saved = screenshot.save(output_path, image_format.constData());
+                QMetaObject::invokeMethod(this,
+                    [this, saved, output_path, output_format]
+                {
+                    if (!saved)
+                    {
+                        statusBar()->showMessage(QStringLiteral("截图保存失败"));
+                        return;
+                    }
+
+                    screenshot_directory_ = QFileInfo(output_path).absolutePath();
+                    screenshot_format_ = output_format;
+                    QSettings settings(settings_file_path(), QSettings::IniFormat);
+                    settings.setValue(
+                        QStringLiteral("Video/Screenshot/Directory"), screenshot_directory_);
+                    settings.setValue(
+                        QStringLiteral("Video/Screenshot/Format"), screenshot_format_);
+                    settings.sync();
+                    statusBar()->showMessage(
+                        QStringLiteral("截图已保存：%1").arg(output_path));
+                    showOsd(QStringLiteral("截图已保存"));
+                }, Qt::QueuedConnection);
+            });
         }, Qt::QueuedConnection);
     });
 }
