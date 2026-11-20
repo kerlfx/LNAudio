@@ -29,8 +29,6 @@ if(NOT EXISTS "${LNPLAYER_FFMPEG_ROOT}/include/libavformat/avformat.h")
 
     set(LNPLAYER_FFMPEG_VERSION "8.1.2" CACHE STRING
         "Pinned FFmpeg version used by the automatic SDK download")
-    set(LNPLAYER_FFMPEG_REVISION "r0" CACHE STRING
-        "Pinned FFmpeg MSVC prebuilt revision")
     set(LNPLAYER_FFMPEG_LICENSE "lgpl" CACHE STRING
         "FFmpeg prebuilt license variant (lgpl or gpl)")
 
@@ -39,8 +37,15 @@ if(NOT EXISTS "${LNPLAYER_FFMPEG_ROOT}/include/libavformat/avformat.h")
         message(FATAL_ERROR "LNPLAYER_FFMPEG_LICENSE must be 'lgpl' or 'gpl'.")
     endif()
 
+    if(NOT LNPLAYER_FFMPEG_VERSION STREQUAL "8.1.2"
+       OR NOT LNPLAYER_FFMPEG_LICENSE STREQUAL "lgpl")
+        message(FATAL_ERROR
+            "A verified SHA256 is currently provided only for FFmpeg 8.1.2 LGPL. "
+            "Update the pinned archive checksum before selecting another variant.")
+    endif()
+
     set(_ffmpeg_archive_name
-        "ffmpeg-${LNPLAYER_FFMPEG_VERSION}-${LNPLAYER_FFMPEG_REVISION}_x64-windows-shared-${LNPLAYER_FFMPEG_LICENSE}.zip")
+        "ffmpeg-${LNPLAYER_FFMPEG_VERSION}_x64-windows-shared-${LNPLAYER_FFMPEG_LICENSE}.zip")
     set(_ffmpeg_archive
         "${CMAKE_BINARY_DIR}/_downloads/${_ffmpeg_archive_name}")
     set(_ffmpeg_url
@@ -51,6 +56,7 @@ if(NOT EXISTS "${LNPLAYER_FFMPEG_ROOT}/include/libavformat/avformat.h")
     file(DOWNLOAD
         "${_ffmpeg_url}"
         "${_ffmpeg_archive}"
+        EXPECTED_HASH SHA256=80dc78fd43aa32e7c3b75401d0aae8bcd260127e528999198ac9d0b033a854df
         SHOW_PROGRESS
         TLS_VERIFY ON
         STATUS _ffmpeg_download_status
