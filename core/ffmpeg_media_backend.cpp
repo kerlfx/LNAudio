@@ -197,7 +197,13 @@ public:
         return failure("The current platform has no configured audio output.");
 #else
         if (!audio_decoder_)
-            return failure("This media source has no audio stream.");
+        {
+            if (!video_decoder_)
+                return failure("The media source has no playable stream.");
+            playing_ = true;
+            playback_ended_.store(false, std::memory_order_relaxed);
+            return success();
+        }
 
         std::unique_lock<std::mutex> lock(playback_mutex_);
         if (!playback_thread_.joinable())
@@ -565,6 +571,13 @@ public:
             if (result == AVERROR_EOF)
             {
                 end_of_stream = true;
+                if (!audio_decoder_)
+                {
+                    playback_ended_.store(true, std::memory_order_relaxed);
+                    playing_ = false;
+                    if (playback_end_callback_)
+                        playback_end_callback_();
+                }
                 return success();
             }
 
@@ -735,6 +748,8 @@ private:
         output.pts_ms = timestamp == AV_NOPTS_VALUE
             ? position_ms_.load(std::memory_order_relaxed)
             : av_rescale_q(timestamp, stream->time_base, AVRational{1, 1000});
+        if (!audio_decoder_)
+            position_ms_.store(output.pts_ms, std::memory_order_relaxed);
         av_frame_unref(video_frame_);
         return success();
     }
