@@ -2367,6 +2367,7 @@ void MainWindow::presentHistoricalVideoFrame()
     {
         video_surface_->set_hdr_metadata(entry.hdr_transfer, entry.color_primaries);
         video_surface_->set_video_color_space(entry.ycbcr_matrix, entry.ycbcr_full_range);
+        video_surface_->set_source_aspect_ratio(entry.display_aspect_ratio);
     }
     QImage frame = entry.image;
     if (subtitles_enabled_ && !entry.embedded_subtitle_bitmap.isNull() && !entry.hardware_owner)
