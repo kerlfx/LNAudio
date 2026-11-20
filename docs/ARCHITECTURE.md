@@ -102,6 +102,23 @@ flowchart TD
 - 输出实现通过平台输出抽象与共享播放逻辑隔离。平台图形设备、Surface 和渲染资源由对应平台适配层管理，不暴露为通用 C ABI 类型。
 
 ### 2.6 本地数据层
+#### 2.6.1 SQLite 音乐库存储实现
+
+当前 Core 内部音乐库存储模块为 `MusicLibrary`，实现位于 `core/music_library.h/.cpp`，使用 SQLite Amalgamation 提供的 `sqlite3.h` API。
+
+- 数据库默认位置：Windows `%LOCALAPPDATA%/LNPlayer/library.db`；其他平台使用 `XDG_DATA_HOME` 或用户数据目录。
+- 数据库启用外键、WAL 日志模式和 5 秒 busy timeout。
+- 使用 `PRAGMA user_version` 管理 schema 版本；当前初始 schema 版本为 1。
+- `tracks` 保存逻辑曲目及元数据、内容哈希、累计播放次数和最近播放时间。
+- `file_locations` 保存一个曲目的一个或多个文件位置、文件大小和修改时间。一个曲目可以关联多个路径；移除单一路径不应直接删除曲目或其他路径。
+- `library_directories` 保存用户配置的扫描目录和递归设置。
+- `playback_history` 保存播放历史。
+- `playlists` 与 `playlist_items` 保存播放列表及其条目顺序。
+- `MusicLibrary` 对单个 SQLite 连接的访问使用内部互斥锁；多条相关写入使用事务。
+- 原始媒体文件由用户管理，音乐库只记录路径和元数据，不复制、移动或删除源文件。
+
+当前实现提供数据库初始化、扫描目录配置写入、曲目/路径 upsert、播放历史写入和曲目搜索接口。目录遍历、FFmpeg 元数据提取、内容哈希计算、文件监控、删除/刷新策略以及 UI/C ABI 查询接口仍未完成。
+
 
 SQLite 保存音乐条目、元数据、文件位置关联、目录配置、索引状态和播放历史等结构化数据。原始媒体文件仍由用户文件系统管理，播放器不因导入或去重而移动、复制或删除原始文件。
 
