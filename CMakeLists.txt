@@ -66,7 +66,6 @@ if(WIN32)
     set(CPACK_NSIS_EXTRA_UNINSTALL_COMMANDS [=[
         DeleteRegKey HKCR "LNPlayer.Video"
         DeleteRegKey HKCR "Applications\LNPlayer.exe"
-        DeleteRegKey HKLM "Software\RegisteredApplications" ; RegisteredApplications is shared; do not delete the whole key.
         DeleteRegKey HKLM "Software\Clients\Media\LNPlayer"
     ]=])
     set(CPACK_GENERATOR "NSIS")
