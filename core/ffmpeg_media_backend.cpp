@@ -914,6 +914,10 @@ public:
         output.bgra.clear();
         output.subtitle_text.clear();
         output.subtitle_bgra.clear();
+        output.subtitle_width = 0;
+        output.subtitle_height = 0;
+        output.subtitle_stride = 0;
+        output.rotation_degrees = 0;
 
         if (!opened_ || !video_decoder_ || !video_packet_ || !video_frame_)
             return failure("No decodable video stream is open.");
@@ -1289,8 +1293,14 @@ private:
 
         if (has_bitmap)
         {
-            const int source_width = video_frame_->width;
-            const int source_height = video_frame_->height;
+            const int source_width =
+                output.rotation_degrees == 90 || output.rotation_degrees == 270
+                    ? output.height
+                    : output.width;
+            const int source_height =
+                output.rotation_degrees == 90 || output.rotation_degrees == 270
+                    ? output.width
+                    : output.height;
             const int source_stride = source_width * 4;
             std::vector<uint8_t> overlay(
                 static_cast<size_t>(source_stride) * source_height, 0);
@@ -1334,7 +1344,7 @@ private:
             bitmap_frame.width = source_width;
             bitmap_frame.height = source_height;
             bitmap_frame.stride = source_stride;
-            rotate_bgra(bitmap_frame, get_frame_rotation_degrees(video_frame_));
+            rotate_bgra(bitmap_frame, output.rotation_degrees);
             output.subtitle_bgra = std::move(bitmap_frame.bgra);
             output.subtitle_width = bitmap_frame.width;
             output.subtitle_height = bitmap_frame.height;
@@ -1533,6 +1543,7 @@ private:
     {
         AVFrame* source_frame = video_frame_;
         const int frame_rotation = get_frame_rotation_degrees(video_frame_);
+        output.rotation_degrees = frame_rotation;
 #ifdef _WIN32
         if (video_frame_->format == AV_PIX_FMT_D3D11 &&
             video_device_shared_ && frame_rotation == 0)

@@ -62,6 +62,7 @@ struct VideoFrame
     int64_t pts_ms = 0;
     uint64_t generation = 0;
     float display_aspect_ratio = 0.0f;
+    int rotation_degrees = 0;
     std::string subtitle_text;
     std::vector<uint8_t> subtitle_bgra;
     int subtitle_width = 0;

@@ -48,8 +48,8 @@ LNPLAYER_API lnplayer_result_t lnplayer_windows_set_d3d11_device(
 /*
  * Windows video-output extension.
  * Decodes one frame synchronously on a Core worker. The callback executes
- * on the calling thread. BGRA pixels are valid only during callback. A D3D11
- * frame can be retained with lnplayer_windows_retain_video_frame() and must be
+ * on the calling thread. Video BGRA pixels, subtitle text, and subtitle BGRA
+ * pixels are valid only during callback. A D3D11 frame can be retained with lnplayer_windows_retain_video_frame() and must be
  * released with lnplayer_windows_release_video_frame(). Call from a dedicated
  * background thread, never from the UI or event thread.
  */
