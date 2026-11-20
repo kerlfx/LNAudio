@@ -3870,6 +3870,8 @@ void MainWindow::togglePlayback()
 
 void MainWindow::seekRelative(int64_t offset_ms)
 {
+    if (duration_ms_ <= 0 || video_seek_pending_)
+        return;
     const QString message = offset_ms < 0
         ? QStringLiteral("后退 %1 秒").arg(-offset_ms / 1000)
         : QStringLiteral("前进 %1 秒").arg(offset_ms / 1000);
@@ -3878,7 +3880,7 @@ void MainWindow::seekRelative(int64_t offset_ms)
 
 void MainWindow::seekToPosition(int64_t position_ms, const QString& message)
 {
-    if (duration_ms_ <= 0 || video_seek_pending_)
+    if (video_seek_pending_)
         return;
 
     showOsd(message);
@@ -3890,7 +3892,9 @@ void MainWindow::seekToPosition(int64_t position_ms, const QString& message)
     pending_video_frame_valid_ = false;
     video_end_of_stream_ = false;
     video_timer_->start();
-    const int64_t target = std::clamp<int64_t>(position_ms, 0, duration_ms_);
+    const int64_t target = duration_ms_ > 0
+        ? std::clamp<int64_t>(position_ms, 0, duration_ms_)
+        : std::max<int64_t>(0, position_ms);
     QMetaObject::invokeMethod(command_worker_, [this, target]
     {
         uint64_t operation_id = 0;
