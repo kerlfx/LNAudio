@@ -10,6 +10,7 @@ extern "C"
 #include <libavformat/avformat.h>
 #include <libavutil/channel_layout.h>
 #include <libavutil/error.h>
+#include <libavutil/hwcontext.h>
 #include <libavutil/mathematics.h>
 #include <libswresample/swresample.h>
 #include <libswscale/swscale.h>
@@ -155,7 +156,35 @@ public:
                 return failure(message);
             }
 
+#ifdef _WIN32
+            if (av_hwdevice_ctx_create(
+                &hw_device_context_, AV_HWDEVICE_TYPE_D3D11VA, nullptr, nullptr, 0) >= 0)
+            {
+                video_decoder_->hw_device_ctx = av_buffer_ref(hw_device_context_);
+                video_decoder_->get_format = select_video_pixel_format;
+                video_hardware_decode_ = true;
+            }
+#endif
+
             result = avcodec_open2(video_decoder_, decoder, nullptr);
+#ifdef _WIN32
+            if (result < 0 && video_hardware_decode_)
+            {
+                avcodec_free_context(&video_decoder_);
+                av_buffer_unref(&hw_device_context_);
+                video_hardware_decode_ = false;
+
+                video_decoder_ = avcodec_alloc_context3(decoder);
+                if (!video_decoder_)
+                {
+                    close();
+                    return failure("Unable to allocate the software video decoder.");
+                }
+                result = avcodec_parameters_to_context(video_decoder_, stream->codecpar);
+                if (result >= 0)
+                    result = avcodec_open2(video_decoder_, decoder, nullptr);
+            }
+#endif
             if (result < 0)
             {
                 const std::string message =
@@ -399,9 +428,12 @@ public:
         swr_free(&resampler_);
         sws_freeContext(video_scaler_);
         video_scaler_ = nullptr;
+        av_frame_free(&transfer_frame_);
         av_frame_free(&video_frame_);
         av_packet_free(&video_packet_);
         avcodec_free_context(&video_decoder_);
+        av_buffer_unref(&hw_device_context_);
+        video_hardware_decode_ = false;
         av_frame_free(&audio_frame_);
         av_packet_free(&audio_packet_);
         avcodec_free_context(&audio_decoder_);
@@ -702,8 +734,31 @@ private:
 
     MediaBackendResult convert_video_frame(VideoFrame& output)
     {
-        const int width = video_frame_->width;
-        const int height = video_frame_->height;
+        AVFrame* source_frame = video_frame_;
+#ifdef _WIN32
+        if (video_frame_->format == AV_PIX_FMT_D3D11)
+        {
+            if (!transfer_frame_)
+                transfer_frame_ = av_frame_alloc();
+            if (!transfer_frame_)
+            {
+                av_frame_unref(video_frame_);
+                return failure("Unable to allocate a D3D11 video transfer frame.");
+            }
+
+            const int transfer_result = av_hwframe_transfer_data(
+                transfer_frame_, video_frame_, 0);
+            if (transfer_result < 0)
+            {
+                av_frame_unref(video_frame_);
+                return failure("Unable to transfer a D3D11 video frame: " +
+                    ffmpeg_error(transfer_result));
+            }
+            source_frame = transfer_frame_;
+        }
+#endif
+        const int width = source_frame->width;
+        const int height = source_frame->height;
         if (width <= 0 || height <= 0)
         {
             av_frame_unref(video_frame_);
@@ -714,7 +769,7 @@ private:
             video_scaler_,
             width,
             height,
-            static_cast<AVPixelFormat>(video_frame_->format),
+            static_cast<AVPixelFormat>(source_frame->format),
             width,
             height,
             AV_PIX_FMT_BGRA,
@@ -736,8 +791,8 @@ private:
         int destination_linesize[] = {output.stride};
         const int rows = sws_scale(
             video_scaler_,
-            video_frame_->data,
-            video_frame_->linesize,
+            source_frame->data,
+            source_frame->linesize,
             0,
             height,
             destination,
@@ -745,6 +800,8 @@ private:
         if (rows != height)
         {
             output.bgra.clear();
+            if (source_frame == transfer_frame_)
+                av_frame_unref(transfer_frame_);
             av_frame_unref(video_frame_);
             return failure("Unable to convert decoded video frame.");
         }
@@ -756,6 +813,8 @@ private:
             : av_rescale_q(timestamp, stream->time_base, AVRational{1, 1000});
         if (!audio_decoder_)
             position_ms_.store(output.pts_ms, std::memory_order_relaxed);
+        if (source_frame == transfer_frame_)
+            av_frame_unref(transfer_frame_);
         av_frame_unref(video_frame_);
         return success();
     }
@@ -963,6 +1022,22 @@ private:
         return success();
     }
 
+#ifdef _WIN32
+    static AVPixelFormat select_video_pixel_format(
+        AVCodecContext*,
+        const AVPixelFormat* formats)
+    {
+        for (const AVPixelFormat* format = formats;
+             *format != AV_PIX_FMT_NONE;
+             ++format)
+        {
+            if (*format == AV_PIX_FMT_D3D11)
+                return *format;
+        }
+        return formats[0];
+    }
+#endif
+
     static MediaBackendResult success()
     {
         return MediaBackendResult{true, {}};
@@ -1002,6 +1077,9 @@ private:
     AVPacket* video_packet_ = nullptr;
     AVFrame* video_frame_ = nullptr;
     SwsContext* video_scaler_ = nullptr;
+    AVFrame* transfer_frame_ = nullptr;
+    AVBufferRef* hw_device_context_ = nullptr;
+    bool video_hardware_decode_ = false;
     std::deque<AVPacket*> audio_packet_queue_;
     std::deque<AVPacket*> video_packet_queue_;
     int audio_stream_index_ = -1;

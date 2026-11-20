@@ -118,6 +118,9 @@ typedef void (*lnplayer_video_frame_callback_t)(
     const lnplayer_video_frame_t* frame,
     void* user_data);
 
+#define LNPLAYER_MEDIA_HAS_AUDIO 0x1u
+#define LNPLAYER_MEDIA_HAS_VIDEO 0x2u
+
 typedef struct lnplayer_snapshot
 {
     uint32_t struct_size;
@@ -125,6 +128,7 @@ typedef struct lnplayer_snapshot
     int64_t position_ms;
     int64_t duration_ms;
     uint32_t volume;
+    /* Bit flags: LNPLAYER_MEDIA_HAS_AUDIO / LNPLAYER_MEDIA_HAS_VIDEO. */
     uint32_t reserved;
     uint64_t generation;
 } lnplayer_snapshot_t;
