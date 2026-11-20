@@ -345,10 +345,20 @@ public:
                     {
                         read.result = {false, "Unexpected error while decoding a video frame."};
                     }
-                    asio::post(runtime_.io_context(), [completion, read = std::move(read)]() mutable
+                    try
                     {
-                        completion->set_value(std::move(read));
-                    });
+                        asio::post(runtime_.io_context(), [completion, read = std::move(read)]() mutable
+                        {
+                            completion->set_value(std::move(read));
+                        });
+                    }
+                    catch (...)
+                    {
+                        completion->set_value(ReadResult{
+                            {false, "Unable to queue video frame completion."},
+                            {},
+                            false});
+                    }
                 });
             });
         }
@@ -484,26 +494,33 @@ private:
                                 session_.snapshot()};
                         }
 
-                        asio::post(runtime_.io_context(),
-                            [this, result, session_result = std::move(session_result), closing]() mutable
-                            {
-                                publish_snapshot(session_result.snapshot);
-                                if (closing)
-                                    update_state(LNPLAYER_STATE_CLOSING);
+                        try
+                        {
+                            asio::post(runtime_.io_context(),
+                                [this, result, session_result = std::move(session_result), closing]() mutable
+                                {
+                                    publish_snapshot(session_result.snapshot);
+                                    if (closing)
+                                        update_state(LNPLAYER_STATE_CLOSING);
 
-                                const lnplayer_result_t operation_result = session_result.success
-                                    ? LNPLAYER_RESULT_OK
-                                    : LNPLAYER_RESULT_INVALID_STATE;
-                                if (!session_result.success)
-                                    emit(
-                                        LNPLAYER_EVENT_ERROR,
-                                        operation_result,
-                                        0,
-                                        session_result.message.empty()
-                                            ? "Media operation failed."
-                                            : session_result.message.c_str());
-                                result->set_value(operation_result);
-                            });
+                                    const lnplayer_result_t operation_result = session_result.success
+                                        ? LNPLAYER_RESULT_OK
+                                        : LNPLAYER_RESULT_INVALID_STATE;
+                                    if (!session_result.success)
+                                        emit(
+                                            LNPLAYER_EVENT_ERROR,
+                                            operation_result,
+                                            0,
+                                            session_result.message.empty()
+                                                ? "Media operation failed."
+                                                : session_result.message.c_str());
+                                    result->set_value(operation_result);
+                                });
+                        }
+                        catch (...)
+                        {
+                            result->set_value(LNPLAYER_RESULT_OUT_OF_MEMORY);
+                        }
                     });
                 }
                 catch (...)
