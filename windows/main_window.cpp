@@ -4444,11 +4444,9 @@ void MainWindow::takeScreenshot()
     if (screenshot.isNull())
         return;
 
-    QSettings settings(settings_file_path(), QSettings::IniFormat);
     if (screenshot_directory_.isEmpty())
         screenshot_directory_ = QDir(application_data_directory()).filePath(
             QStringLiteral("Screenshots"));
-    QDir().mkpath(screenshot_directory_);
     QString selected_filter = screenshot_format_ == QStringLiteral("jpg")
         ? QStringLiteral("JPEG 图片 (*.jpg *.jpeg)")
         : screenshot_format_ == QStringLiteral("bmp")
@@ -4484,18 +4482,28 @@ void MainWindow::takeScreenshot()
         screenshot_format_ = QStringLiteral("png");
 
     const QByteArray image_format = screenshot_format_.toLatin1();
-    if (!screenshot.save(output_path, image_format.constData()))
+    screenshot = screenshot.copy();
+    postBackground([this, screenshot = std::move(screenshot), output_path, image_format]() mutable
     {
-        statusBar()->showMessage(QStringLiteral("截图保存失败"));
-        return;
-    }
+        QDir().mkpath(QFileInfo(output_path).absolutePath());
+        const bool saved = screenshot.save(output_path, image_format.constData());
+        QMetaObject::invokeMethod(this, [this, saved, output_path]
+        {
+            if (!saved)
+            {
+                statusBar()->showMessage(QStringLiteral("截图保存失败"));
+                return;
+            }
 
-    screenshot_directory_ = QFileInfo(output_path).absolutePath();
-    settings.setValue(QStringLiteral("Video/Screenshot/Directory"), screenshot_directory_);
-    settings.setValue(QStringLiteral("Video/Screenshot/Format"), screenshot_format_);
-    settings.sync();
-    statusBar()->showMessage(QStringLiteral("截图已保存：%1").arg(output_path));
-    showOsd(QStringLiteral("截图已保存"));
+            screenshot_directory_ = QFileInfo(output_path).absolutePath();
+            QSettings settings(settings_file_path(), QSettings::IniFormat);
+            settings.setValue(QStringLiteral("Video/Screenshot/Directory"), screenshot_directory_);
+            settings.setValue(QStringLiteral("Video/Screenshot/Format"), screenshot_format_);
+            settings.sync();
+            statusBar()->showMessage(QStringLiteral("截图已保存：%1").arg(output_path));
+            showOsd(QStringLiteral("截图已保存"));
+        }, Qt::QueuedConnection);
+    });
 }
 
 void MainWindow::setPlaybackRate(float rate)
