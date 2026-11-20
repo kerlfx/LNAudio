@@ -1360,6 +1360,9 @@ void MainWindow::moveSelectedPlaylistItem(int offset)
 void MainWindow::cycleRepeatMode()
 {
     repeat_mode_ = (repeat_mode_ + 1) % 3;
+    if (repeat_button_)
+        repeat_button_->setText(repeat_mode_ == 0 ? QStringLiteral("循环：关")
+            : repeat_mode_ == 1 ? QStringLiteral("循环：列表") : QStringLiteral("循环：单项"));
     saveVideoPlaylist();
 }
 
