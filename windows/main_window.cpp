@@ -4710,6 +4710,7 @@ void MainWindow::presentHistoricalVideoFrame()
     const VideoFrameHistoryEntry entry = video_frame_history_[video_frame_history_index_];
     viewing_historical_frame_ = true;
     current_position_ms_ = entry.pts_ms;
+    const QString media_path = current_media_path_;
     const QString duration_text = duration_ms_ < 0
         ? QStringLiteral("--:--")
         : format_position(duration_ms_);
@@ -4718,19 +4719,12 @@ void MainWindow::presentHistoricalVideoFrame()
     if (!slider_dragging_ && duration_ms_ > 0)
         seek_slider_->setValue(static_cast<int>(
             std::clamp<int64_t>(entry.pts_ms * 1000 / duration_ms_, 0, 1000)));
-    if (video_surface_)
-    {
-        video_surface_->set_hdr_metadata(
-            entry.hdr_transfer, entry.color_primaries, entry.hdr_peak_luminance);
-        video_surface_->set_video_color_space(entry.ycbcr_matrix, entry.ycbcr_full_range);
-        video_surface_->set_source_aspect_ratio(entry.display_aspect_ratio);
-    }
-    QImage frame = entry.image;
-    if (subtitles_enabled_ && !entry.embedded_subtitle_bitmap.isNull() && !entry.hardware_owner)
-    {
-        QPainter bitmap_painter(&frame);
-        bitmap_painter.drawImage(frame.rect(), entry.embedded_subtitle_bitmap);
-    }
+
+    video_surface_->set_hdr_metadata(
+        entry.hdr_transfer, entry.color_primaries, entry.hdr_peak_luminance);
+    video_surface_->set_video_color_space(entry.ycbcr_matrix, entry.ycbcr_full_range);
+    video_surface_->set_source_aspect_ratio(entry.display_aspect_ratio);
+
     QString subtitle = subtitleAt(entry.pts_ms);
     if (subtitles_enabled_ && !entry.embedded_subtitle.isEmpty())
     {
@@ -4738,120 +4732,79 @@ void MainWindow::presentHistoricalVideoFrame()
             subtitle += QLatin1Char('\n');
         subtitle += entry.embedded_subtitle;
     }
+
+    const QString font_family = subtitle_font_family_;
+    const QString subtitle_color = subtitle_color_;
+    const int font_size = subtitle_font_size_;
+    const int vertical_position = subtitle_vertical_position_;
+    const bool render_subtitles = subtitles_enabled_;
+    video_frame_pending_ = true;
+
     if (entry.hardware_owner)
     {
-        QImage overlay(video_surface_->size(), QImage::Format_ARGB32);
-        overlay.fill(Qt::transparent);
-        if (subtitles_enabled_ && !entry.embedded_subtitle_bitmap.isNull())
+        const QSize overlay_size = video_surface_->size();
+        postBackground([this, entry, overlay_size, subtitle, render_subtitles,
+            font_family, subtitle_color, font_size, vertical_position, media_path]
         {
-            const float aspect = entry.display_aspect_ratio > 0.0f
-                ? entry.display_aspect_ratio
-                : static_cast<float>(entry.embedded_subtitle_bitmap.width()) /
-                    entry.embedded_subtitle_bitmap.height();
-            int target_width = overlay.width();
-            int target_height = static_cast<int>(target_width / aspect);
-            if (target_height > overlay.height())
-            {
-                target_height = overlay.height();
-                target_width = static_cast<int>(target_height * aspect);
-            }
-            const QRect target(
-                (overlay.width() - target_width) / 2,
-                (overlay.height() - target_height) / 2,
-                target_width,
-                target_height);
-            QPainter bitmap_painter(&overlay);
-            bitmap_painter.drawImage(target, entry.embedded_subtitle_bitmap);
-        }
-        if (!subtitle.isEmpty())
-        {
-            QPainter painter(&overlay);
-            painter.setRenderHint(QPainter::TextAntialiasing, true);
-            QFont font(subtitle_font_family_);
-            font.setPixelSize(subtitle_font_size_ > 0 ? subtitle_font_size_ : std::max(20, overlay.width() / 40));
-            font.setWeight(QFont::DemiBold);
-            painter.setFont(font);
-            const QRect text_rect(
-                overlay.width() / 20,
-                overlay.height() * subtitle_vertical_position_ / 100,
-                overlay.width() * 9 / 10,
-                overlay.height() / 6);
-            const int offsets[][2] = {
-                {-2, -2}, {0, -2}, {2, -2}, {-2, 0},
-                {2, 0}, {-2, 2}, {0, 2}, {2, 2}
-            };
-            painter.setPen(Qt::black);
-            for (const auto& offset : offsets)
-                painter.drawText(
-                    text_rect.translated(offset[0], offset[1]),
-                    Qt::AlignHCenter | Qt::AlignVCenter | Qt::TextWordWrap,
-                    subtitle);
-            painter.setPen(QColor(subtitle_color_));
-            painter.drawText(
-                text_rect,
-                Qt::AlignHCenter | Qt::AlignVCenter | Qt::TextWordWrap,
-                subtitle);
-        }
+            QImage overlay(overlay_size, QImage::Format_ARGB32);
+            overlay.fill(Qt::transparent);
+            if (render_subtitles && !entry.embedded_subtitle_bitmap.isNull())
+                draw_subtitle_bitmap(
+                    overlay, entry.embedded_subtitle_bitmap, true, entry.display_aspect_ratio);
+            draw_subtitle_text(
+                overlay, subtitle, font_family, subtitle_color, font_size, vertical_position);
 
-        postCommand([this, entry, overlay = std::move(overlay)]() mutable
-        {
-            lnplayer_snapshot_t snapshot{};
-            snapshot.struct_size = sizeof(snapshot);
-            if (!player_ ||
-                lnplayer_get_snapshot(player_, &snapshot) != LNPLAYER_RESULT_OK ||
-                snapshot.generation != entry.generation)
-                return;
-
-            if (!video_surface_->present_hardware_frame(
-                    entry.hardware_texture,
-                    entry.hardware_array_slice,
-                    entry.hardware_format,
-                    entry.hardware_width,
-                    entry.hardware_height,
-                    entry.hardware_owner,
-                    overlay))
+            postCommand([this, entry, overlay = std::move(overlay), media_path]() mutable
             {
-                QMetaObject::invokeMethod(this, [this]
+                lnplayer_t* player = player_.load(std::memory_order_acquire);
+                lnplayer_snapshot_t snapshot{};
+                snapshot.struct_size = sizeof(snapshot);
+                const bool current = player &&
+                    lnplayer_get_snapshot(player, &snapshot) == LNPLAYER_RESULT_OK &&
+                    snapshot.generation == entry.generation;
+                const bool presented = current && video_surface_ &&
+                    video_surface_->present_hardware_frame(
+                        entry.hardware_texture,
+                        entry.hardware_array_slice,
+                        entry.hardware_format,
+                        entry.hardware_width,
+                        entry.hardware_height,
+                        entry.hardware_owner,
+                        overlay);
+                QMetaObject::invokeMethod(this, [this, presented, current, media_path]
                 {
-                    status_label_->setText(QStringLiteral("无法重新呈现历史硬件视频帧"));
+                    video_frame_pending_ = false;
+                    if (!current && current_media_path_ != media_path)
+                        return;
+                    if (!presented)
+                        status_label_->setText(
+                            QStringLiteral("无法重新呈现历史硬件视频帧"));
                 }, Qt::QueuedConnection);
-            }
+            });
         });
         return;
     }
 
-    if (!subtitle.isEmpty())
+    QImage frame = entry.image;
+    postBackground([this, frame = std::move(frame), entry, subtitle,
+        render_subtitles, font_family, subtitle_color, font_size,
+        vertical_position, media_path]() mutable
     {
-        QPainter painter(&frame);
-        painter.setRenderHint(QPainter::TextAntialiasing, true);
-        QFont font(subtitle_font_family_);
-        font.setPixelSize(subtitle_font_size_ > 0 ? subtitle_font_size_ : std::max(20, frame.width() / 40));
-        font.setWeight(QFont::DemiBold);
-        painter.setFont(font);
-        const QRect text_rect(
-            frame.width() / 20,
-            frame.height() * subtitle_vertical_position_ / 100,
-            frame.width() * 9 / 10,
-            frame.height() / 6);
-        const int offsets[][2] = {
-            {-2, -2}, {0, -2}, {2, -2}, {-2, 0},
-            {2, 0}, {-2, 2}, {0, 2}, {2, 2}
-        };
-        painter.setPen(Qt::black);
-        for (const auto& offset : offsets)
-            painter.drawText(
-                text_rect.translated(offset[0], offset[1]),
-                Qt::AlignHCenter | Qt::AlignVCenter | Qt::TextWordWrap,
-                subtitle);
-        painter.setPen(QColor(subtitle_color_));
-        painter.drawText(
-            text_rect,
-            Qt::AlignHCenter | Qt::AlignVCenter | Qt::TextWordWrap,
-            subtitle);
-    }
+        if (render_subtitles && !entry.embedded_subtitle_bitmap.isNull())
+            draw_subtitle_bitmap(frame, entry.embedded_subtitle_bitmap, false, 0.0f);
+        draw_subtitle_text(
+            frame, subtitle, font_family, subtitle_color, font_size, vertical_position);
 
-    last_video_frame_ = frame;
-    video_surface_->set_frame(frame);
+        QMetaObject::invokeMethod(this,
+            [this, frame = std::move(frame), entry, media_path]() mutable
+        {
+            video_frame_pending_ = false;
+            if (current_media_path_ != media_path || entry.generation != media_generation_)
+                return;
+            last_video_frame_ = frame;
+            video_surface_->set_frame(frame);
+        }, Qt::QueuedConnection);
+    });
 }
 
 void MainWindow::handleCoreEvent(
