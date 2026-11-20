@@ -833,3 +833,5 @@
 - [ ] 本次只完成源码修改和静态审查，未运行构建、CTest 或 CI。
 
 提交：6d30ff6b38006f46ae28b8f7c400f1f08a8d2fd5。
+- [x] 因帧读取与 Session 命令现已由同一 mutex 串行化，移除原先仅用于跨锁比较的冗余 media_generation_ atomic；帧 generation 直接读取受锁保护的 Session snapshot。
+提交：ed0e8be87e11c252b758f2fc8a4f693df75f6a2b、c477129e683aa65deb73bd33f7adc9108e56756a。
