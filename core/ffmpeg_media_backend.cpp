@@ -9,6 +9,7 @@ extern "C"
 #include <algorithm>
 #include <limits>
 #include <string>
+#include <utility>
 
 namespace lnplayer
 {
