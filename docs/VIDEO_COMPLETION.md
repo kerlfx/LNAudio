@@ -463,3 +463,11 @@
 提交：
 - `07ecbc08aaf5ad6cea2314fd01c8b8c8646b7ca9`、`e7c38f7a76789c2c5c509e841d0b9b365d80fb3d` — VideoSurface 中键回调。
 - `454352ed85dd6bca3279014fb9bd1642cace5145`、`9700dbe364e893720ad869e05a82fab810d08f69` — 中键行为配置。
+
+
+### 2026-11-21 — Windows 播放器统一深色控件主题
+
+- [x] 统一主窗口、菜单栏/菜单、按钮、列表、输入控件、滑块、标签页和状态栏的深色配色与 hover/pressed/checked/disabled 状态。
+- [ ] 尚未完成图标体系、布局间距/尺寸规范、主题切换、高对比度和高 DPI 视觉验收。
+
+提交：`d0caaca2b7e23a8a5fc2627140b07f98452f00e4`。
