@@ -40,6 +40,7 @@
 #include <QPaintEvent>
 #include <QResizeEvent>
 #include <QRegularExpression>
+#include <QRandomGenerator>
 #include <QSlider>
 #include <QStatusBar>
 #include <QThread>
@@ -371,7 +372,55 @@ MainWindow::MainWindow(PlayerMode mode, const QString& initial_media, QWidget* p
     {
         video_surface_ = new VideoSurface(content);
         playlist_widget_ = new QListWidget(content);
-        playlist_widget_->setMaximumWidth(240);
+        playlist_widget_->setMaximumWidth(280);
+        auto* playlist_panel = new QWidget(content);
+        auto* playlist_panel_layout = new QVBoxLayout(playlist_panel);
+        playlist_panel_layout->setContentsMargins(0, 0, 0, 0);
+        auto* playlist_actions = new QHBoxLayout();
+        auto* add_to_queue = new QPushButton(QStringLiteral("添加"), playlist_panel);
+        auto* remove_from_queue = new QPushButton(QStringLiteral("移除"), playlist_panel);
+        auto* move_up = new QPushButton(QStringLiteral("上移"), playlist_panel);
+        auto* move_down = new QPushButton(QStringLiteral("下移"), playlist_panel);
+        auto* shuffle_button = new QPushButton(QStringLiteral("随机：关"), playlist_panel);
+        auto* repeat_button = new QPushButton(QStringLiteral("循环：关"), playlist_panel);
+        shuffle_button->setCheckable(true);
+        playlist_actions->addWidget(add_to_queue);
+        playlist_actions->addWidget(remove_from_queue);
+        playlist_actions->addWidget(move_up);
+        playlist_actions->addWidget(move_down);
+        playlist_panel_layout->addLayout(playlist_actions);
+        auto* playback_modes = new QHBoxLayout();
+        playback_modes->addWidget(shuffle_button);
+        playback_modes->addWidget(repeat_button);
+        playlist_panel_layout->addLayout(playback_modes);
+        playlist_panel_layout->addWidget(playlist_widget_, 1);
+        connect(add_to_queue, &QPushButton::clicked, this, [this]
+        {
+            const QStringList files = QFileDialog::getOpenFileNames(
+                this, QStringLiteral("添加到播放队列"), QString(),
+                QStringLiteral("视频文件 (*.mp4 *.mkv *.mov *.avi *.webm *.wmv *.flv *.mpeg *.mpg);;所有文件 (*)"));
+            QList<QUrl> urls;
+            for (const QString& file : files)
+                urls.append(QUrl::fromLocalFile(file));
+            appendPlaylistFiles(urls);
+        });
+        connect(remove_from_queue, &QPushButton::clicked, this,
+            [this] { removeSelectedPlaylistItem(); });
+        connect(move_up, &QPushButton::clicked, this,
+            [this] { moveSelectedPlaylistItem(-1); });
+        connect(move_down, &QPushButton::clicked, this,
+            [this] { moveSelectedPlaylistItem(1); });
+        connect(shuffle_button, &QPushButton::toggled, this, [this, shuffle_button](bool enabled)
+        {
+            shuffle_enabled_ = enabled;
+            shuffle_button->setText(enabled ? QStringLiteral("随机：开") : QStringLiteral("随机：关"));
+        });
+        connect(repeat_button, &QPushButton::clicked, this, [this, repeat_button]
+        {
+            cycleRepeatMode();
+            repeat_button->setText(repeat_mode_ == 0 ? QStringLiteral("循环：关")
+                : repeat_mode_ == 1 ? QStringLiteral("循环：列表") : QStringLiteral("循环：单项"));
+        });
         connect(playlist_widget_, &QListWidget::itemDoubleClicked, this,
             [this](QListWidgetItem* item)
             {
@@ -454,7 +503,7 @@ MainWindow::MainWindow(PlayerMode mode, const QString& initial_media, QWidget* p
         });
         auto* video_layout = new QHBoxLayout();
         video_layout->addWidget(video_surface_, 1);
-        video_layout->addWidget(playlist_widget_);
+        video_layout->addWidget(playlist_panel);
         layout->addLayout(video_layout, 1);
     }
     else
@@ -815,6 +864,108 @@ void MainWindow::openFiles(const QList<QUrl>& urls)
     openPlaylistIndex(0);
 }
 
+void MainWindow::appendPlaylistFiles(const QList<QUrl>& urls)
+{
+    for (const QUrl& url : urls)
+    {
+        const QString path = url.toLocalFile();
+        if (path.isEmpty())
+            continue;
+        playlist_.append(QUrl::fromLocalFile(QFileInfo(path).absoluteFilePath()));
+    }
+    rebuildPlaylistWidget();
+    if (playlist_index_ < 0 && !playlist_.isEmpty())
+        openPlaylistIndex(0);
+}
+
+void MainWindow::rebuildPlaylistWidget()
+{
+    if (!playlist_widget_)
+        return;
+    playlist_widget_->clear();
+    for (const QUrl& url : playlist_)
+        playlist_widget_->addItem(QFileInfo(url.toLocalFile()).fileName());
+    if (playlist_index_ >= 0 && playlist_index_ < playlist_.size())
+        playlist_widget_->setCurrentRow(playlist_index_);
+}
+
+void MainWindow::removeSelectedPlaylistItem()
+{
+    if (!playlist_widget_)
+        return;
+    const int row = playlist_widget_->currentRow();
+    if (row < 0 || row >= playlist_.size())
+        return;
+
+    const bool removing_current = row == playlist_index_;
+    playlist_.removeAt(row);
+    if (row < playlist_index_)
+        --playlist_index_;
+    rebuildPlaylistWidget();
+
+    if (removing_current)
+    {
+        if (playlist_.isEmpty())
+        {
+            playlist_index_ = -1;
+            playlist_open_pending_ = false;
+            video_timer_->stop();
+            QMetaObject::invokeMethod(command_worker_, [this]
+            {
+                if (player_)
+                    lnplayer_close(player_);
+            }, Qt::QueuedConnection);
+            if (video_surface_)
+                video_surface_->set_frame(QImage());
+        }
+        else
+        {
+            openPlaylistIndex(std::min(row, playlist_.size() - 1));
+        }
+    }
+}
+
+void MainWindow::moveSelectedPlaylistItem(int offset)
+{
+    if (!playlist_widget_)
+        return;
+    const int from = playlist_widget_->currentRow();
+    const int to = from + offset;
+    if (from < 0 || to < 0 || from >= playlist_.size() || to >= playlist_.size())
+        return;
+
+    playlist_.swapItemsAt(from, to);
+    if (playlist_index_ == from)
+        playlist_index_ = to;
+    else if (playlist_index_ == to)
+        playlist_index_ = from;
+    rebuildPlaylistWidget();
+    playlist_widget_->setCurrentRow(to);
+}
+
+void MainWindow::cycleRepeatMode()
+{
+    repeat_mode_ = (repeat_mode_ + 1) % 3;
+}
+
+int MainWindow::nextPlaylistIndex(bool manual) const
+{
+    if (playlist_.isEmpty() || playlist_index_ < 0)
+        return -1;
+    if (shuffle_enabled_ && playlist_.size() > 1)
+    {
+        int next = playlist_index_;
+        while (next == playlist_index_)
+            next = static_cast<int>(QRandomGenerator::global()->bounded(
+                static_cast<quint32>(playlist_.size())));
+        return next;
+    }
+    const int next = playlist_index_ + 1;
+    if (next < playlist_.size())
+        return next;
+    return repeat_mode_ == 1 || (manual && repeat_mode_ == 1) ? 0 : -1;
+}
+
 void MainWindow::openPlaylistIndex(int index)
 {
     if (index < 0 || index >= playlist_.size())
@@ -874,8 +1025,9 @@ void MainWindow::playPrevious()
 
 void MainWindow::playNext()
 {
-    if (playlist_index_ >= 0 && playlist_index_ + 1 < playlist_.size())
-        openPlaylistIndex(playlist_index_ + 1);
+    const int next = nextPlaylistIndex(true);
+    if (next >= 0)
+        openPlaylistIndex(next);
 }
 
 void MainWindow::loadExternalSubtitle()
@@ -1478,9 +1630,15 @@ void MainWindow::handleCoreEvent(
     case LNPLAYER_EVENT_PLAYBACK_ENDED:
         if (playlist_open_pending_)
             break;
-        if (playlist_index_ >= 0 && playlist_index_ + 1 < playlist_.size())
+        if (repeat_mode_ == 2 && playlist_index_ >= 0)
         {
-            openPlaylistIndex(playlist_index_ + 1);
+            openPlaylistIndex(playlist_index_);
+            break;
+        }
+        const int next_index = nextPlaylistIndex(false);
+        if (next_index >= 0)
+        {
+            openPlaylistIndex(next_index);
             break;
         }
         video_timer_->stop();
