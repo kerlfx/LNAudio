@@ -48,6 +48,8 @@ SessionResult PlaybackSession::open(const std::string& source)
         return make_result(false, "Unable to create media backend.");
     }
 
+    backend_->set_volume(volume_);
+
     MediaInfo info;
     const MediaBackendResult result = backend_->open(source, info);
     if (!result.success)
@@ -172,8 +174,9 @@ SessionResult PlaybackSession::close()
 void PlaybackSession::set_volume(float volume)
 {
     std::lock_guard<std::mutex> lock(mutex_);
+    volume_ = volume;
     if (backend_)
-        backend_->set_volume(volume);
+        backend_->set_volume(volume_);
 }
 
 SessionSnapshot PlaybackSession::snapshot() const
