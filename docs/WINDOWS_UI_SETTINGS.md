@@ -17,7 +17,7 @@ LNPlayer/
 
 - 配置文件固定为 `Data/settings.ini`，使用 Qt `QSettings::IniFormat`。
 - `Data` 目录可写时，所有应用配置与应用数据优先写入该目录。
-- 如果程序安装在 `Program Files` 等不可写目录，Windows 会拒绝普通用户写入；此时才回退到当前用户的 Local App Data 下的 LNPlayer 数据目录。这是保证标准安装位置可运行所需的例外，不会为了方便而默认把数据散落到用户目录。
+- 如果程序安装在 `Program Files` 等不可写目录，Windows 会拒绝普通用户写入；此时才回退到 `QStandardPaths::AppLocalDataLocation/Data`（当前用户 Local App Data 下的 LNPlayer 专属数据目录）。这是保证标准安装位置可运行所需的例外，不会为了方便而默认把数据散落到用户目录。
 - 设置窗口“常规”页展示实际 INI 路径，并提供打开配置目录入口。
 - 截图默认目录为数据目录下的 `Screenshots`；用户也可以在设置中指定其他目录。
 - 播放列表、最近播放、播放位置、书签、媒体偏好等目前集中存储在 INI 中，不额外创建数据库或散落文件。
@@ -72,7 +72,7 @@ LNPlayer/
 
 ## 当前限制与验收
 
-- 源码已将设置文件位置切换到程序目录下的 `Data/settings.ini`，并在程序目录不可写时回退到当前用户 Local App Data。
+- 源码已将设置文件位置切换到程序目录下的 `Data/settings.ini`，并在程序目录不可写时回退到 `QStandardPaths::AppLocalDataLocation/Data`。
 - 安装包文件关联已改为当前用户范围，不写 HKLM；Windows 默认应用选择仍由系统设置界面控制。
 - 旧版注册表迁移仅用于兼容升级，不作为新版本配置存储方式。
 - 仍需 Windows/MSVC/Qt 构建与实机验收：可写目录便携运行、Program Files 安装回退、升级迁移、卸载清理、Windows 10/11 默认应用选择，以及每种扩展名双击启动。
