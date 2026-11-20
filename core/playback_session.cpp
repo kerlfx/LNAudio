@@ -68,6 +68,9 @@ SessionResult PlaybackSession::play()
 {
     std::lock_guard<std::mutex> lock(mutex_);
 
+    if (backend_ && backend_->playback_ended())
+        snapshot_.state = SessionState::Ended;
+
     if (!backend_ ||
         (snapshot_.state != SessionState::Ready &&
          snapshot_.state != SessionState::Paused &&
@@ -93,6 +96,9 @@ SessionResult PlaybackSession::play()
 SessionResult PlaybackSession::pause()
 {
     std::lock_guard<std::mutex> lock(mutex_);
+
+    if (backend_ && backend_->playback_ended())
+        snapshot_.state = SessionState::Ended;
 
     if (!backend_ || snapshot_.state != SessionState::Playing)
         return make_result(false, "Session is not playing.");
@@ -166,7 +172,14 @@ SessionResult PlaybackSession::close()
 SessionSnapshot PlaybackSession::snapshot() const
 {
     std::lock_guard<std::mutex> lock(mutex_);
-    return snapshot_;
+    SessionSnapshot current = snapshot_;
+    if (backend_)
+    {
+        current.position_ms = backend_->position_ms();
+        if (backend_->playback_ended())
+            current.state = SessionState::Ended;
+    }
+    return current;
 }
 
 SessionResult PlaybackSession::make_result(bool success, std::string message) const
