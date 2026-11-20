@@ -280,6 +280,14 @@ public:
         if (!opened_)
             return failure("The media source is not playing.");
 #ifdef _WIN32
+        if (!audio_decoder_)
+        {
+            if (!playing_)
+                return failure("The media source is not playing.");
+            playing_ = false;
+            return success();
+        }
+
         std::unique_lock<std::mutex> lock(playback_mutex_);
         if (!playing_)
             return failure("The media source is not playing.");
@@ -324,7 +332,7 @@ public:
         const auto restore_playback = [this, resume_playback, &playback_lock, &seek_succeeded]
         {
             playback_lock.lock();
-            if (seek_succeeded)
+            if (seek_succeeded && audio_decoder_)
             {
                 playback_flush_completed_ = false;
                 playback_flush_success_ = false;
