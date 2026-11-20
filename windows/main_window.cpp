@@ -38,7 +38,6 @@
 #include <QDoubleSpinBox>
 #include <QSpinBox>
 #include <QScrollArea>
-#include <QTabWidget>
 #include <QDropEvent>
 #include <QEvent>
 #include <QMoveEvent>
