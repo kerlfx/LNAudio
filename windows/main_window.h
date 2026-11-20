@@ -9,6 +9,8 @@
 #include <QUrl>
 
 #include <vector>
+#include <memory>
+#include <cstdint>
 
 #include "lnplayer.h"
 
@@ -99,6 +101,12 @@ private:
     bool video_first_frame_received_ = false;
     bool video_end_of_stream_ = false;
     QImage pending_video_frame_;
+    std::shared_ptr<void> pending_hardware_frame_owner_;
+    void* pending_hardware_texture_ = nullptr;
+    uint32_t pending_hardware_array_slice_ = 0;
+    uint32_t pending_hardware_format_ = 0;
+    int pending_hardware_width_ = 0;
+    int pending_hardware_height_ = 0;
     QImage last_video_frame_;
     int64_t pending_video_pts_ms_ = 0;
     int64_t current_position_ms_ = 0;
