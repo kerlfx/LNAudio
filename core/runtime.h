@@ -1,0 +1,32 @@
+#ifndef LNPLAYER_RUNTIME_H
+#define LNPLAYER_RUNTIME_H
+
+#include <asio.hpp>
+
+#include <thread>
+
+namespace lnplayer
+{
+
+class Runtime
+{
+public:
+    Runtime();
+    ~Runtime();
+
+    Runtime(const Runtime&) = delete;
+    Runtime& operator=(const Runtime&) = delete;
+
+    asio::io_context& io_context();
+    asio::thread_pool& thread_pool();
+
+private:
+    asio::io_context io_context_;
+    asio::executor_work_guard<asio::io_context::executor_type> work_guard_;
+    asio::thread_pool thread_pool_;
+    std::thread io_thread_;
+};
+
+}
+
+#endif
