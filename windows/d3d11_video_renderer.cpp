@@ -168,15 +168,21 @@ public:
 
     void resize(uint32_t width, uint32_t height)
     {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::unique_lock<std::mutex> lock(mutex_);
         if (!swap_chain_ || width == 0 || height == 0)
             return;
 
         context_->OMSetRenderTargets(0, nullptr, nullptr);
         render_target_.Reset();
-        if (SUCCEEDED(swap_chain_->ResizeBuffers(
-            0, width, height, DXGI_FORMAT_UNKNOWN, 0)))
-            create_render_target();
+        const HRESULT resize_result = swap_chain_->ResizeBuffers(
+            0, width, height, DXGI_FORMAT_UNKNOWN, 0);
+        if (SUCCEEDED(resize_result) && create_render_target())
+            return;
+
+        HWND target = window_;
+        release_resources();
+        lock.unlock();
+        initialize(target);
     }
 
     void set_stretch(bool enabled)
@@ -187,10 +193,15 @@ public:
 
     bool present(const uint8_t* pixels, int width, int height, int stride)
     {
-        std::lock_guard<std::mutex> lock(mutex_);
-        if (!pixels || width <= 0 || height <= 0 || stride < width * 4 ||
-            !swap_chain_ || !context_ || !render_target_)
+        std::unique_lock<std::mutex> lock(mutex_);
+        if (!pixels || width <= 0 || height <= 0 || stride < width * 4)
             return false;
+        if (!swap_chain_ || !context_ || !render_target_)
+        {
+            HWND target = window_;
+            lock.unlock();
+            return target && initialize(target) && present(pixels, width, height, stride);
+        }
 
         if (!video_texture_ || texture_width_ != width || texture_height_ != height)
         {
@@ -271,7 +282,16 @@ public:
 
         ID3D11ShaderResourceView* empty_views[] = {nullptr};
         context_->PSSetShaderResources(0, 1, empty_views);
-        return SUCCEEDED(swap_chain_->Present(1, 0));
+        const HRESULT present_result = swap_chain_->Present(1, 0);
+        if (present_result == DXGI_ERROR_DEVICE_REMOVED ||
+            present_result == DXGI_ERROR_DEVICE_RESET)
+        {
+            HWND target = window_;
+            release_resources();
+            lock.unlock();
+            return target && initialize(target) && present(pixels, width, height, stride);
+        }
+        return SUCCEEDED(present_result);
     }
 
     void clear()
