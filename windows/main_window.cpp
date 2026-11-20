@@ -621,6 +621,8 @@ MainWindow::MainWindow(
         playlist_widget_ = new QListWidget(content);
         playlist_widget_->setMaximumWidth(280);
         playlist_widget_->setDragDropMode(QAbstractItemView::InternalMove);
+        playlist_widget_->setAcceptDrops(true);
+        playlist_widget_->installEventFilter(this);
         playlist_widget_->setSelectionMode(QAbstractItemView::ExtendedSelection);
         playlist_widget_->setContextMenuPolicy(Qt::CustomContextMenu);
         playlist_widget_->setDefaultDropAction(Qt::MoveAction);
@@ -1722,6 +1724,26 @@ void MainWindow::updateFullscreenUi()
 
 bool MainWindow::eventFilter(QObject* watched, QEvent* event)
 {
+    if (watched == playlist_widget_ && event->type() == QEvent::DragEnter)
+    {
+        auto* drag_event = static_cast<QDragEnterEvent*>(event);
+        if (drag_event->mimeData()->hasUrls())
+        {
+            drag_event->acceptProposedAction();
+            return true;
+        }
+    }
+    if (watched == playlist_widget_ && event->type() == QEvent::Drop)
+    {
+        auto* drop_event = static_cast<QDropEvent*>(event);
+        if (drop_event->mimeData()->hasUrls())
+        {
+            appendPlaylistFiles(drop_event->mimeData()->urls());
+            drop_event->acceptProposedAction();
+            return true;
+        }
+    }
+
     if (watched == seek_slider_ && event->type() == QEvent::MouseMove &&
         duration_ms_ > 0)
     {
