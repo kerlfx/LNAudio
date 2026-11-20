@@ -30,6 +30,8 @@ public:
     void set_stretch(bool enabled);
     void set_gesture_enabled(bool enabled);
     void set_aspect_ratio(float ratio);
+    void adjust_zoom(int direction);
+    float zoom() const;
     void set_source_aspect_ratio(float ratio);
     void set_video_filter(
         float brightness, float contrast, float saturation, float hue_degrees,
@@ -44,7 +46,7 @@ public:
     QImage capture_frame() const;
     void set_interaction_callbacks(
         std::function<void()> double_click,
-        std::function<void(int)> wheel,
+        std::function<void(int, bool)> wheel,
         std::function<void()> middle_click,
         std::function<void(int)> gesture);
 
@@ -64,12 +66,13 @@ private:
     float aspect_ratio_ = 0.0f;
     float source_aspect_ratio_ = 0.0f;
     std::function<void()> double_click_callback_;
-    std::function<void(int)> wheel_callback_;
+    std::function<void(int, bool)> wheel_callback_;
     std::function<void()> middle_click_callback_;
     std::function<void(int)> gesture_callback_;
     QPoint right_press_position_;
     bool gesture_enabled_ = false;
     bool gesture_triggered_ = false;
+    float zoom_ = 1.0f;
 };
 
 #endif
