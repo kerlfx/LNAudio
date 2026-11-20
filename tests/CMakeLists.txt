@@ -49,3 +49,15 @@ add_test(NAME LNPlayer.Subtitles COMMAND LNPlayerSubtitleTests)
 set_tests_properties(LNPlayer.Subtitles PROPERTIES
     ENVIRONMENT_MODIFICATION "PATH=path_list_prepend:$<TARGET_FILE_DIR:Qt6::Core>"
 )
+
+add_executable(LNPlayerSessionConcurrencyTests
+    session_concurrency_tests.cpp
+    "${PROJECT_SOURCE_DIR}/core/playback_session.cpp"
+)
+
+target_include_directories(LNPlayerSessionConcurrencyTests
+    PRIVATE
+        "${PROJECT_SOURCE_DIR}/core"
+)
+
+add_test(NAME LNPlayer.SessionConcurrency COMMAND LNPlayerSessionConcurrencyTests)
