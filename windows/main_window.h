@@ -15,6 +15,7 @@
 #include <asio.hpp>
 
 #include <vector>
+#include <deque>
 #include <memory>
 #include <atomic>
 #include <cstdint>
@@ -294,7 +295,7 @@ private:
     QHash<QString, lnplayer_video_info_t> playlist_video_metadata_;
     QHash<QString, int64_t> playlist_durations_;
     QSet<QString> playlist_probe_pending_;
-    QList<QString> playlist_probe_queue_;
+    std::deque<QString> playlist_probe_queue_;
     bool playlist_probe_running_ = false;
     int playlist_index_ = -1;
     QString current_media_path_;
