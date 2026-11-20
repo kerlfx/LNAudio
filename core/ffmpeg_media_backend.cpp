@@ -221,7 +221,7 @@ public:
         video_packet_pending_ = false;
         demux_eof_ = false;
         resampler_drained_ = false;
-        clear_packet_queues_locked();
+        clear_packet_queues();
         audio_consumer_active_ = audio_decoder_ != nullptr;
         video_consumer_active_ = false;
         return success();
@@ -377,7 +377,7 @@ public:
         video_packet_pending_ = false;
         video_draining_ = false;
         demux_eof_ = false;
-        clear_packet_queues();
+        clear_packet_queues_locked();
         resampler_drained_ = false;
         if (resampler_)
         {
@@ -468,7 +468,7 @@ public:
         av_frame_free(&audio_frame_);
         av_packet_free(&audio_packet_);
         avcodec_free_context(&audio_decoder_);
-        clear_packet_queues();
+        clear_packet_queues_locked();
         if (format_context_)
             avformat_close_input(&format_context_);
 
