@@ -439,6 +439,7 @@ MainWindow::MainWindow(
     , pause_button_(new QPushButton(QStringLiteral("暂停"), this))
     , stop_button_(new QPushButton(QStringLiteral("停止"), this))
     , task_tracker_(std::make_shared<UiTaskTracker>())
+    , dispatch_executor_(asio::make_strand(UiTaskRuntime::instance().io_context()))
     , background_executor_(UiTaskRuntime::instance().thread_pool_executor())
     , command_executor_(asio::make_strand(background_executor_))
     , frame_executor_(asio::make_strand(background_executor_))
