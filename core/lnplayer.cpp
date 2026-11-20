@@ -287,7 +287,8 @@ public:
                 read.frame.width,
                 read.frame.height,
                 read.frame.stride,
-                read.frame.pts_ms
+                read.frame.pts_ms,
+                read.frame.generation
             };
             callback(&frame, user_data);
         }
