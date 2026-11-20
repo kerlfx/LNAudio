@@ -131,6 +131,12 @@ find_library(FFMPEG_SWRESAMPLE_LIBRARY
     REQUIRED
 )
 
+find_library(FFMPEG_SWSCALE_LIBRARY
+    NAMES swscale swscale-9 swscale-8 swscale-7
+    HINTS "${LNPLAYER_FFMPEG_ROOT}/lib"
+    REQUIRED
+)
+
 aux_source_directory("${CMAKE_CURRENT_SOURCE_DIR}" LNPLAYER_CORE_SOURCES)
 
 add_library(lnplayer SHARED
@@ -159,6 +165,7 @@ target_link_libraries(lnplayer
         "${FFMPEG_AVCODEC_LIBRARY}"
         "${FFMPEG_AVUTIL_LIBRARY}"
         "${FFMPEG_SWRESAMPLE_LIBRARY}"
+        "${FFMPEG_SWSCALE_LIBRARY}"
 )
 
 if(WIN32)
