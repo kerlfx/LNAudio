@@ -974,6 +974,7 @@ void MainWindow::handleCoreEvent(
             seek_slider_->setEnabled(duration_ms > 0);
             snapshot_timer_->setInterval(mode_ == PlayerMode::Video ? 25 : 250);
             snapshot_timer_->start();
+            refreshSnapshot();
             pending_video_frame_valid_ = false;
             video_first_frame_received_ = false;
             video_end_of_stream_ = false;
