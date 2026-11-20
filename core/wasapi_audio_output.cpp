@@ -306,6 +306,24 @@ bool WasapiAudioOutput::current_padding(uint32_t& frames) const
     return true;
 }
 
+bool WasapiAudioOutput::drain()
+{
+    if (!started_ || !audio_client_ || !audio_event_)
+        return false;
+
+    for (;;)
+    {
+        UINT32 padding = 0;
+        if (FAILED(audio_client_->GetCurrentPadding(&padding)))
+            return false;
+        if (padding == 0)
+            return true;
+
+        if (WaitForSingleObject(audio_event_, 1000) != WAIT_OBJECT_0)
+            return false;
+    }
+}
+
 void WasapiAudioOutput::close()
 {
     if (started_ && audio_client_)
