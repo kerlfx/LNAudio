@@ -1234,6 +1234,64 @@ lnplayer_result_t lnplayer_get_video_info(
     }
 }
 
+lnplayer_result_t lnplayer_probe_media(
+    const char* source_utf8,
+    int64_t* duration_ms,
+    lnplayer_video_info_t* info)
+{
+    if (!source_utf8 || !source_utf8[0] || !duration_ms ||
+        !info || info->struct_size < sizeof(lnplayer_video_info_t))
+        return set_error(LNPLAYER_RESULT_INVALID_ARGUMENT, "Invalid media probe arguments.");
+
+    try
+    {
+        lnplayer::MediaInfo media;
+        std::string error;
+        if (!lnplayer::probe_ffmpeg_media(source_utf8, media, error))
+            return set_error(LNPLAYER_RESULT_INTERNAL_ERROR, error.c_str());
+
+        const lnplayer::MediaVideoInfo& source = media.video;
+        const uint32_t structure_size = info->struct_size;
+        *info = {};
+        info->struct_size = structure_size;
+        *duration_ms = media.duration_ms;
+        info->width = source.width;
+        info->height = source.height;
+        info->bit_rate = source.bit_rate;
+        info->frame_rate_num = source.frame_rate_num;
+        info->frame_rate_den = source.frame_rate_den;
+        info->sample_aspect_ratio_num = source.sample_aspect_ratio_num;
+        info->sample_aspect_ratio_den = source.sample_aspect_ratio_den;
+        info->rotation_degrees = source.rotation_degrees;
+        info->color_range = source.color_range;
+        info->color_primaries = source.color_primaries;
+        info->color_transfer = source.color_transfer;
+        info->color_space = source.color_space;
+        info->bit_depth = source.bit_depth;
+        const auto copy_text = [](char* destination, size_t capacity, const std::string& value)
+        {
+            if (capacity != 0)
+                std::snprintf(destination, capacity, "%s", value.c_str());
+        };
+        copy_text(info->container_format, sizeof(info->container_format), source.container_format);
+        copy_text(info->container_long_name, sizeof(info->container_long_name), source.container_long_name);
+        copy_text(info->codec_name, sizeof(info->codec_name), source.codec_name);
+        copy_text(info->codec_long_name, sizeof(info->codec_long_name), source.codec_long_name);
+        copy_text(info->decoder_name, sizeof(info->decoder_name), source.decoder_name);
+        copy_text(info->profile, sizeof(info->profile), source.profile);
+        copy_text(info->pixel_format, sizeof(info->pixel_format), source.pixel_format);
+        return finish_result(LNPLAYER_RESULT_OK);
+    }
+    catch (const std::bad_alloc&)
+    {
+        return set_error(LNPLAYER_RESULT_OUT_OF_MEMORY, "Unable to allocate media probe metadata.");
+    }
+    catch (...)
+    {
+        return set_error(LNPLAYER_RESULT_INTERNAL_ERROR, "Unable to probe media metadata.");
+    }
+}
+
 lnplayer_result_t lnplayer_set_volume(lnplayer_t* player, uint32_t volume)
 {
     PlayerAccess access(player);
