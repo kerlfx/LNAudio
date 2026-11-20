@@ -61,7 +61,8 @@ public:
     bool present_frame_threadsafe(const QImage& frame);
     bool present_hardware_frame(
         void* texture, uint32_t array_slice, uint32_t format,
-        int width, int height, std::shared_ptr<void> frame_owner);
+        int width, int height, std::shared_ptr<void> frame_owner,
+        const QImage& overlay);
     QImage capture_frame() const;
     void set_interaction_callbacks(
         std::function<void()> double_click,
@@ -175,10 +176,13 @@ bool VideoSurface::present_frame_threadsafe(const QImage& frame)
 
 bool VideoSurface::present_hardware_frame(
     void* texture, uint32_t array_slice, uint32_t format,
-    int width, int height, std::shared_ptr<void> frame_owner)
+    int width, int height, std::shared_ptr<void> frame_owner,
+    const QImage& overlay)
 {
     return renderer_ && renderer_->present_hardware(
-        texture, array_slice, format, width, height, std::move(frame_owner));
+        texture, array_slice, format, width, height, std::move(frame_owner),
+        overlay.isNull() ? nullptr : overlay.constBits(),
+        overlay.isNull() ? 0 : overlay.bytesPerLine());
 }
 
 QImage VideoSurface::capture_frame() const
@@ -1057,6 +1061,39 @@ void MainWindow::presentPendingVideoFrame()
 
     if (pending_hardware_frame_owner_)
     {
+        const QString subtitle = subtitleAt(pending_video_pts_ms_);
+        QImage overlay(video_surface_->size(), QImage::Format_ARGB32);
+        overlay.fill(Qt::transparent);
+        if (!subtitle.isEmpty())
+        {
+            QPainter painter(&overlay);
+            painter.setRenderHint(QPainter::TextAntialiasing, true);
+            QFont font(QStringLiteral("Segoe UI"));
+            font.setPixelSize(std::max(20, overlay.width() / 40));
+            font.setWeight(QFont::DemiBold);
+            painter.setFont(font);
+            const QRect text_rect(
+                overlay.width() / 20,
+                overlay.height() * 4 / 5,
+                overlay.width() * 9 / 10,
+                overlay.height() / 6);
+            const int offsets[][2] = {
+                {-2, -2}, {0, -2}, {2, -2}, {-2, 0},
+                {2, 0}, {-2, 2}, {0, 2}, {2, 2}
+            };
+            painter.setPen(Qt::black);
+            for (const auto& offset : offsets)
+                painter.drawText(
+                    text_rect.translated(offset[0], offset[1]),
+                    Qt::AlignHCenter | Qt::AlignVCenter | Qt::TextWordWrap,
+                    subtitle);
+            painter.setPen(Qt::white);
+            painter.drawText(
+                text_rect,
+                Qt::AlignHCenter | Qt::AlignVCenter | Qt::TextWordWrap,
+                subtitle);
+        }
+
         auto owner = std::move(pending_hardware_frame_owner_);
         void* texture = pending_hardware_texture_;
         const uint32_t array_slice = pending_hardware_array_slice_;
@@ -1068,7 +1105,8 @@ void MainWindow::presentPendingVideoFrame()
         pending_video_frame_valid_ = false;
 
         QMetaObject::invokeMethod(command_worker_,
-            [this, owner = std::move(owner), texture, array_slice, format, width, height, generation]
+            [this, owner = std::move(owner), texture, array_slice, format,
+             width, height, generation, overlay = std::move(overlay)]
         {
             lnplayer_snapshot_t snapshot{};
             snapshot.struct_size = sizeof(snapshot);
@@ -1078,7 +1116,8 @@ void MainWindow::presentPendingVideoFrame()
 
             const bool presented = video_surface_ &&
                 video_surface_->present_hardware_frame(
-                    texture, array_slice, format, width, height, std::move(owner));
+                    texture, array_slice, format, width, height,
+                    std::move(owner), overlay);
             if (!presented)
             {
                 QMetaObject::invokeMethod(this, [this]
@@ -1175,7 +1214,9 @@ void MainWindow::seekRelative(int64_t offset_ms)
 
 void MainWindow::takeScreenshot()
 {
-    QImage screenshot = video_surface_ ? video_surface_->capture_frame() : last_video_frame_;
+    QImage screenshot = video_surface_ ? video_surface_->capture_frame() : QImage();
+    if (screenshot.isNull())
+        screenshot = last_video_frame_;
     if (screenshot.isNull())
         return;
 
