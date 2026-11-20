@@ -59,7 +59,9 @@ public:
     void set_aspect_ratio(float ratio);
     void set_source_aspect_ratio(float ratio);
     bool present_frame_threadsafe(const QImage& frame);
-    bool present_hardware_frame(void* texture, uint32_t array_slice, uint32_t format, int width, int height);
+    bool present_hardware_frame(
+        void* texture, uint32_t array_slice, uint32_t format,
+        int width, int height, std::shared_ptr<void> frame_owner);
     void set_interaction_callbacks(
         std::function<void()> double_click,
         std::function<void(int)> wheel);
@@ -171,10 +173,11 @@ bool VideoSurface::present_frame_threadsafe(const QImage& frame)
 }
 
 bool VideoSurface::present_hardware_frame(
-    void* texture, uint32_t array_slice, uint32_t format, int width, int height)
+    void* texture, uint32_t array_slice, uint32_t format,
+    int width, int height, std::shared_ptr<void> frame_owner)
 {
     return renderer_ && renderer_->present_hardware(
-        texture, array_slice, format, width, height);
+        texture, array_slice, format, width, height, std::move(frame_owner));
 }
 
 void VideoSurface::set_interaction_callbacks(
@@ -1061,7 +1064,7 @@ void MainWindow::presentPendingVideoFrame()
 
             const bool presented = video_surface_ &&
                 video_surface_->present_hardware_frame(
-                    texture, array_slice, format, width, height);
+                    texture, array_slice, format, width, height, std::move(owner));
             if (!presented)
             {
                 QMetaObject::invokeMethod(this, [this]
