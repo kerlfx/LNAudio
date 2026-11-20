@@ -81,9 +81,9 @@ flowchart TD
 - Windows Qt UI 在 GUI 主线程直接调用 C ABI。提交型接口快速返回；查询型接口只读取可立即取得的状态或缓存，不执行耗时工作。
 - Android Kotlin UI 通过 JNI 直接调用相同的 C ABI。提交型接口快速返回；可能耗时的查询或数据处理由 Android 后台机制承载，不能阻塞 Main Thread。
 - C ABI 的提交型调用与业务执行异步完成是两回事：调用本身同步返回提交结果，Core 后台完成操作后通过独立事件通知。
-- UI 不需要专用 Boost.Asio 调度层，也不需要为了普通提交型接口建立额外 UI 工作线程。
+- UI 不需要专用 Standalone Asio 调度层，也不需要为了普通提交型接口建立额外 UI 工作线程。
 - Android JNI Bridge 只负责类型转换、句柄管理和调用桥接，不承载播放业务逻辑。
-- 平台 UI 不直接依赖 Core 内部 C++ 类，也不要求 Android UI 引入 Boost.Asio。
+- 平台 UI 不直接依赖 Core 内部 C++ 类，也不要求 Android UI 引入 Standalone Asio。
 
 ### 2.3 共享核心层
 
@@ -340,10 +340,10 @@ flowchart TD
 
 ### 7.1 总体模型
 
-Core 使用 Boost.Asio 作为内部异步协调与并发执行基础。每个进程只有一个 Player；该进程内的 Core Runtime 维护：
+Core 使用 **Standalone Asio（不依赖 Boost）** 作为内部异步协调与并发执行基础。只使用 Asio 的独立发行版，代码命名空间为 `asio::`，不引入 Boost 库。每个进程只有一个 Player；该进程内的 Core Runtime 维护：
 
-- 一个 `boost::asio::io_context`，负责命令接收、Player 命令协调、任务分发、结果回收、状态更新和事件分发。
-- 一套共享的 `boost::asio::thread_pool`，执行播放控制、媒体处理调用、文件 I/O、音乐库访问等实际业务任务。
+- 一个 `asio::io_context`，由独立单线程运行，负责命令接收、Player 命令协调、任务分发、结果回收、状态更新和事件分发。
+- 一套共享的 `asio::thread_pool`，执行播放控制、媒体处理调用、文件 I/O、音乐库访问等实际业务任务。
 - 一个 Player Instance 及其 Playback Controller、Playlist、Playback Session 和平台输出资源。
 
 控制任务、媒体任务、文件 I/O、音乐库任务均使用同一套共享线程池，不按业务类型额外创建多个线程池。线程池中的工作线程可以并发执行不同任务；具体资源的线程安全和操作依赖由 Controller 与资源级同步机制保证。
@@ -746,6 +746,13 @@ Windows Qt 与 Android JNI 共用同一套 C ABI 语义：
 - 两个平台对提交结果、同步操作最终结果、异步操作完成事件、主动事件、错误码和内存有效期的理解必须一致。
 
 本节定义接口契约和建议模型，不代表具体函数签名、枚举数值和结构体布局已经冻结。正式实现前应据此设计并审查 `core/include/lnplayer.h`。
+
+### 7.8 Standalone Asio 构建约束
+
+- Core 使用 Standalone Asio 头文件库，不依赖 Boost，也不链接 Boost.System。
+- 源码统一使用 `asio::` 命名空间及 `asio.hpp` 头文件。
+- CMake 通过独立的 Asio include 路径配置依赖；不得隐式回退到 Boost.Asio。
+- Asio 仅负责异步协调和线程池调度；FFmpeg 解码等实际业务仍由共享线程池中的有界任务执行。
 
 ## 9. 依赖方向与边界
 
