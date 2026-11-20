@@ -148,6 +148,34 @@ bool test_async_open_is_drained_before_destroy()
 }
 
 
+bool test_video_metadata_api_contract()
+{
+    lnplayer_t* player = nullptr;
+    if (!expect(lnplayer_create(nullptr, &player) == LNPLAYER_RESULT_OK,
+            "create Player for video metadata API test"))
+        return false;
+
+    lnplayer_video_info_t info{};
+    info.struct_size = sizeof(info);
+    const lnplayer_result_t query_result = lnplayer_get_video_info(player, &info);
+    const bool empty_metadata =
+        info.width == 0 && info.height == 0 && info.bit_rate == 0 &&
+        info.mastering_max_luminance == 0.0f &&
+        info.max_content_light_level == 0;
+    const lnplayer_result_t invalid_probe =
+        lnplayer_probe_media(nullptr, nullptr, nullptr);
+    const lnplayer_result_t destroy_result = lnplayer_destroy(player);
+
+    return expect(query_result == LNPLAYER_RESULT_OK,
+               "video metadata query succeeds before media is opened") &&
+        expect(empty_metadata,
+               "video metadata query returns cleared fields without an open media") &&
+        expect(invalid_probe == LNPLAYER_RESULT_INVALID_ARGUMENT,
+               "media probe rejects invalid arguments") &&
+        expect(destroy_result == LNPLAYER_RESULT_OK,
+               "destroy Player after video metadata API test");
+}
+
 bool test_last_error_buffer()
 {
     const lnplayer_result_t invalid_create = lnplayer_create(nullptr, nullptr);
@@ -190,6 +218,8 @@ int main()
     if (!test_async_open_is_drained_before_destroy())
         return 1;
     if (!test_create_after_destroy())
+        return 1;
+    if (!test_video_metadata_api_contract())
         return 1;
     if (!test_last_error_buffer())
         return 1;
