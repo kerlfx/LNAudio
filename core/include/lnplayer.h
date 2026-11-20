@@ -131,6 +131,25 @@ LNPLAYER_API lnplayer_result_t lnplayer_pause(lnplayer_t* player);
 LNPLAYER_API lnplayer_result_t lnplayer_stop(lnplayer_t* player);
 LNPLAYER_API lnplayer_result_t lnplayer_close(lnplayer_t* player);
 
+/*
+ * Music library operations perform filesystem and database I/O synchronously.
+ * Call them from a background thread, never from a UI thread or Core callback.
+ */
+LNPLAYER_API lnplayer_result_t lnplayer_library_add_directory(
+    lnplayer_t* player,
+    const char* path_utf8,
+    int recursive);
+
+LNPLAYER_API lnplayer_result_t lnplayer_library_remove_directory(
+    lnplayer_t* player,
+    const char* path_utf8);
+
+LNPLAYER_API lnplayer_result_t lnplayer_library_scan_directory(
+    lnplayer_t* player,
+    const char* path_utf8,
+    int recursive,
+    int32_t* imported_count);
+
 /* Snapshot queries do not wait for the event loop or worker pool. */
 LNPLAYER_API lnplayer_result_t lnplayer_get_snapshot(
     lnplayer_t* player,
