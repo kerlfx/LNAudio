@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace lnplayer
 {
@@ -21,6 +22,14 @@ struct MediaBackendResult
     std::string message;
 };
 
+struct AudioFrame
+{
+    std::vector<float> samples;
+    int sample_rate = 48000;
+    int channels = 2;
+    int64_t pts_ms = 0;
+};
+
 class MediaBackend
 {
 public:
@@ -32,6 +41,7 @@ public:
     virtual MediaBackendResult seek(int64_t position_ms) = 0;
     virtual MediaBackendResult stop() = 0;
     virtual MediaBackendResult close() = 0;
+    virtual MediaBackendResult read_audio_frame(AudioFrame& frame, bool& end_of_stream) = 0;
 };
 
 using MediaBackendFactory = std::unique_ptr<MediaBackend> (*)();
