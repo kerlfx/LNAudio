@@ -285,6 +285,27 @@ C ABI 函数统一采用普通同步函数调用形式，但接口按完成语�
 
 Player 销毁是生命周期屏障，不是普通的异步播放命令。销毁顺序遵循资源依赖的逆序：停止接收新请求 → 使句柄失效并阻止新访问 → 取消/中断媒体读取与后台任务 → 停止输出 → 等待相关工作退出 → 释放解码器和格式上下文 → 释放队列及时钟 → 停止事件分发并等待在途回调退出 → 释放 Player 与 Runtime 资源。不得在该 Player 自身的回调中调用会等待该回调退出的同步销毁操作。
 
+### 4.6 C ABI v1 契约
+
+公开头文件为 `core/include/lnplayer.h`，只使用 C 兼容类型；平台 UI 只依赖该头文件，不接触 Core 内部 C++ 类、Asio、FFmpeg 或平台图形对象。
+
+- 句柄使用不透明的 `lnplayer_t*`。每个进程最多创建一个实例；重复创建返回 `LNPLAYER_RESULT_ALREADY_EXISTS`。
+- `lnplayer_create` 接收可选配置，配置通过 `struct_size` 支持后续扩展；创建成功后返回句柄。
+- `lnplayer_destroy` 是同步销毁屏障。调用方必须先停止并发 API 调用；不得从事件回调内部调用。
+- 媒体源通过 UTF-8 字符串传入；Core 不接管调用方字符串内存。
+- `open/seek` 属于提交型接口，输出非零 `operation_id`；最终结果通过对应完成事件报告。operation_id 在单个 Player 生命周期内唯一。
+- `play/pause/stop/close` 属于同步完成型接口，返回时操作必须已经完成；不得从 Core 事件回调或 io_context worker 调用。
+- `lnplayer_get_snapshot` 只读取线程安全快照，不等待任务执行。位置和时长单位为毫秒；未知时长使用 -1。
+- 音量使用 0–1000 整数范围，0 表示静音，1000 表示 100%。
+- 事件回调运行在 Core 事件线程。事件结构及其中的 message 指针仅在回调期间有效；平台必须将 UI 更新投递到 UI 线程。
+- 回调不得直接执行同步完成型操作或销毁 Player。回调可保存必要数据后立即返回。
+- `lnplayer_get_last_error` 返回当前调用线程最近一次 C ABI 错误；所需缓冲区长度包含结尾 NUL。
+- 返回码使用 `lnplayer_result_t`；接口不向调用方返回 Core 分配的内存，因此不存在跨 ABI 的释放函数或分配器所有权问题。
+
+首期错误码固定为：`OK`、`INVALID_ARGUMENT`、`INVALID_HANDLE`、`ALREADY_EXISTS`、`INVALID_STATE`、`NOT_IMPLEMENTED`、`OUT_OF_MEMORY`、`INTERNAL_ERROR`、`BUFFER_TOO_SMALL`、`WOULD_DEADLOCK`。枚举值在 ABI v1 内不得重排或复用。
+
+当前实现状态：ABI v1 头文件、ABI 版本查询、唯一实例创建/销毁、快照查询、音量设置和线程局部错误读取已建立；Playback Controller 尚未实现，因此 open/play/pause/stop/seek/close 当前返回 `NOT_IMPLEMENTED`。事件回调契约已定义，事件产生与派发将在 Controller/Event Manager 实现阶段接入。
+
 ## 5. Windows 运行模型
 
 ### 5.1 进程与窗口
