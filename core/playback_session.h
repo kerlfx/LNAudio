@@ -50,6 +50,9 @@ public:
     PlaybackSession& operator=(const PlaybackSession&) = delete;
 
     SessionResult open(const std::string& source);
+#ifdef _WIN32
+    void set_video_device(void* device);
+#endif
     SessionResult play();
     SessionResult pause();
     SessionResult seek(int64_t position_ms);
