@@ -82,3 +82,8 @@ LNPlayer/
 - 字幕启用状态在 Player 初始化及设置窗口保存后同步到 Core。
 - 画面滤镜设置保存与加载范围已统一；降噪范围固定为 0–1。
 - 性能页目前是状态展示，不提供尚未实现的 GPU 使用率或丢帧统计开关。
+
+
+## UI 完成标准
+
+完整的 Windows UI Definition of Done、交互验收矩阵、24 项实机测试场景和 Gate 1–4 交付门禁见 [`WINDOWS_UI_ACCEPTANCE.md`](WINDOWS_UI_ACCEPTANCE.md)。本设置文档只定义配置目录、设置面板和 INI 约定，不代表 UI 已完成验收。
