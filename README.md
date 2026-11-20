@@ -33,6 +33,8 @@ cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_PREFIX_PATH="C:/Qt
 cmake --build build --config Release
 ~~~
 
+To build the opt-in native lifecycle tests, configure with `-DLNPLAYER_BUILD_TESTS=ON`, then build `LNPlayerLifecycleTests` and run CTest manually. Tests are not run automatically by the build.
+
 Adjust CMAKE_PREFIX_PATH to the installed Qt version and location. To use a pre-provisioned FFmpeg SDK:
 
 ~~~powershell
