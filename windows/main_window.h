@@ -4,6 +4,7 @@
 #include <QMainWindow>
 #include <QImage>
 #include <QString>
+#include <QStringList>
 #include <QList>
 #include <QUrl>
 
@@ -34,7 +35,7 @@ enum class PlayerMode
 class MainWindow final : public QMainWindow
 {
 public:
-    explicit MainWindow(PlayerMode mode, const QStringList& initial_media_files = {}, QWidget* parent = nullptr);
+    explicit MainWindow(PlayerMode mode, const QStringList& initial_media_files = QStringList(), QWidget* parent = nullptr);
     ~MainWindow() override;
 
 protected:
