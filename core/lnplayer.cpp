@@ -7,6 +7,7 @@
 #include "lnplayer_windows.h"
 #endif
 
+#include <array>
 #include <atomic>
 #include <cstring>
 #include <cmath>
@@ -666,7 +667,7 @@ lnplayer_t* g_player = nullptr;
 bool g_destroying = false;
 std::size_t g_active_player_calls = 0;
 thread_local std::size_t g_thread_player_calls = 0;
-thread_local std::string g_last_error;
+thread_local std::array<char, 1024> g_last_error{};
 
 class PlayerAccess
 {
@@ -697,9 +698,12 @@ private:
     lnplayer_t* player_ = nullptr;
 };
 
-lnplayer_result_t set_error(lnplayer_result_t result, const char* message)
+lnplayer_result_t set_error(lnplayer_result_t result, const char* message) noexcept
 {
-    g_last_error = message;
+    const char* text = message ? message : "";
+    const size_t length = std::min(std::strlen(text), g_last_error.size() - 1);
+    std::memcpy(g_last_error.data(), text, length);
+    g_last_error[length] = '\0';
     return result;
 }
 
@@ -718,7 +722,7 @@ void invoke_callback(Callback callback, Args&&... args) noexcept
 lnplayer_result_t finish_result(lnplayer_result_t result)
 {
     if (result == LNPLAYER_RESULT_OK)
-        g_last_error.clear();
+        g_last_error[0] = '\0';
     else
         set_error(result, result == LNPLAYER_RESULT_NOT_IMPLEMENTED
             ? "The media backend is not connected."
@@ -781,7 +785,7 @@ lnplayer_result_t lnplayer_create(
             instance->user_data);
         g_player = instance.release();
         *player = g_player;
-        g_last_error.clear();
+        g_last_error[0] = '\0';
         return LNPLAYER_RESULT_OK;
     }
     catch (const std::bad_alloc&)
@@ -913,12 +917,23 @@ lnplayer_result_t lnplayer_library_add_directory(
     if (!path_utf8 || !path_utf8[0])
         return set_error(LNPLAYER_RESULT_INVALID_ARGUMENT, "Library directory path is empty.");
 
-    std::string error;
-    if (!player->runtime.open_music_library(error))
-        return set_error(LNPLAYER_RESULT_INTERNAL_ERROR, error.c_str());
-    if (!player->runtime.music_library().add_directory(path_utf8, recursive != 0, error))
-        return set_error(LNPLAYER_RESULT_INTERNAL_ERROR, error.c_str());
-    return finish_result(LNPLAYER_RESULT_OK);
+    try
+    {
+        std::string error;
+        if (!player->runtime.open_music_library(error))
+            return set_error(LNPLAYER_RESULT_INTERNAL_ERROR, error.c_str());
+        if (!player->runtime.music_library().add_directory(path_utf8, recursive != 0, error))
+            return set_error(LNPLAYER_RESULT_INTERNAL_ERROR, error.c_str());
+        return finish_result(LNPLAYER_RESULT_OK);
+    }
+    catch (const std::bad_alloc&)
+    {
+        return set_error(LNPLAYER_RESULT_OUT_OF_MEMORY, "Unable to allocate music library directory state.");
+    }
+    catch (...)
+    {
+        return set_error(LNPLAYER_RESULT_INTERNAL_ERROR, "Unexpected error while adding music library directory.");
+    }
 }
 
 lnplayer_result_t lnplayer_library_remove_directory(
@@ -931,12 +946,23 @@ lnplayer_result_t lnplayer_library_remove_directory(
     if (!path_utf8 || !path_utf8[0])
         return set_error(LNPLAYER_RESULT_INVALID_ARGUMENT, "Library directory path is empty.");
 
-    std::string error;
-    if (!player->runtime.open_music_library(error))
-        return set_error(LNPLAYER_RESULT_INTERNAL_ERROR, error.c_str());
-    if (!player->runtime.music_library().remove_directory(path_utf8, error))
-        return set_error(LNPLAYER_RESULT_INTERNAL_ERROR, error.c_str());
-    return finish_result(LNPLAYER_RESULT_OK);
+    try
+    {
+        std::string error;
+        if (!player->runtime.open_music_library(error))
+            return set_error(LNPLAYER_RESULT_INTERNAL_ERROR, error.c_str());
+        if (!player->runtime.music_library().remove_directory(path_utf8, error))
+            return set_error(LNPLAYER_RESULT_INTERNAL_ERROR, error.c_str());
+        return finish_result(LNPLAYER_RESULT_OK);
+    }
+    catch (const std::bad_alloc&)
+    {
+        return set_error(LNPLAYER_RESULT_OUT_OF_MEMORY, "Unable to allocate music library directory state.");
+    }
+    catch (...)
+    {
+        return set_error(LNPLAYER_RESULT_INTERNAL_ERROR, "Unexpected error while removing music library directory.");
+    }
 }
 
 lnplayer_result_t lnplayer_library_scan_directory(
@@ -1093,7 +1119,7 @@ lnplayer_result_t lnplayer_windows_convert_video_frame(
         frame.ycbcr_matrix = ycbcr_matrix;
         frame.ycbcr_full_range = ycbcr_full_range;
         invoke_callback(callback, &frame, user_data);
-        g_last_error.clear();
+        g_last_error[0] = '\0';
         return LNPLAYER_RESULT_OK;
     }
     catch (...)
@@ -1122,7 +1148,7 @@ lnplayer_result_t lnplayer_windows_read_video_frame(
             player->controller->read_video_frame(callback, user_data, end_of_stream, error);
         if (result == LNPLAYER_RESULT_OK)
         {
-            g_last_error.clear();
+            g_last_error[0] = '\0';
             return result;
         }
         return set_error(
@@ -1147,7 +1173,7 @@ lnplayer_result_t lnplayer_get_snapshot(
         return set_error(LNPLAYER_RESULT_INVALID_ARGUMENT, "Snapshot structure is null or too small.");
 
     player->controller->get_snapshot(snapshot);
-    g_last_error.clear();
+    g_last_error[0] = '\0';
     return LNPLAYER_RESULT_OK;
 }
 
@@ -1160,7 +1186,7 @@ lnplayer_result_t lnplayer_set_volume(lnplayer_t* player, uint32_t volume)
         return set_error(LNPLAYER_RESULT_INVALID_ARGUMENT, "Volume must be between 0 and 1000.");
 
     player->controller->set_volume(volume);
-    g_last_error.clear();
+    g_last_error[0] = '\0';
     return LNPLAYER_RESULT_OK;
 }
 
@@ -1314,7 +1340,7 @@ lnplayer_result_t lnplayer_get_last_error(
     size_t buffer_size,
     size_t* required_size)
 {
-    const size_t required = g_last_error.size() + 1;
+    const size_t required = std::strlen(g_last_error.data()) + 1;
 
     if (required_size)
         *required_size = required;
@@ -1322,7 +1348,7 @@ lnplayer_result_t lnplayer_get_last_error(
     if (!buffer || buffer_size < required)
         return LNPLAYER_RESULT_BUFFER_TOO_SMALL;
 
-    std::memcpy(buffer, g_last_error.c_str(), required);
+    std::memcpy(buffer, g_last_error.data(), required);
     return LNPLAYER_RESULT_OK;
 }
 
