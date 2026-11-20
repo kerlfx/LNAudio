@@ -78,10 +78,11 @@ flowchart TD
 
 ### 2.2 平台桥接层
 
-- Windows UI 通过 Core C ABI 调用共享核心。
-- Android 通过 JNI Bridge 将 Kotlin 调用转发到 Core C ABI。
-- JNI 只负责类型转换、句柄管理和调用桥接，不承载播放业务逻辑。
-- 平台 UI 不直接依赖 Core 内部 C++ 类。
+- Windows UI 和 Android UI 均采用平台原生异步机制提交交互任务；可能长时间等待的同步 C ABI 调用只能在 UI 后台执行上下文中调用。
+- Windows Qt UI 通过 UI 侧 Boost.Asio 异步任务调度层提交任务；Asio 工作线程调用 Core C ABI，结果再投递回 Qt GUI 主线程。
+- Android Kotlin UI 使用 Kotlin Coroutines、Dispatchers 和 Android Main Looper 协作；通过后台 Dispatcher 执行 JNI/C ABI 同步调用，完成后恢复到 Main Dispatcher 更新界面。
+- Android JNI Bridge 只负责类型转换、句柄管理和调用桥接，不承载播放业务逻辑。
+- 平台 UI 不直接依赖 Core 内部 C++ 类，也不要求 Android UI 引入 Boost.Asio。
 
 ### 2.3 共享核心层
 
@@ -326,7 +327,7 @@ Core 使用 Boost.Asio 作为内部异步调度与并发执行基础。对外 C 
 
 ~~~mermaid
 flowchart TD
-    A[平台 UI / JNI 调用线程] --> B[C ABI 同步接口]
+    A[UI 后台任务执行上下文 / JNI 调用线程] --> B[C ABI 同步接口]
     B --> C[提交请求并等待结果]
     C --> D[io_context]
     D --> E[统一任务提交]
@@ -422,6 +423,45 @@ Video Output 至少需要区分两类帧：
 Core 内部可以使用 FFmpeg AVFrame 和 AVBufferRef 管理帧生命周期，但这些 FFmpeg 类型不得出现在公开 C ABI 中。跨平台抽象应隐藏平台资源类型；若平台 UI/渲染器需要原生 Surface 或图形资源，应通过平台专用适配接口交接，而不是把 ID3D11Texture2D*、ANativeWindow* 等类型放入通用 lnplayer.h。
 
 零拷贝是优先优化目标，不是所有设备和解码路径都能保证的契约。无法直接互操作时，允许执行必要的硬件帧传输/格式转换，或回退到软件解码；应避免无条件把硬件帧下载到 CPU 再重新上传 GPU。
+
+### 7.6 平台 UI 异步交互模型
+
+平台 UI 采用异步任务提交模型。UI 主线程只处理平台事件、用户输入、界面对象生命周期和绘制；所有可能长时间等待的同步 C ABI 调用都必须在 UI 后台执行上下文中执行。UI 主线程不得直接调用可能阻塞的 C ABI，也不得通过同步等待后台任务结果的方式变相阻塞。
+
+不同平台使用原生适配方式，不强制将 UI 层统一到 Boost.Asio：
+
+- **Windows / Qt**：Qt GUI 主线程接收交互后，将任务提交到 UI 侧 Boost.Asio 调度层。UI 调度层使用独立的 `io_context` 协调交互请求、结果和事件，并使用 UI 侧共享 `thread_pool` 执行可能阻塞的同步 C ABI 调用及其他后台工作。任务完成后，通过 Qt queued connection、事件投递或等价机制将结果交回 GUI 主线程。
+- **Android / Kotlin**：使用 Kotlin Coroutines 管理异步交互任务和生命周期。UI 事件在适当的 Coroutine Scope 中启动任务；通过 `Dispatchers.IO` 执行可能阻塞的 JNI/C ABI 调用，通过 `Dispatchers.Default` 执行 CPU 密集型 UI 数据处理；返回 UI 时使用 `Dispatchers.Main`。Android Main Looper 仍是 View、Activity 和其他 UI 对象的唯一常规操作线程。Android UI 不需要为此引入 Boost.Asio。
+- **JNI 边界**：JNI 调用应保持为同步桥接调用；调用发生在后台协程所调度的工作线程，而不是 Android Main Thread。JNI 不创建第二套播放器业务调度系统，也不在 JNI 层实现播放状态机。
+
+UI 调度层与 Core Runtime 的职责相互独立。UI 调度层负责交互任务的提交、并发、生命周期和结果回送；Core Runtime 负责 C ABI 请求协调、播放器业务任务和媒体资源调度。UI 后台工作线程调用同步 C ABI 时会等待 Core 返回，因此 UI 侧和 Core 侧都必须避免循环等待、线程池饥饿及在自身调度线程中同步等待自身任务。
+
+同一 Player 的交互命令需要保持明确的提交顺序。Windows 可使用 Asio `strand` 或等价串行协调器；Android 可使用协程 Actor、`Mutex` 或专用命令队列。顺序协调只覆盖需要保持顺序的命令，不应把无关 Player 或可并行的数据准备工作全局串行化。
+
+异步任务的取消必须区分“停止等待结果”和“取消底层操作”：Coroutine cancellation 或 UI 任务取消本身不会自动中断已经进入同步 C ABI 的调用。若需要中断打开、Seek 或其他长任务，必须由 Core 提供明确的取消语义；在未实现可中断契约前，UI 应允许忽略过期结果，但不得假定底层调用已停止。
+
+结果与主动事件必须通过平台线程安全的投递机制返回 UI。后台线程不得直接操作 QWidget、Android View 或其他受 UI 线程约束的平台对象。异步结果还应关联 Player/操作代次或请求标识，防止窗口销毁、媒体切换或新请求发生后，旧任务结果覆盖当前界面状态。
+
+~~~mermaid
+flowchart TD
+    A[Qt GUI 主线程] -->|提交交互任务| B[Windows UI io_context]
+    B --> C[Windows UI 共享 thread_pool]
+    C -->|同步调用| D[Core C ABI]
+    D --> E[Core io_context / thread_pool]
+    E --> D
+    D --> C
+    C --> B
+    B -->|Qt 事件投递| A
+
+    F[Android Main Looper / Kotlin UI] -->|启动协程| G[Kotlin Coroutines]
+    G --> H[Dispatchers.IO]
+    H -->|JNI 同步调用| D2[Core C ABI]
+    D2 --> E
+    E --> D2
+    D2 --> H
+    H --> G
+    G -->|Dispatchers.Main| F
+~~~
 
 ### 7.5.3 渲染任务调度与实时边界
 
