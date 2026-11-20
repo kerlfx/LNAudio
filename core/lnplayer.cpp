@@ -579,6 +579,7 @@ std::condition_variable g_player_condition;
 lnplayer_t* g_player = nullptr;
 bool g_destroying = false;
 std::size_t g_active_player_calls = 0;
+thread_local std::size_t g_thread_player_calls = 0;
 thread_local std::string g_last_error;
 
 class PlayerAccess
@@ -590,6 +591,7 @@ public:
         if (!player || player != g_player || g_destroying)
             return;
         ++g_active_player_calls;
+        ++g_thread_player_calls;
         player_ = player;
     }
 
@@ -597,6 +599,7 @@ public:
     {
         if (!player_)
             return;
+        --g_thread_player_calls;
         std::lock_guard<std::mutex> lock(g_player_mutex);
         if (--g_active_player_calls == 0)
             g_player_condition.notify_all();
@@ -695,6 +698,9 @@ lnplayer_result_t lnplayer_create(
 
 lnplayer_result_t lnplayer_destroy(lnplayer_t* player)
 {
+    if (g_thread_player_calls != 0)
+        return set_error(LNPLAYER_RESULT_WOULD_DEADLOCK, "Player cannot be destroyed from one of its active API callbacks.");
+
     std::unique_lock<std::mutex> lock(g_player_mutex);
     if (!player || player != g_player || g_destroying)
         return set_error(LNPLAYER_RESULT_INVALID_HANDLE, "Invalid Player handle.");
