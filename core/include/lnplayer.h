@@ -104,20 +104,6 @@ typedef void (*lnplayer_library_track_callback_t)(
     const lnplayer_library_track_t* track,
     void* user_data);
 
-typedef struct lnplayer_video_frame
-{
-    uint32_t struct_size;
-    const uint8_t* bgra;
-    int32_t width;
-    int32_t height;
-    int32_t stride;
-    int64_t pts_ms;
-} lnplayer_video_frame_t;
-
-typedef void (*lnplayer_video_frame_callback_t)(
-    const lnplayer_video_frame_t* frame,
-    void* user_data);
-
 #define LNPLAYER_MEDIA_HAS_AUDIO 0x1u
 #define LNPLAYER_MEDIA_HAS_VIDEO 0x2u
 
@@ -190,17 +176,6 @@ LNPLAYER_API lnplayer_result_t lnplayer_library_search_tracks(
     int32_t limit,
     lnplayer_library_track_callback_t callback,
     void* user_data);
-
-/*
- * Decodes one video frame synchronously on the Core worker.
- * The callback runs on the calling thread; frame pixels are valid only
- * during the callback. Call from a dedicated background thread.
- */
-LNPLAYER_API lnplayer_result_t lnplayer_read_video_frame(
-    lnplayer_t* player,
-    lnplayer_video_frame_callback_t callback,
-    void* user_data,
-    int* end_of_stream);
 
 /* Snapshot queries do not wait for the event loop or worker pool. */
 LNPLAYER_API lnplayer_result_t lnplayer_get_snapshot(
