@@ -835,3 +835,16 @@
 提交：6d30ff6b38006f46ae28b8f7c400f1f08a8d2fd5。
 - [x] 因帧读取与 Session 命令现已由同一 mutex 串行化，移除原先仅用于跨锁比较的冗余 media_generation_ atomic；帧 generation 直接读取受锁保护的 Session snapshot。
 提交：ed0e8be87e11c252b758f2fc8a4f693df75f6a2b、c477129e683aa65deb73bd33f7adc9108e56756a。
+
+### 2026-11-21 — Windows UI 设置与 INI
+
+- [x] Windows 设置统一使用 Qt INI 格式，文件位于 `QStandardPaths::AppConfigLocation/settings.ini`。
+- [x] 首次启动迁移旧版 Windows Native Settings（注册表）中存在的键；已有 INI 键优先，不覆盖。
+- [x] 设置窗口增加常规页，展示配置文件位置并可打开配置目录。
+- [x] 设置面板整理为常规、播放、界面、视频、字幕、快捷键、截图、性能。
+- [x] 增加截图默认目录与 PNG/JPEG/BMP 格式设置，并让截图对话框沿用偏好。
+- [x] 补齐色调、锐化、降噪、灰度滤镜参数的设置保存；降噪 UI 范围与加载范围统一为 0–1。
+- [ ] 仍需 Windows 实际运行验收：旧注册表迁移、INI 手工修改、取消/恢复默认、快捷键冲突、截图格式和路径、DPI/窗口尺寸。
+- [ ] 本轮未运行 Windows/MSVC/Qt 构建、CTest 或 CI。
+
+详细设置键和面板说明见 `docs/WINDOWS_UI_SETTINGS.md`。
