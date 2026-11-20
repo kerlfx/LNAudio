@@ -1152,7 +1152,8 @@ MainWindow::MainWindow(
             }
         }
 
-        if (is_playing_ && has_video_ && !video_frame_pending_ && !pending_video_frame_valid_)
+        if (is_playing_ && has_video_ && !video_seek_pending_ &&
+            !video_frame_pending_ && !pending_video_frame_valid_)
             requestVideoFrame();
     });
 
@@ -1813,7 +1814,8 @@ void MainWindow::refreshLibrary()
 
 void MainWindow::requestVideoFrame()
 {
-    if (mode_ != PlayerMode::Video || !has_video_ || video_frame_pending_ || video_end_of_stream_)
+    if (mode_ != PlayerMode::Video || !has_video_ || video_frame_pending_ ||
+        video_seek_pending_ || video_end_of_stream_)
         return;
 
     video_frame_pending_ = true;
@@ -1956,7 +1958,7 @@ void MainWindow::requestVideoFrame()
                 return;
             }
 
-            if ((!image.isNull() || hardware_owner) &&
+            if ((!image.isNull() || hardware_owner) && !video_seek_pending_ &&
                 generation == requested_generation && generation >= media_generation_)
             {
                 media_generation_ = generation;
