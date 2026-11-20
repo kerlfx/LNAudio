@@ -298,6 +298,7 @@ private:
     std::deque<QString> playlist_probe_queue_;
     bool playlist_probe_running_ = false;
     int playlist_index_ = -1;
+    uint64_t playlist_operation_generation_ = 0;
     QString current_media_path_;
     QListWidgetItem* playing_playlist_item_ = nullptr;
     QMultiHash<QString, QListWidgetItem*> playlist_item_index_;
