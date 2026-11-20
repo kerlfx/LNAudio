@@ -838,7 +838,7 @@
 
 ### 2026-11-21 — Windows UI 设置与 INI
 
-- [x] Windows 设置统一使用 Qt INI 格式，文件位于 `QStandardPaths::AppConfigLocation/settings.ini`。
+- [x] Windows 设置统一使用 Qt INI 格式，优先位于程序目录 `Data/settings.ini`；程序目录不可写时才回退到当前用户 Local App Data。
 - [x] 首次启动迁移旧版 Windows Native Settings（注册表）中存在的键；已有 INI 键优先，不覆盖。
 - [x] 设置窗口增加常规页，展示配置文件位置并可打开配置目录。
 - [x] 设置面板整理为常规、播放、界面、视频、字幕、快捷键、截图、性能。
@@ -851,3 +851,18 @@
 - [x] 字幕启用状态加入 INI，并在 Player 初始化和设置窗口保存后同步到 Core；音量滑块改为 300 ms 防抖持久化，窗口关闭时保存最终值，避免拖动过程中频繁写盘。
 - [x] 播放设置页增加默认播放速度（0.25×–4×），保存后通过统一的 `setPlaybackRate()` 应用并写入 INI。
 - [x] 播放设置页增加“播放结束后自动播放下一项”；关闭后普通播放模式在当前项结束时停止，列表循环和单项循环仍按显式循环模式执行。
+
+
+### 2026-11-21 — 便携数据目录与 Windows 文件关联
+
+- [x] 设置文件优先迁移到程序目录下的 `Data/settings.ini`；程序目录不可写时回退到当前用户 Local App Data，避免标准 Program Files 安装因权限不足无法保存设置。
+- [x] 明确截图目录默认位于 Data/Screenshots；其他数据继续集中在 INI，缓存/日志等目录仅在对应功能实现后按需创建。
+- [x] 安装包文件关联改为当前用户注册，不写 HKLM；ProgID、OpenWith 和 RegisteredApplications 均限定在 HKCU，卸载只清理 LNPlayer 自身注册项。
+- [x] 设置常规页列出当前支持的视频扩展名，并提供 Windows 默认应用设置入口。默认应用由 Windows 管理，播放器不尝试绕过系统机制强制接管。
+- [ ] 仍需 Windows 实机验收便携目录写入、Program Files 回退、各扩展名双击启动、默认应用设置和卸载清理。
+- [ ] 本次未运行 Windows 构建、CTest 或 CI。
+
+提交：
+- `5ac9b8c5f26e399f6956e514224b1b7daf59d8e4`、`a90965e0e3ea7a9fffcdc2ad6fe205a9f67f4303` — 安装包文件关联改为当前用户注册。
+- `e83bda2b891a16d05fbb7a0096cba08977b98548` — 常规设置页补充支持格式说明。
+- `12ececeaf212401de7703f33420d575690f708fe` — 便携数据目录和关联策略文档。
