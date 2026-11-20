@@ -1065,6 +1065,7 @@ MainWindow::MainWindow(PlayerMode mode, const QString& initial_media, QWidget* p
     connect(seek_slider_, &QSlider::sliderReleased, this, [this]
     {
         slider_dragging_ = false;
+        viewing_historical_frame_ = false;
         if (duration_ms_ <= 0)
             return;
 

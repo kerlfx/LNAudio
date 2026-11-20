@@ -243,14 +243,24 @@ public:
             const int preferred_stream = default_subtitle_stream >= 0
                 ? default_subtitle_stream
                 : first_subtitle_stream;
-            if (preferred_stream >= 0)
+            if (preferred_stream >= 0 &&
+                create_subtitle_decoder(preferred_stream, &subtitle_decoder_))
+                subtitle_stream_index_ = preferred_stream;
+
+            if (!subtitle_decoder_)
             {
-                if (create_subtitle_decoder(preferred_stream, &subtitle_decoder_))
-                    subtitle_stream_index_ = preferred_stream;
-                else if (preferred_stream != first_subtitle_stream &&
-                    first_subtitle_stream >= 0 &&
-                    create_subtitle_decoder(first_subtitle_stream, &subtitle_decoder_))
-                    subtitle_stream_index_ = first_subtitle_stream;
+                for (unsigned int index = 0; index < format_context_->nb_streams; ++index)
+                {
+                    AVStream* stream = format_context_->streams[index];
+                    if (stream->codecpar->codec_type != AVMEDIA_TYPE_SUBTITLE ||
+                        static_cast<int>(index) == preferred_stream)
+                        continue;
+                    if (create_subtitle_decoder(static_cast<int>(index), &subtitle_decoder_))
+                    {
+                        subtitle_stream_index_ = static_cast<int>(index);
+                        break;
+                    }
+                }
             }
         }
 
@@ -1269,7 +1279,15 @@ private:
                     if ((!cue.text.empty() || !cue.bitmaps.empty()) &&
                         cue.end_ms > cue.start_ms)
                     {
-                        active_subtitle_cues_.push_back(std::move(cue));
+                        const auto insertion = std::upper_bound(
+                            active_subtitle_cues_.begin(),
+                            active_subtitle_cues_.end(),
+                            cue.start_ms,
+                            [](int64_t start, const DecodedSubtitleCue& existing)
+                            {
+                                return start < existing.start_ms;
+                            });
+                        active_subtitle_cues_.insert(insertion, std::move(cue));
                         while (active_subtitle_cues_.size() > 128)
                             active_subtitle_cues_.pop_front();
                     }
