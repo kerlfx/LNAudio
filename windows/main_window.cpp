@@ -856,6 +856,7 @@ void MainWindow::openFiles(const QList<QUrl>& urls)
 
     playlist_ = std::move(next_playlist);
     playlist_index_ = -1;
+    resetShuffleOrder();
     if (playlist_widget_)
     {
         playlist_widget_->clear();
@@ -901,9 +902,9 @@ void MainWindow::removeSelectedPlaylistItem()
 
     const bool removing_current = row == playlist_index_;
     playlist_.removeAt(row);
-    resetShuffleOrder();
     if (row < playlist_index_)
         --playlist_index_;
+    resetShuffleOrder();
     rebuildPlaylistWidget();
 
     if (removing_current)
@@ -938,11 +939,11 @@ void MainWindow::moveSelectedPlaylistItem(int offset)
         return;
 
     playlist_.swapItemsAt(from, to);
-    resetShuffleOrder();
     if (playlist_index_ == from)
         playlist_index_ = to;
     else if (playlist_index_ == to)
         playlist_index_ = from;
+    resetShuffleOrder();
     rebuildPlaylistWidget();
     playlist_widget_->setCurrentRow(to);
 }
