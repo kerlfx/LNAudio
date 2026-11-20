@@ -1082,6 +1082,9 @@ MainWindow::MainWindow(
     {
         slider_dragging_ = false;
         viewing_historical_frame_ = false;
+        video_frame_history_.clear();
+        video_frame_history_index_ = -1;
+        pending_video_frame_valid_ = false;
         if (duration_ms_ <= 0)
             return;
 
@@ -2246,7 +2249,12 @@ void MainWindow::togglePlayback()
     const bool resume_from_history = !should_pause && viewing_historical_frame_;
     const int64_t resume_position = current_position_ms_;
     if (resume_from_history)
+    {
         viewing_historical_frame_ = false;
+        video_frame_history_.clear();
+        video_frame_history_index_ = -1;
+        pending_video_frame_valid_ = false;
+    }
 
     QMetaObject::invokeMethod(command_worker_,
         [this, should_pause, resume_from_history, resume_position]
@@ -2274,6 +2282,9 @@ void MainWindow::seekRelative(int64_t offset_ms)
         return;
 
     viewing_historical_frame_ = false;
+    video_frame_history_.clear();
+    video_frame_history_index_ = -1;
+    pending_video_frame_valid_ = false;
     const int64_t target = std::clamp<int64_t>(
         current_position_ms_ + offset_ms, 0, duration_ms_);
     QMetaObject::invokeMethod(command_worker_, [this, target]
