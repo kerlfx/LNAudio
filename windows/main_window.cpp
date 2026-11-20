@@ -17,6 +17,7 @@
 #include <QByteArray>
 #include <QFont>
 #include <QDragEnterEvent>
+#include <QDir>
 #include <QDropEvent>
 #include <QFile>
 #include <QFileDialog>
@@ -2039,13 +2040,29 @@ void MainWindow::takeScreenshot()
     if (screenshot.isNull())
         return;
 
+    QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+    const QString last_directory = settings.value(
+        QStringLiteral("Video/Screenshot/LastDirectory"),
+        QDir::homePath()).toString();
     const QString path = QFileDialog::getSaveFileName(
         this,
         QStringLiteral("保存视频截图"),
-        QStringLiteral("screenshot.png"),
-        QStringLiteral("PNG 图片 (*.png);;JPEG 图片 (*.jpg *.jpeg)"));
-    if (!path.isEmpty())
-        screenshot.save(path);
+        QDir(last_directory).filePath(QStringLiteral("screenshot.png")),
+        QStringLiteral("PNG 图片 (*.png);;JPEG 图片 (*.jpg *.jpeg);;BMP 图片 (*.bmp)"));
+    if (path.isEmpty())
+        return;
+
+    if (!screenshot.save(path))
+    {
+        statusBar()->showMessage(QStringLiteral("截图保存失败"));
+        return;
+    }
+
+    settings.setValue(
+        QStringLiteral("Video/Screenshot/LastDirectory"),
+        QFileInfo(path).absolutePath());
+    settings.sync();
+    statusBar()->showMessage(QStringLiteral("截图已保存：%1").arg(path));
 }
 
 void MainWindow::setPlaybackRate(float rate)
