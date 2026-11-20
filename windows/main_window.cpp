@@ -47,6 +47,7 @@
 #include <QListWidgetItem>
 #include <QMenuBar>
 #include <QMenu>
+#include <QActionGroup>
 #include <QShortcut>
 #include <QKeySequence>
 #include <QKeySequenceEdit>
@@ -299,6 +300,80 @@ MainWindow::MainWindow(
     file_menu->addSeparator();
     auto* exit_action = file_menu->addAction(QStringLiteral("退出"));
     connect(exit_action, &QAction::triggered, this, &QWidget::close);
+
+    if (mode_ == PlayerMode::Video)
+    {
+        auto* playback_menu = menuBar()->addMenu(QStringLiteral("播放"));
+        auto* play_pause_action = playback_menu->addAction(QStringLiteral("播放/暂停"));
+        connect(play_pause_action, &QAction::triggered, this, [this] { togglePlayback(); });
+        auto* stop_action = playback_menu->addAction(QStringLiteral("停止"));
+        connect(stop_action, &QAction::triggered, this, [this]
+        {
+            QMetaObject::invokeMethod(command_worker_, [this]
+            {
+                if (player_)
+                    lnplayer_stop(player_);
+            }, Qt::QueuedConnection);
+        });
+        playback_menu->addSeparator();
+        auto* previous_action = playback_menu->addAction(QStringLiteral("上一项"));
+        auto* next_action = playback_menu->addAction(QStringLiteral("下一项"));
+        connect(previous_action, &QAction::triggered, this, [this] { playPrevious(); });
+        connect(next_action, &QAction::triggered, this, [this] { playNext(); });
+
+        auto* speed_menu = playback_menu->addMenu(QStringLiteral("播放速度"));
+        QList<QAction*> speed_actions;
+        const float playback_speeds[] = {0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f, 3.0f, 4.0f};
+        auto* speed_group = new QActionGroup(speed_menu);
+        speed_group->setExclusive(true);
+        for (float speed : playback_speeds)
+        {
+            QAction* action = speed_menu->addAction(
+                QStringLiteral("%1x").arg(speed, 0, 'f', 2));
+            action->setCheckable(true);
+            action->setData(speed);
+            speed_group->addAction(action);
+            speed_actions.append(action);
+            connect(action, &QAction::triggered, this, [this, speed]
+            {
+                setPlaybackRate(speed);
+            });
+        }
+        connect(speed_menu, &QMenu::aboutToShow, this, [this, speed_actions]
+        {
+            for (QAction* action : speed_actions)
+                action->setChecked(std::abs(action->data().toFloat() - playback_rate_) < 0.001f);
+        });
+
+        auto* subtitle_menu = menuBar()->addMenu(QStringLiteral("字幕"));
+        auto* load_subtitle_action = subtitle_menu->addAction(QStringLiteral("加载外挂字幕..."));
+        connect(load_subtitle_action, &QAction::triggered, this, [this] { loadExternalSubtitle(); });
+        auto* subtitles_enabled_action = subtitle_menu->addAction(QStringLiteral("启用字幕"));
+        subtitles_enabled_action->setCheckable(true);
+        subtitles_enabled_action->setChecked(subtitles_enabled_);
+        connect(subtitles_enabled_action, &QAction::toggled, this, [this](bool enabled)
+        {
+            subtitles_enabled_ = enabled;
+            QMetaObject::invokeMethod(command_worker_, [this, enabled]
+            {
+                if (player_)
+                    lnplayer_set_subtitles_enabled(player_, enabled ? 1 : 0);
+            }, Qt::QueuedConnection);
+            pending_video_frame_valid_ = false;
+            requestVideoFrame();
+            showOsd(enabled ? QStringLiteral("字幕已启用") : QStringLiteral("字幕已关闭"));
+        });
+        subtitle_menu->addSeparator();
+        auto* subtitle_delay_action = subtitle_menu->addAction(QStringLiteral("字幕延迟 +500 ms"));
+        auto* subtitle_advance_action = subtitle_menu->addAction(QStringLiteral("字幕提前 500 ms"));
+        auto* subtitle_reset_action = subtitle_menu->addAction(QStringLiteral("重置字幕时间"));
+        connect(subtitle_delay_action, &QAction::triggered, this,
+            [this] { setSubtitleOffset(subtitle_offset_ms_ + 500); });
+        connect(subtitle_advance_action, &QAction::triggered, this,
+            [this] { setSubtitleOffset(subtitle_offset_ms_ - 500); });
+        connect(subtitle_reset_action, &QAction::triggered, this,
+            [this] { setSubtitleOffset(0); });
+    }
 
     if (mode_ == PlayerMode::Video)
     {
@@ -846,30 +921,12 @@ MainWindow::MainWindow(
                 pending_video_frame_valid_ = false;
                 requestVideoFrame();
             }
-            else if (selected == subtitle_delay || selected == subtitle_advance || selected == subtitle_reset)
-            {
-                if (selected == subtitle_delay)
-                    subtitle_offset_ms_ += 500;
-                else if (selected == subtitle_advance)
-                    subtitle_offset_ms_ -= 500;
-                else
-                    subtitle_offset_ms_ = 0;
-                const int64_t subtitle_offset_ms = subtitle_offset_ms_;
-                QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
-                settings.setValue(QStringLiteral("Video/Subtitle/OffsetMs"), subtitle_offset_ms_);
-                settings.sync();
-                QMetaObject::invokeMethod(command_worker_, [this, subtitle_offset_ms]
-                {
-                    if (player_)
-                        lnplayer_set_subtitle_offset(player_, subtitle_offset_ms);
-                    QMetaObject::invokeMethod(this, [this]
-                    {
-                        pending_video_frame_valid_ = false;
-                        requestVideoFrame();
-                    }, Qt::QueuedConnection);
-                }, Qt::QueuedConnection);
-                statusBar()->showMessage(QStringLiteral("字幕时间偏移：%1 ms").arg(subtitle_offset_ms_));
-            }
+            else if (selected == subtitle_delay)
+                setSubtitleOffset(subtitle_offset_ms_ + 500);
+            else if (selected == subtitle_advance)
+                setSubtitleOffset(subtitle_offset_ms_ - 500);
+            else if (selected == subtitle_reset)
+                setSubtitleOffset(0);
             else if (selected == previous_frame)
                 stepVideoFrame(true);
             else if (selected == next_frame)
@@ -2476,6 +2533,27 @@ void MainWindow::loadExternalSubtitlePath(const QString& path)
 
             pending_video_frame_valid_ = false;
             requestVideoFrame();
+        }, Qt::QueuedConnection);
+    }, Qt::QueuedConnection);
+}
+
+void MainWindow::setSubtitleOffset(int64_t offset_ms)
+{
+    subtitle_offset_ms_ = std::clamp<int64_t>(offset_ms, -60000, 60000);
+    QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+    settings.setValue(QStringLiteral("Video/Subtitle/OffsetMs"), subtitle_offset_ms_);
+    settings.sync();
+
+    const int64_t applied_offset = subtitle_offset_ms_;
+    QMetaObject::invokeMethod(command_worker_, [this, applied_offset]
+    {
+        if (player_)
+            lnplayer_set_subtitle_offset(player_, applied_offset);
+        QMetaObject::invokeMethod(this, [this, applied_offset]
+        {
+            pending_video_frame_valid_ = false;
+            requestVideoFrame();
+            showOsd(QStringLiteral("字幕偏移：%1 ms").arg(applied_offset));
         }, Qt::QueuedConnection);
     }, Qt::QueuedConnection);
 }
