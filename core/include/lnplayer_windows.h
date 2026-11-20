@@ -28,9 +28,13 @@ typedef struct lnplayer_windows_video_frame
     int32_t subtitle_width;
     int32_t subtitle_height;
     int32_t subtitle_stride;
+    /* 0=SDR/unknown, 1=SMPTE ST 2084 (PQ), 2=ARIB STD-B67 (HLG). */
     int32_t hdr_transfer;
+    /* 1=BT.2020 primaries, 0=other/unspecified. */
     int32_t color_primaries;
+    /* 0=BT.601/default, 1=BT.709. */
     int32_t ycbcr_matrix;
+    /* 0=limited range, 1=full range. */
     int32_t ycbcr_full_range;
 } lnplayer_windows_video_frame_t;
 
