@@ -717,7 +717,16 @@ MainWindow::MainWindow(
     seek_slider_->setRange(0, 1000);
     seek_slider_->setEnabled(false);
     volume_slider_->setRange(0, 1000);
-    volume_slider_->setValue(1000);
+    {
+        QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+        const int saved_volume = std::clamp(
+            settings.value(QStringLiteral("Playback/Volume"), 1000).toInt(), 0, 1000);
+        muted_volume_ = std::clamp(
+            settings.value(QStringLiteral("Playback/MutedVolume"), 1000).toInt(), 1, 1000);
+        volume_slider_->setValue(saved_volume);
+        if (saved_volume > 0)
+            muted_volume_ = saved_volume;
+    }
     volume_slider_->setMaximumWidth(160);
 
     auto* seek_layout = new QHBoxLayout();
@@ -832,8 +841,12 @@ MainWindow::MainWindow(
         config.user_data = this;
 
         const lnplayer_result_t result = lnplayer_create(&config, &player_);
-        if (result == LNPLAYER_RESULT_OK && mode_ == PlayerMode::Video)
-            lnplayer_set_playback_rate(player_, playback_rate_);
+        if (result == LNPLAYER_RESULT_OK)
+        {
+            lnplayer_set_volume(player_, static_cast<uint32_t>(volume_slider_->value()));
+            if (mode_ == PlayerMode::Video)
+                lnplayer_set_playback_rate(player_, playback_rate_);
+        }
 
         if (result == LNPLAYER_RESULT_OK &&
             mode_ == PlayerMode::Video && video_surface_)
@@ -897,6 +910,15 @@ MainWindow::MainWindow(
 
     connect(volume_slider_, &QSlider::valueChanged, this, [this](int value)
     {
+        QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+        settings.setValue(QStringLiteral("Playback/Volume"), value);
+        if (value > 0)
+        {
+            muted_volume_ = value;
+            settings.setValue(QStringLiteral("Playback/MutedVolume"), value);
+        }
+        settings.sync();
+
         QMetaObject::invokeMethod(command_worker_, [this, value]
         {
             if (player_)
