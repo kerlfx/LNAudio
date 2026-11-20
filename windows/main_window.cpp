@@ -1,6 +1,7 @@
 #include "main_window.h"
 
 #include <QDragEnterEvent>
+#include <QDropEvent>
 #include <QFileDialog>
 #include <QLabel>
 #include <QMenuBar>
