@@ -94,8 +94,9 @@ Windows 端同时提供音频和视频播放界面，两套 UI 属于同一个 L
 - UI 使用 Qt 6 Widgets，构建要求 Qt 6.12 或更新的 Qt 6 版本。
 - Core 使用独立的 Standalone Asio 头文件依赖，不依赖 Boost；默认从仓库的 `3rd_cache/asio/asio/include` 或 `3rd_cache/asio/include` 查找 `asio.hpp`。
 - Core Runtime 使用单线程 `asio::io_context` 和共享 `asio::thread_pool`。
-- 当前 Windows 窗口仅有界面骨架、文件选择和拖放入口；命令行媒体参数只显示路径，尚未实际播放。
-- C ABI 已有初版，PlaybackSession/MediaBackend 抽象已建立；FFmpeg Backend、Controller 任务调度接入、Windows 音频输出、D3D11 视频输出和完整 UI 尚未完成。
+- 当前 Windows 已接入 FFmpeg 音频解码、WASAPI 输出和 SQLite 音乐库；视频模式已接入 FFmpeg 视频解码、Windows D3D11 Swap Chain 呈现、D3D11VA 尝试与软件回退。
+- 视频帧通过 Windows 专用 `lnplayer_windows.h` Pull 接口交付，不扩展通用播放控制 C ABI。视频 UI 已具备 PTS 基础等待、全屏、快捷键、右键菜单、画面比例切换、截图和逐帧操作。
+- 视频硬件帧目前经 CPU 内存中转，尚未实现 FFmpeg 与 Renderer 共享 D3D11 Device 的零拷贝；音频主时钟仍使用解码时间戳近似，尚未接入 WASAPI IAudioClock。字幕、多音轨、播放速度、滤镜和设备丢失恢复未实现。
 - 本节描述的是当前工程状态，不代表 Windows 功能范围仅限于首期骨架；Windows 完整版本范围由第 1.1、1.2 节和后续 Windows 功能章节共同定义。
 
 ### 3.5 第三方依赖获取与集成
