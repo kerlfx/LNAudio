@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <deque>
 #include <iterator>
 #include <mutex>
 
@@ -326,12 +327,15 @@ public:
         uint32_t array_slice,
         uint32_t format,
         int width,
-        int height)
+        int height,
+        std::shared_ptr<void> frame_owner)
     {
         std::lock_guard<std::mutex> lock(mutex_);
         if (!native_texture || width <= 0 || height <= 0 ||
-            !swap_chain_ || !device_ || !video_device_ || !video_context_)
+            !frame_owner || !swap_chain_ || !device_ || !video_device_ || !video_context_)
             return false;
+
+        reap_completed_hardware_frames();
 
         RECT client{};
         if (!GetClientRect(window_, &client))
@@ -391,6 +395,12 @@ public:
         input_desc.Texture2D.MipSlice = 0;
         input_desc.Texture2D.ArraySlice = array_slice;
 
+        D3D11_QUERY_DESC query_desc{};
+        query_desc.Query = D3D11_QUERY_EVENT;
+        ComPtr<ID3D11Query> completion_query;
+        if (FAILED(device_->CreateQuery(&query_desc, completion_query.GetAddressOf())))
+            return false;
+
         ComPtr<ID3D11VideoProcessorInputView> input_view;
         if (FAILED(video_device_->CreateVideoProcessorInputView(
                 texture,
@@ -446,6 +456,10 @@ public:
         if (FAILED(blt_result))
             return false;
 
+        context_->End(completion_query.Get());
+        context_->Flush();
+        pending_hardware_frames_.push_back(
+            PendingHardwareFrame{std::move(completion_query), std::move(frame_owner)});
         return SUCCEEDED(swap_chain_->Present(1, 0));
     }
 
@@ -466,6 +480,24 @@ public:
     }
 
 private:
+    struct PendingHardwareFrame
+    {
+        ComPtr<ID3D11Query> completion;
+        std::shared_ptr<void> owner;
+    };
+
+    void reap_completed_hardware_frames()
+    {
+        while (!pending_hardware_frames_.empty())
+        {
+            const HRESULT result = context_->GetData(
+                pending_hardware_frames_.front().completion.Get(), nullptr, 0, 0);
+            if (result == S_FALSE)
+                break;
+            pending_hardware_frames_.pop_front();
+        }
+    }
+
     bool create_render_target()
     {
         ComPtr<ID3D11Texture2D> back_buffer;
@@ -521,6 +553,21 @@ private:
 
     void release_resources()
     {
+        if (context_ && !pending_hardware_frames_.empty())
+        {
+            context_->Flush();
+            for (auto& frame : pending_hardware_frames_)
+            {
+                HRESULT result = S_FALSE;
+                while (result == S_FALSE)
+                {
+                    result = context_->GetData(frame.completion.Get(), nullptr, 0, 0);
+                    if (result == S_FALSE)
+                        Sleep(0);
+                }
+            }
+            pending_hardware_frames_.clear();
+        }
         if (context_)
             context_->ClearState();
         video_view_.Reset();
@@ -543,6 +590,7 @@ private:
     }
 
     std::mutex mutex_;
+    std::deque<PendingHardwareFrame> pending_hardware_frames_;
     HWND window_ = nullptr;
     UINT texture_width_ = 0;
     UINT texture_height_ = 0;
@@ -610,9 +658,11 @@ bool D3D11VideoRenderer::present(const uint8_t* bgra, int width, int height, int
 }
 
 bool D3D11VideoRenderer::present_hardware(
-    void* texture, uint32_t array_slice, uint32_t format, int width, int height)
+    void* texture, uint32_t array_slice, uint32_t format,
+    int width, int height, std::shared_ptr<void> frame_owner)
 {
-    return impl_->present_hardware(texture, array_slice, format, width, height);
+    return impl_->present_hardware(
+        texture, array_slice, format, width, height, std::move(frame_owner));
 }
 
 void D3D11VideoRenderer::clear()
