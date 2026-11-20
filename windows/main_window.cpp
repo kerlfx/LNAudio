@@ -1,4 +1,5 @@
 #include "main_window.h"
+#include "d3d11_video_renderer.h"
 
 #include <algorithm>
 
@@ -19,6 +20,7 @@
 #include <QPushButton>
 #include <QPainter>
 #include <QPaintEvent>
+#include <QResizeEvent>
 #include <QSlider>
 #include <QStatusBar>
 #include <QThread>
@@ -31,19 +33,55 @@ VideoSurface::VideoSurface(QWidget* parent)
     : QWidget(parent)
 {
     setMinimumSize(640, 360);
+    setAttribute(Qt::WA_NativeWindow);
+    setAttribute(Qt::WA_NoSystemBackground);
+    setAttribute(Qt::WA_OpaquePaintEvent);
     setAutoFillBackground(false);
     setStyleSheet(QStringLiteral("background-color: #101010;"));
+
+    renderer_ = new lnplayer::windows::D3D11VideoRenderer();
+    const HWND window = reinterpret_cast<HWND>(static_cast<quintptr>(winId()));
+    if (!renderer_->initialize(window))
+    {
+        delete renderer_;
+        renderer_ = nullptr;
+    }
+}
+
+VideoSurface::~VideoSurface()
+{
+    delete renderer_;
+    renderer_ = nullptr;
 }
 
 void VideoSurface::set_frame(const QImage& frame)
 {
     frame_ = frame;
+    if (renderer_)
+    {
+        if (frame_.isNull())
+            renderer_->clear();
+        else if (renderer_->present(
+            frame_.constBits(),
+            frame_.width(),
+            frame_.height(),
+            frame_.bytesPerLine()))
+            return;
+        else
+        {
+            delete renderer_;
+            renderer_ = nullptr;
+        }
+    }
     update();
 }
 
 void VideoSurface::paintEvent(QPaintEvent* event)
 {
     Q_UNUSED(event);
+    if (renderer_)
+        return;
+
     QPainter painter(this);
     painter.fillRect(rect(), Qt::black);
     if (frame_.isNull())
@@ -57,6 +95,15 @@ void VideoSurface::paintEvent(QPaintEvent* event)
         fitted.height());
     painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
     painter.drawImage(target, frame_);
+}
+
+void VideoSurface::resizeEvent(QResizeEvent* event)
+{
+    QWidget::resizeEvent(event);
+    if (renderer_)
+        renderer_->resize(
+            static_cast<uint32_t>(event->size().width()),
+            static_cast<uint32_t>(event->size().height()));
 }
 
 namespace
