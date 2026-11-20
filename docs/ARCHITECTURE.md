@@ -110,8 +110,8 @@ SQLite 保存音乐条目、元数据、文件位置关联、目录配置、索�
 | 模块 | 主要职责 | 不负责 |
 |---|---|---|
 | Application / Platform Integration | 平台入口、应用生命周期、系统 API 接入 | 共享播放业务 |
-| Player Manager | 创建、销毁和管理 Player 实例 | 媒体解码细节 |
-| Player Instance | 聚合单个播放器实例的控制、状态和资源 | 平台窗口创建 |
+| Runtime | 创建、销毁并管理进程内唯一 Player 及运行资源 | 媒体解码细节 |
+| Player Instance | 聚合进程内唯一播放器的控制、状态和资源 | 平台窗口创建 |
 | Playback Controller | 接收播放命令并协调状态转换 | 直接操作 UI 控件 |
 | Playback Session | 管理一次媒体播放所需的资源和状态 | 音乐库全局索引 |
 | Media Pipeline | 探测、解封装、解码、同步和缓冲 | 平台窗口生命周期 |
@@ -127,27 +127,25 @@ SQLite 保存音乐条目、元数据、文件位置关联、目录配置、索�
 
 ## 4. Player 对象模型与生命周期
 
+
 ### 4.1 对象职责与所有权
 
-建议采用以下所有权关系：
+每个进程只创建并持有一个 Player Instance。Core Runtime 负责该 Player 的运行环境和生命周期；不需要 Player Manager 管理多个 Player，也不提供进程内多 Player 调度。
 
-- **Player Manager**：管理当前 Core Runtime 中创建的 Player Instance，负责实例创建、销毁和句柄登记。它不持有某个实例的媒体解码状态。
-- **Player Instance**：代表一个逻辑播放器，拥有独立的播放状态、Playback Controller、Playlist、当前 Playback Session 和事件出口。
-- **Playback Controller**：属于一个 Player Instance，串行协调该实例的播放命令和状态转换。它不直接承担 FFmpeg 解码工作。
-- **Playlist**：属于 Player Instance，保存队列条目、当前条目位置及播放顺序策略。播放列表条目是媒体引用/描述，不持有打开中的 FFmpeg 上下文。
-- **Playback Session**：属于 Player Instance，代表当前打开的一次媒体播放。持有媒体输入、FFmpeg format/codec 上下文、解码器、时钟、数据队列及会话级资源。
+- **Runtime**：管理进程内唯一 Player、一个 `io_context`、一套共享 `thread_pool`、事件分发器及其他运行时资源。
+- **Player Instance**：代表当前进程唯一的逻辑播放器，拥有播放状态、Playback Controller、Playlist、当前 Playback Session 和事件出口。
+- **Playback Controller**：串行协调唯一 Player 的播放命令、状态转换和媒体生命周期；不直接承担 FFmpeg 解码工作。
+- **Playlist**：保存队列条目、当前条目位置及播放顺序策略。队列条目是媒体引用/描述，不持有打开中的 FFmpeg 上下文。
+- **Playback Session**：代表当前打开的一次媒体播放，持有媒体输入、FFmpeg format/codec 上下文、解码器、时钟、数据队列及会话级资源。
 - **Media Pipeline**：由 Playback Session 创建和管理，负责探测、解封装、解码和同步；平台输出通过抽象接口接入。
-
-Player Manager 与 Player Instance 是管理关系；Controller、Playlist 和 Session 是实例内部组成部分。不要把 Controller 或 Session 暴露成独立的顶层播放器实例。
 
 ~~~mermaid
 classDiagram
-    class PlayerManager {
+    class Runtime {
         +createPlayer()
         +destroyPlayer()
     }
     class PlayerInstance {
-        +id
         +state
     }
     class PlaybackController {
@@ -156,6 +154,7 @@ classDiagram
         +pause()
         +stop()
         +seek()
+        +close()
     }
     class Playlist {
         +add()
@@ -173,22 +172,26 @@ classDiagram
         +decode()
         +flush()
     }
-    PlayerManager "1" --> "0..*" PlayerInstance
+    Runtime "1" *-- "1" PlayerInstance
     PlayerInstance "1" *-- "1" PlaybackController
     PlayerInstance "1" *-- "1" Playlist
     PlayerInstance "1" *-- "0..1" PlaybackSession
     PlaybackSession "1" *-- "1" MediaPipeline
 ~~~
 
-### 4.2 实例数量与会话数量
 
+### 4.2 进程、Player 与会话数量
+
+- **一个进程只有一个 Player Instance**，由该进程内的 Core Runtime 创建和管理。
 - 一个 Player Instance 同一时刻最多拥有一个当前活动 Playback Session。
-- 一个 Player Instance 可以在没有活动 Session 时存在，例如刚创建、尚未打开媒体或停止并关闭当前媒体之后。
+- 一个 Player Instance 可以在没有活动 Session 时存在，例如刚创建、尚未打开媒体或关闭当前媒体之后。
 - 一个 Player Instance 可以持有多个 Playlist 条目，但队列中的其他条目不会因此提前创建 FFmpeg 上下文。
-- 切换到另一个媒体时，Controller 协调当前 Session 关闭，再为目标媒体建立新 Session。
-- 首期不设计同一 Player Instance 内多个独立媒体同时播放；若未来需要预加载，可增加独立的准备态资源，但不能与当前活动 Session 混淆。
+- 切换媒体时，由唯一的 Playback Controller 协调当前 Session 的关闭和目标媒体 Session 的建立。
+- 首期不设计同一 Player 内多个独立媒体同时播放；播放列表中的其他条目不构成额外 Player。
 
-Windows 已确定一个窗口一个进程；建议每个 Windows 窗口进程创建一个 Player Instance。Core API 仍保留创建多个实例的能力，不把 Windows 的进程策略写死到共享 Core。Android 是否在单进程中创建多个实例，由 Android 产品行为决定。
+Windows 每个播放器窗口对应一个独立子进程，因此每个窗口进程各自拥有一个 Player。音频 UI 和视频 UI 可以同时存在于不同进程。Android 每个应用进程同样只创建一个 Player。
+
+不同进程之间不共享 Player、Runtime、线程池、FFmpeg 上下文或可变播放状态。多个进程可以同时播放，但这是操作系统进程级隔离，不是单进程内多 Player 并发。
 
 ### 4.3 Player Instance 生命周期
 
@@ -233,46 +236,54 @@ stateDiagram-v2
 状态图是逻辑状态模型。具体实现可将 Seeking 等短暂操作表示为操作状态而非顶层枚举，但对外行为必须保持一致。
 
 
+
 ### 4.4 命令语义
 
-C ABI 采用同步函数调用形式，但不同接口具有不同的返回语义：
+C ABI 函数统一采用普通同步函数调用形式，但接口按完成语义分为三类：
 
-- **提交型接口**：函数只负责接收并提交操作请求，成功提交后立即返回，不等待实际业务完成。返回值表示请求是否被 Core 接受；异步操作的最终成功或失败通过完成事件报告。
-- **查询型接口**：同步读取调用时刻可立即取得的状态快照或缓存并返回。查询不得隐式等待媒体探测、解码、文件读取或其他耗时任务。
-- **即时型接口**：对于确实能够在调用线程内快速完成且不依赖耗时资源的操作，可以同步返回操作结果；不得将耗时业务放入此类接口。
+- **提交型接口**：函数负责接收并提交操作请求，成功进入 Core 管理队列后立即返回。返回值表示请求是否被接受，不代表业务执行成功。
+- **同步完成型接口**：函数提交操作后等待实际操作完成，再返回最终执行结果。等待发生在调用 C ABI 的线程；Core 的 `io_context` worker 不得阻塞等待业务任务。
+- **快速查询型接口**：同步读取调用时刻可立即取得的线程安全状态快照或缓存并返回，不等待媒体探测、解码、文件 I/O 或其他耗时任务。
 
-首期播放命令采用提交型语义：
+首期命令语义：
 
-| 命令 | C ABI 行为 | 业务完成通知 |
+| 命令 | C ABI 行为 | 返回语义 |
 |---|---|---|
-| create | 创建 Player，快速返回句柄 | 创建失败由调用返回值报告 |
-| open(source) | 提交打开请求并快速返回 | 打开成功/失败事件 |
-| play | 提交播放请求并快速返回 | 状态变化或错误事件 |
-| pause | 提交暂停请求并快速返回 | 状态变化或错误事件 |
-| stop | 提交停止请求并快速返回 | 停止完成后的状态变化事件 |
-| seek(position) | 提交定位请求并快速返回 | 定位完成/失败事件 |
-| close | 提交关闭请求并快速返回 | 关闭完成后的状态变化事件 |
-| destroy | 停止接收新请求并启动资源清理；销毁契约需保证句柄失效与资源回收顺序 | 相关事件出口停止后完成销毁 |
+| create | 创建进程内唯一 Player，快速返回句柄 | 创建结果 |
+| open(source) | 提交媒体打开任务后立即返回 | 请求是否成功接收；最终结果由 `OPEN_COMPLETED` 事件报告 |
+| play | 等待播放启动操作完成 | 实际操作成功或失败 |
+| pause | 等待暂停操作完成 | 实际操作成功或失败 |
+| stop | 等待停止操作完成 | 实际操作成功或失败 |
+| seek(position) | 提交定位任务后立即返回 | 请求是否成功接收；最终结果由 `SEEK_COMPLETED` 事件报告 |
+| close | 等待当前媒体关闭及关联资源清理完成 | 实际操作成功或失败 |
+| get_state / get_position / get_duration / get_volume | 读取线程安全快照 | 当前可立即取得的值 |
+| destroy | 执行 Player 生命周期销毁屏障 | 返回前句柄失效、在途工作退出且事件回调不再访问关联资源 |
 
-提交型接口返回成功只代表请求已进入 Core 的请求入口，不代表当前 Player 状态允许该操作，也不代表媒体操作最终成功。请求在 Core 中完成状态检查和执行后，若被拒绝或执行失败，必须通过对应操作完成事件报告。每个被接受的异步操作分配 operation_id，并在其完成事件中携带，用于关联连续提交的操作。
+`play/pause/stop/close` 是同步完成型接口。调用方线程等待操作最终结果；它们不通过操作完成事件代替函数返回值。状态变化等独立事件仍可正常分发。
 
-命令不能因内部异步执行而丢失顺序；同一 Player Instance 的状态转换由其 Controller 统一协调。不同 Player 之间允许并发。
+`open/seek` 是提交型接口。每个被接受的请求分配 `operation_id`；请求必须在入口验证后进入受管理队列，成功入队是提交成功的线性化点。并发调用按实际入队顺序确定命令顺序。
+
+同一进程只有一个 Player，因此只需一个 Playback Controller 协调该 Player 的命令顺序。共享线程池中的任务仍可并发执行，但不能依赖线程池的执行或完成顺序来保证命令语义。快速查询走线程安全快照路径，不等待 `io_context` 或线程池。
+
+同步完成型接口不得从 Core 的 `io_context` worker 或该 Player 的事件回调中调用，避免等待自身负责推进的任务而形成死锁。平台 UI 若不能承受等待，应从平台后台线程调用这些接口。
+
 
 ### 4.5 打开、切换与销毁顺序
 
-建议媒体打开流程：
+媒体打开流程：
 
-1. Controller 接收 open 命令并登记操作序号。
-2. 若存在旧 Session，先使其停止接收新工作并执行关闭。
+1. 唯一的 Playback Controller 接收 `open` 请求并登记 `operation_id`。
+2. 若存在旧 Session，先使其停止接收新工作，并协调旧 Session 关闭。
 3. 创建新的 Playback Session。
 4. 打开媒体输入、读取媒体信息并初始化所需解码器和输出资源。
 5. 初始化成功后将新 Session 设为当前 Session，状态进入 Ready。
-6. 将打开操作的最终结果返回原请求响应通道；媒体信息通过响应数据或后续查询提供。独立发生的状态变化仍通过主动事件通知。
+6. 通过 `OPEN_COMPLETED` 事件报告最终结果；媒体信息通过后续快速查询或专用数据接口读取。
 
-若打开失败，释放新 Session 已创建的资源并发出错误事件；不得留下半初始化的活动会话。
+若打开失败，释放新 Session 已创建的资源并发送失败完成事件；不得留下半初始化的活动会话。使用媒体代次（generation）隔离不同打开周期，旧任务的迟到结果不得覆盖当前 Session 状态。
 
-销毁顺序应遵循资源依赖的逆序：停止命令入口 → 取消/中断媒体读取与后台任务 → 停止输出 → 等待相关工作退出 → 释放解码器和格式上下文 → 释放队列及时钟 → 注销事件出口 → 销毁实例。具体线程 join 和中断机制在媒体管线及线程专题确定。
+`stop` 与 `close` 的职责应保持区分：`stop` 等待停止操作达到其定义的停止状态；`close` 等待当前媒体 Session 关闭及其关联资源清理完成。二者都必须在实际操作完成后才从 C ABI 返回。
 
+Player 销毁是生命周期屏障，不是普通的异步播放命令。销毁顺序遵循资源依赖的逆序：停止接收新请求 → 使句柄失效并阻止新访问 → 取消/中断媒体读取与后台任务 → 停止输出 → 等待相关工作退出 → 释放解码器和格式上下文 → 释放队列及时钟 → 停止事件分发并等待在途回调退出 → 释放 Player 与 Runtime 资源。不得在该 Player 自身的回调中调用会等待该回调退出的同步销毁操作。
 
 ## 5. Windows 运行模型
 
@@ -326,38 +337,41 @@ flowchart TD
 ## 7. 异步服务、线程池与并发模型
 
 
+
 ### 7.1 总体模型
 
-Core 使用 Boost.Asio 作为内部异步调度与并发执行基础。C ABI 函数由调用方同步调用，但主要播放控制接口采用提交即返回语义；实际媒体和播放业务在 Core 内部异步执行。
+Core 使用 Boost.Asio 作为内部异步协调与并发执行基础。每个进程只有一个 Player；该进程内的 Core Runtime 维护：
 
-每个 Runtime 维护：
+- 一个 `boost::asio::io_context`，负责命令接收、Player 命令协调、任务分发、结果回收、状态更新和事件分发。
+- 一套共享的 `boost::asio::thread_pool`，执行播放控制、媒体处理调用、文件 I/O、音乐库访问等实际业务任务。
+- 一个 Player Instance 及其 Playback Controller、Playlist、Playback Session 和平台输出资源。
 
-- 一个 boost::asio::io_context，负责所有 C ABI 请求入口、请求接收、Player 命令协调、任务分发、结果回收、状态更新和主动事件分发。
-- 一套共享的 boost::asio::thread_pool，作为 Runtime 内所有业务任务的统一执行池。
-- Player Manager 及其他 Runtime 级资源。
+控制任务、媒体任务、文件 I/O、音乐库任务均使用同一套共享线程池，不按业务类型额外创建多个线程池。线程池中的工作线程可以并发执行不同任务；具体资源的线程安全和操作依赖由 Controller 与资源级同步机制保证。
 
-控制任务、媒体任务、文件 I/O、音乐库任务均提交到同一套共享线程池，不额外创建按业务类型划分的控制池、媒体池或文件 I/O 池。线程池中的工作线程可以并发执行不同任务；任务类别不意味着独占线程或独立线程池。
+C ABI 采用三种调用语义：
 
-提交型 C ABI 的调用线程只负责把请求交给 Runtime 请求入口并取得提交结果，不等待实际业务完成。Core 在 io_context 中接受并协调请求，再将实际业务任务提交到共享 thread_pool。业务任务完成后将结果投递回 io_context，由其更新状态并分发操作完成事件或独立主动事件。
+- 提交型（首期 `open/seek`）：将请求交给 Runtime 管理队列，确认接收后立即返回。
+- 同步完成型（首期 `play/pause/stop/close`）：提交任务后由 C ABI 调用线程等待最终结果；业务任务仍由共享线程池执行，完成结果经 `io_context` 回传并唤醒调用线程。
+- 快速查询型：直接读取线程安全状态快照，不等待 `io_context` 或线程池。
+
+`io_context` worker 只负责协调，不得阻塞等待线程池业务任务。同步等待只发生在调用 C ABI 的外部线程；不得从 `io_context` worker 或事件回调线程调用同步完成型接口。
 
 ~~~mermaid
 flowchart TD
-    A[平台 UI / JNI 调用线程] --> B[C ABI]
-    B --> C[Core io_context 请求入口]
-    C --> D[立即返回提交结果]
-    C --> E[命令顺序协调与任务分发]
-    E --> F[Runtime 共享 Asio thread_pool]
-    F --> G[播放控制任务]
-    F --> H[媒体与 FFmpeg 调用任务]
-    F --> I[文件 I/O 任务]
-    F --> J[音乐库任务]
-    G --> K[任务结果]
-    H --> K
-    I --> K
-    J --> K
-    K --> C
-    C --> L[状态更新与操作完成事件]
-    L --> M[C ABI 事件回调]
+    UI["Qt UI / Kotlin UI"] --> ABI["C ABI"]
+    ABI --> KIND{"接口语义"}
+    KIND -->|"快速查询"| SNAP["线程安全状态快照"]
+    KIND -->|"提交型 open / seek"| IO["io_context"]
+    KIND -->|"同步完成型 play / pause / stop / close"| WAIT["提交任务并由调用线程等待"]
+    IO --> CTRL["唯一 Player Controller"]
+    WAIT --> CTRL
+    CTRL --> POOL["共享 Asio thread_pool"]
+    POOL --> TASK["FFmpeg / 输出 / 文件 I/O / 音乐库任务"]
+    TASK --> RESULT["执行结果"]
+    RESULT --> IO
+    IO --> UPDATE["更新状态 / 生成事件 / 唤醒等待者"]
+    UPDATE --> EVENT["C ABI 事件回调"]
+    SNAP --> ABI
 ~~~
 
 
@@ -365,27 +379,28 @@ flowchart TD
 
 | 组件 | 职责 |
 |---|---|
-| C ABI | 提供稳定的跨平台调用边界；提交型接口返回请求接收结果，查询型接口返回即时状态/缓存 |
-| io_context | 接收全部 C ABI 请求、协调 Player 命令顺序、分发任务、回收结果、更新状态并分发主动事件 |
-| 共享 thread_pool | 执行实际业务任务，包括播放控制、媒体处理调用、文件 I/O 和音乐库操作 |
-| Player Controller | 管理单个 Player 的命令顺序、操作代次、状态转换和操作生命周期 |
-| Event Manager | 分发异步操作完成事件及独立状态/运行时事件 |
+| C ABI | 提供稳定跨平台边界；按接口语义提交任务、等待完成或读取快照 |
+| `io_context` | 协调唯一 Player 的命令顺序、分发任务、回收结果、更新状态、生成事件并唤醒同步等待者 |
+| 共享 `thread_pool` | 执行实际业务任务，包括播放控制、媒体处理调用、文件 I/O 和音乐库操作 |
+| Player Controller | 管理唯一 Player 的命令顺序、媒体代次、状态转换和操作生命周期 |
+| Event Manager | 分发提交型操作完成事件及独立状态/运行时事件 |
 | FFmpeg | 执行媒体探测、解封装和解码，并管理其解码器内部线程 |
 
-所有 C ABI 请求必须先进入 Runtime 的 io_context，不得绕过它直接提交共享线程池。提交型接口不等待业务任务完成；Core 请求入口应在请求进入受管理的队列后立即返回提交结果。请求是否能在当前 Player 状态下执行，由 Core 后续协调并通过带有对应 operation_id 的完成事件报告。
+除快速查询型接口外，播放命令通过 Runtime 的 `io_context` 协调入口。快速查询直接读取线程安全快照，不访问非线程安全 FFmpeg 上下文，也不等待任务队列。
 
-查询型接口读取线程安全的状态快照或缓存，不应为了查询而等待共享线程池任务，也不应直接访问非线程安全的 FFmpeg 上下文。需要耗时计算或 I/O 的查询应改为提交型异步操作。
+提交型接口在请求进入受管理队列后返回。同步完成型接口将任务提交给 Controller，并由调用 C ABI 的线程等待最终结果；业务完成后由工作线程将结果投递回 `io_context`，由其更新状态并唤醒等待者。不得让 `io_context` worker 或共享 `thread_pool` worker 阻塞等待同一 Runtime 内由其推进的任务。
 
-共享线程池任务完成后，将结果投递回 Runtime 的 io_context。由 io_context 统一更新 Player 状态、判定操作结果并安排事件分发。不得在 io_context worker 或共享 thread_pool worker 中调用会等待同一 Runtime 内部任务完成的同步接口，以避免自等待和死锁。
+共享线程池任务完成后，统一将结果投递回 `io_context`。由 `io_context` 更新 Player 状态、判定操作结果并安排事件分发。同步完成型接口的最终结果通过其函数返回值交付；提交型接口的最终结果通过带 `operation_id` 的操作完成事件交付。
+
 
 ### 7.3 共享线程池与任务并发
 
-- 同一个 Runtime 内的所有 Player 和模块共用一套 Asio `thread_pool`。
-- 多个任务可以同时执行；不同 Player、不同 Playback Session 之间允许并发。
-- 同一个 Player 的命令提交、状态变更和操作结果需要遵守明确的顺序与状态机规则，但不因此要求该 Player 的所有工作任务都在单一队列中串行执行。
-- 同一个 Session 可以存在多个异步任务在途。只有在任务会访问同一非线程安全资源或存在数据依赖时，才对相应资源或操作阶段进行协调；不采用“整个 Session 全部任务串行”的模型。
-- 线程池任务应尽量是有界的工作单元。持续播放/解码不应由一个无限期运行的任务独占线程池 worker；应按可调度的处理阶段提交任务，并在数据、队列和输出背压条件允许时继续推进。
+- 每个进程只有一个 Player；该进程内所有 Core 业务模块共用一套 Asio `thread_pool`。
+- 同一个 Player 的命令顺序由唯一 Playback Controller 管理；不能依赖线程池任务的提交顺序、开始顺序或完成顺序来保证命令顺序。
+- 同一 Session 可以存在多个异步任务在途。只有在任务访问同一非线程安全资源或存在数据依赖时，才对相应资源或操作阶段进行协调；不采用“整个 Session 全部任务串行”的模型。
+- 线程池任务应尽量是有界工作单元。持续播放/解码不应由一个无限期运行的任务独占 worker；应按可调度的处理阶段提交任务，并在数据、队列和输出背压条件允许时继续推进。
 - 线程池线程数量、任务优先级和背压策略仍需结合目标平台与实际性能确定。
+- 多个播放器进程之间由操作系统隔离，各自拥有独立 Runtime 和线程池；不在进程之间共享线程池。
 
 ### 7.4 FFmpeg 内部多线程
 
@@ -442,34 +457,18 @@ Core 内部可以使用 FFmpeg AVFrame 和 AVBufferRef 管理帧生命周期，�
 零拷贝是优先优化目标，不是所有设备和解码路径都能保证的契约。无法直接互操作时，允许执行必要的硬件帧传输/格式转换，或回退到软件解码；应避免无条件把硬件帧下载到 CPU 再重新上传 GPU。
 
 
+
 ### 7.6 平台 UI 与 C ABI 调用模型
 
-平台 UI 不需要额外的 UI 侧 Asio 调度层。C ABI 函数本身是普通同步函数调用，但提交型接口只执行轻量的请求接收与入队操作，快速返回；Core 的实际业务执行由 Core 自己的异步运行时负责。
+平台 UI 不需要额外的 UI 侧 Asio 调度层。C ABI 函数本身是普通同步函数调用，但不同接口具有不同的完成语义。
 
-- **Windows / Qt**：Qt GUI 主线程直接调用提交型 C ABI。由于接口只负责接收请求并返回提交结果，不等待媒体打开、解码、Seek 或关闭等业务完成，因此不需要 UI 侧 Boost.Asio、UI 线程池或额外的 C ABI 工作线程。查询型接口只读取 Core 提供的线程安全状态快照/缓存，必须保持快速，不得在 GUI 线程执行耗时工作。
-- **Android / Kotlin**：Kotlin 通过 JNI 直接调用相同的 C ABI 提交型接口。JNI 只做参数转换和桥接，不增加另一套播放器任务调度系统。查询型接口同样只读取即时状态/缓存；真正耗时的查询应采用异步接口语义，不能阻塞 Android Main Thread。
-- **Core 内部**：所有请求进入 Runtime 的 io_context，由其协调并提交实际业务到共享 thread_pool。UI 不需要了解 Core 的线程池结构，也不负责调度 FFmpeg 任务。
+- **Windows / Qt**：Qt GUI 主线程可直接调用提交型 `open/seek` 和快速查询接口。同步完成型 `play/pause/stop/close` 会等待 Core 操作完成；为避免界面冻结，应由平台后台线程调用这些接口，再通过 Qt queued connection 更新 UI。
+- **Android / Kotlin**：Kotlin 通过 JNI 调用相同 C ABI。提交型接口和快速查询可直接调用；同步完成型接口应由后台 Dispatcher/线程调用，不得阻塞 Android Main Thread。
+- **Core 内部**：命令由 Runtime 的 `io_context` 协调，实际业务由共享 `thread_pool` 执行。UI 不需要了解 Core 的线程池结构，也不负责调度 FFmpeg 任务。
 
-提交型 C ABI 返回值表示请求是否被 Core 请求入口接受；它不是媒体操作的最终结果。异步操作完成后，Core 通过事件回调报告成功、失败或状态变化。事件回调不得直接操作 QWidget、Android View 或其他 UI 对象；平台桥接层必须将事件安全投递到对应 UI 线程。
+快速查询只读取线程安全快照。同步完成型接口的等待发生在调用 C ABI 的线程，不阻塞 `io_context` worker。事件回调不得直接操作 QWidget、Android View 或其他 UI 对象；平台桥接层必须将事件投递到对应 UI 线程。
 
-同一 Player 的命令提交顺序由 Core Player Controller 统一协调。UI 可以按用户交互顺序直接调用 C ABI，不需要在 UI 层再建立 Asio strand、协程 Actor 或重复的命令队列。
-
-异步操作完成事件携带 player、operation_id 和结果信息。UI 根据操作编号判断该结果对应哪个请求，并可忽略已过期操作的界面更新；这不意味着底层操作被取消。操作取消只有在 Core 提供明确取消 API 和语义后才成立。
-
-~~~mermaid
-flowchart TD
-    A[Qt GUI 主线程] -->|直接调用提交型 C ABI| B[Core C ABI]
-    C[Android Kotlin UI] -->|JNI 直接调用提交型 C ABI| B
-    B --> D[Core io_context]
-    D --> E[Runtime 共享 thread_pool]
-    E --> F[媒体 / 播放业务]
-    F --> D
-    D --> G[事件分发]
-    G --> H[Qt queued event / signal]
-    G --> I[JNI 事件桥接]
-    H --> A
-    I --> C
-~~~
+不得从 Core 的 `io_context` worker 或 Player 事件回调中调用同步完成型接口，以免发生自等待或死锁。
 
 ### 7.5.3 渲染任务调度与实时边界
 
@@ -561,83 +560,101 @@ flowchart TD
 - 暂停时冻结播放时钟并保留最后一帧；恢复播放后重新按时钟调度。
 - 具体时钟漂移校正、显示刷新率适配和丢帧阈值在同步专题中进一步确定。
 
-### 7.7 Windows 多进程边界
 
-Windows 每个播放器窗口运行在独立子进程中。每个子进程独立创建 Core Runtime，并拥有自己的 `io_context`、共享 `thread_pool`、Player Instance、Playback Session 和 FFmpeg 上下文。
+### 7.7 进程隔离边界
 
-不同子进程之间不共享线程池或可变媒体上下文。进程隔离用于窗口和资源生命周期隔离；每个进程内部仍按上述 Asio 共享线程池模型执行异步并发任务。
+每个进程独立创建一个 Core Runtime，并且**一个进程只有一个 Player Instance**。该进程的 Runtime、`io_context`、共享 `thread_pool`、Player、Playback Session 和 FFmpeg 上下文均属于该进程。
 
-Android 首期采用单应用进程模型时，同样由该进程内的 Runtime 管理共享线程池和 Player 实例。
+Windows 每个播放器窗口运行在独立子进程中，因此每个窗口进程各自拥有一个 Player 和一套 Core 运行资源。Android 每个应用进程同样只创建一个 Player。
+
+不同进程之间不共享 Player、线程池或可变媒体上下文。进程隔离用于窗口和资源生命周期隔离；每个进程内部仍按 Asio 共享线程池模型执行异步并发任务。
 
 ## 8. Core C ABI 接口与事件系统
 
 Core 对外提供稳定的 C ABI，公共头文件位于 `core/include/lnplayer.h`。C ABI 是 Windows Qt UI 与 Android JNI Bridge 共同使用的边界；内部 C++ 类型、FFmpeg 上下文和线程对象均不得泄漏到该边界。
 
+
 ### 8.1 Runtime 与 Player 句柄
 
-建议采用两级句柄：
+建议采用 Runtime 句柄和唯一 Player 句柄：
 
-- **Runtime Handle（`ln_runtime_t`）**：不透明句柄，代表一个 Core 运行环境，负责实例登记、模块级资源和事件分发。
-- **Player Handle（`ln_player_t`）**：建议使用 `uint64_t` ID，由 Runtime 分配并在该 Runtime 内唯一，不暴露 Player Instance 的 C++ 指针。
-- 一个 Runtime 可以创建多个 Player；每个 Player 对应一个独立 Player Instance，拥有自己的 Controller、Playlist、Playback Session 和事件出口。
-- Player 销毁后，其 ID 失效；后续调用返回明确的无效句柄错误。ID 不应在同一 Runtime 生命周期内重新分配给另一个实例，以避免迟到命令误作用于新实例。
-- Runtime 销毁前必须先销毁其所有 Player，或由 Runtime 按确定的顺序统一销毁它们；具体采用哪种 API 契约应在头文件定稿时固定。
+- **Runtime Handle（`ln_runtime_t`）**：不透明句柄，代表一个进程内的 Core 运行环境，负责唯一 Player、线程池、事件分发及模块级资源。
+- **Player Handle（`ln_player_t`）**：不透明或整数型句柄，代表该 Runtime 唯一的 Player Instance。
+- 一个 Runtime 只能创建一个 Player；重复创建应返回明确的已存在/状态错误，而不是创建第二个实例。
+- Player 销毁后句柄失效；后续调用返回明确的无效句柄错误。
+- Runtime 销毁必须等待唯一 Player 完成销毁，或按确定顺序执行 Player 销毁屏障后再释放 Runtime 资源。
 
-不建议把内部 `PlayerInstance*` 直接作为公开句柄。整数 ID 更适合跨 JNI 保存和传递，也避免调用方解引用内部对象地址。Runtime 本身使用不透明指针句柄，调用方必须遵守创建/销毁配对规则，销毁后不得继续使用。
+不需要 Player Manager 或进程内 Player ID 分配器来管理多个实例。公开句柄不得暴露内部 C++ 对象指针的可解引用语义；具体句柄类型和 ABI 布局在头文件设计时确定。
 
 
 ### 8.2 API 分组
 
-建议公开 API 按职责分组，而不是暴露内部类方法：
+建议公开 API 按职责分组：
 
 | API 分组 | 典型操作 | 语义 |
 |---|---|---|
-| Runtime | create、destroy、get_version | 初始化和关闭 Core 运行环境 |
-| Player | create、destroy | 创建和销毁播放器实例 |
+| Runtime | create、destroy、get_version | 初始化和关闭进程内 Core 运行环境 |
+| Player | create、destroy | 创建和销毁进程内唯一 Player |
 | Event | set_callback、clear_callback | 注册或注销事件接收端 |
-| Playback Command | open、play、pause、stop、seek、close | 提交异步操作，快速返回提交结果和 operation_id |
-| Playback Query | get_state、get_position、get_duration、get_media_info | 快速读取线程安全状态快照或缓存 |
-| Operation | cancel（若实现）、查询操作状态（如确有需要） | 管理异步操作生命周期；首期是否提供取消 API 待实现设计确认 |
+| 提交型 Playback Command | open、seek | 接收请求后快速返回提交结果及 operation_id |
+| 同步完成型 Playback Command | play、pause、stop、close | 等待实际操作完成并返回最终结果 |
+| Playback Query | get_state、get_position、get_duration、get_media_info、get_volume | 快速读取线程安全状态快照或缓存 |
 | Error | error_code_to_string、get_last_error（如确有需要） | 获取错误说明 |
 
-API 命名统一使用 ln_... 前缀。导出函数使用 C linkage，并明确导出宏、调用约定和固定宽度整数类型。公共头文件只包含 C ABI 所需的标准 C 头文件，保证可由 C 和 C++ 编译器包含。
+API 命名统一使用 `ln_` 前缀。导出函数使用 C linkage，并明确导出宏、调用约定和固定宽度整数类型。公共头文件只包含 C ABI 所需的标准 C 头文件，保证可由 C 和 C++ 编译器包含。
 
 
 ### 8.3 请求提交、查询与异步执行
 
-C ABI 函数由调用方同步调用，但播放命令采用提交型语义，Core 内部异步执行：
+C ABI 函数由调用方以普通同步方式调用。不同接口采用提交、等待完成或快速查询语义。
 
-1. UI 调用提交型 C ABI 函数，传入 Player 句柄和操作参数。
-2. C ABI 检查必要的 ABI 参数及句柄有效性，为请求分配 operation_id，并将请求提交到 Runtime 的 io_context 请求入口。
-3. 请求成功进入 Core 管理的请求入口后，C ABI 立即返回提交结果和 operation_id，不等待实际播放业务完成。
-4. io_context 按 Player 的命令顺序协调请求，检查当前状态，并将可执行的实际业务任务提交到 Runtime 共享 thread_pool。
-5. 业务任务完成后，将结果投递回 io_context。
-6. io_context 更新 Player 状态，并通过事件系统发送携带相同 operation_id 的操作完成事件。
+**提交型接口（首期 open/seek）：**
 
-提交结果与操作结果必须严格区分：
+1. 调用方传入唯一 Player 句柄和操作参数。
+2. C ABI 检查参数及句柄有效性，分配 `operation_id`。
+3. 请求进入 Runtime 管理的 Player 命令队列；成功入队是提交成功的线性化点，函数随即返回提交结果和 `operation_id`。
+4. Controller 按实际入队顺序协调命令，将实际业务任务提交到共享 `thread_pool`。
+5. 业务任务完成后将结果投递回 `io_context`，由其更新状态并发送携带相同 `operation_id` 的操作完成事件。
 
-- **提交成功**：请求已被 Core 接收并进入内部请求处理流程；不保证该命令在当前 Player 状态下最终可执行。
-- **提交失败**：请求未能进入 Core 请求处理流程，例如参数无效、句柄无效或请求入口无法接收。
-- **操作完成成功/失败**：Core 实际处理请求后的最终结果，通过操作完成事件报告。
+并发调用时，以请求被唯一 Player 命令队列实际接受的顺序作为命令顺序。不能仅因调用线程先进入 C ABI 就推断其先于另一个并发请求入队。
 
-查询型 C ABI 采用同步快速读取语义，返回调用时刻可立即取得的线程安全状态快照或缓存。查询接口不得隐式等待媒体探测、解码、文件读取或其他耗时任务；若查询无法快速完成，应提供提交型异步查询和对应完成事件。
+**同步完成型接口（首期 play/pause/stop/close）：**
 
-因此，C ABI 不暴露 Future、Promise 或 C++ 异步类型。提交型接口也不等待业务任务完成，不需要为每个请求建立调用线程等待机制。Core 内部可以使用 Promise/Future 或等价机制协调确实需要结果的内部任务，但不得让 io_context worker 或共享 thread_pool worker 阻塞等待由同一 Runtime 调度的任务。所有 C ABI 请求必须先进入 io_context，不得绕过它直接提交 thread_pool。
+1. 调用方线程调用 C ABI，入口完成参数和句柄验证。
+2. 请求交由 Runtime 的 `io_context` 和唯一 Player Controller 协调。
+3. Controller 按命令顺序将业务任务提交到共享 `thread_pool`。
+4. 调用 C ABI 的线程等待该操作的完成结果；等待不得发生在 `io_context` worker 或负责完成该操作的线程池 worker 中。
+5. 业务任务完成后将结果投递回 `io_context`，更新 Player 状态并唤醒等待中的调用线程。
+6. C ABI 返回最终执行结果，而非仅返回请求接收结果。
 
-首期命令语义如下：
+**快速查询型接口：**
+
+直接读取原子变量或锁保护的线程安全状态快照，不等待 `io_context`、`thread_pool`、FFmpeg 或文件 I/O。查询结果表示读取时刻可立即取得的状态；媒体信息尚未就绪时按接口约定返回未就绪状态。
+
+提交结果与操作结果严格区分：
+
+- **提交成功**：请求已进入唯一 Player 的受管理命令队列，不保证业务最终成功。
+- **提交失败**：参数无效、句柄无效或命令队列无法接收请求等入口错误。
+- **同步操作成功/失败**：由 `play/pause/stop/close` 函数返回最终执行结果。
+- **异步操作成功/失败**：由 `OPEN_COMPLETED`、`SEEK_COMPLETED` 等携带 `operation_id` 的完成事件报告。
+
+C ABI 不暴露 Future、Promise 或 C++ 异步类型。Core 内部可以使用 Promise/Future 或等价机制唤醒原调用线程，但 `io_context` worker 不得阻塞等待线程池任务。快速查询是绕过 `io_context` 的明确例外。
+
+首期命令语义：
 
 | 命令 | C ABI 返回语义 | 最终业务结果 |
 |---|---|---|
-| open(source) | 请求接收后立即返回提交结果及 operation_id | OPEN_COMPLETED 成功/失败事件 |
-| play | 请求接收后立即返回提交结果及 operation_id | 操作完成事件及状态变化事件 |
-| pause | 请求接收后立即返回提交结果及 operation_id | 操作完成事件及状态变化事件 |
-| stop | 请求接收后立即返回提交结果及 operation_id | 停止完成事件及状态变化事件 |
-| seek(position) | 请求接收后立即返回提交结果及 operation_id | SEEK_COMPLETED 成功/失败事件 |
-| close | 请求接收后立即返回提交结果及 operation_id | 关闭完成事件及状态变化事件 |
+| open(source) | 请求进入管理队列后立即返回提交结果及 operation_id | OPEN_COMPLETED 成功/失败事件 |
+| play | 等待播放启动操作完成 | 函数返回最终结果 |
+| pause | 等待暂停操作完成 | 函数返回最终结果 |
+| stop | 等待停止操作完成 | 函数返回最终结果 |
+| seek(position) | 请求进入管理队列后立即返回提交结果及 operation_id | SEEK_COMPLETED 成功/失败事件 |
+| close | 等待媒体关闭及关联资源清理完成 | 函数返回最终结果 |
 
-视频帧交付是独立的实时数据通道，不属于普通控制请求响应，也不属于主动事件通知。帧由 Core Video Output 与平台 Renderer 之间的内部平台输出接口交接；通用播放控制 C ABI 不逐帧传递图像数据。
+视频帧交付是独立实时数据通道，不属于普通控制请求响应或主动事件通知。帧由 Core Video Output 与平台 Renderer 之间的内部平台输出接口交接；通用播放控制 C ABI 不逐帧传递图像数据。
 
-同一 Player 的命令和状态变更遵守明确的提交顺序及状态机规则；这不要求该 Player 的所有内部任务串行执行。不同 Player 允许并发执行，同一 Player 内互不冲突的任务也允许并发。
+同一 Player 的命令顺序由唯一 Controller 管理；这不要求该 Player 的所有内部任务串行执行。每个进程只有一个 Player，不存在进程内不同 Player 之间的并发调度。
+
 
 ### 8.4 事件结构与类型
 
@@ -647,38 +664,37 @@ C ABI 函数由调用方同步调用，但播放命令采用提交型语义，Co
 |---|---|
 | struct_size | 结构体大小，用于 ABI 版本扩展 |
 | type | 事件类型 |
-| player | 事件所属 Player ID |
-| sequence | 该 Player 内单调递增的事件序号 |
 | operation_id | 关联的异步操作编号；非操作事件为 0 |
-| result | 主动事件对应的结果或错误码；不用于返回同步 C ABI 请求结果 |
-| data / data_size | 可选的事件负载及其字节数 |
+| sequence | 该 Player 内单调递增的事件序号 |
+| result | 事件对应的结果或错误码 |
+| data / data_size | 可选事件负载及其字节数 |
 
 首期事件类型建议包括：
 
 - `STATE_CHANGED`：Player 状态变化。
 - `OPEN_COMPLETED`：打开操作完成，携带 operation_id、成功/失败结果及可选媒体信息摘要。
 - `SEEK_COMPLETED`：定位操作完成，携带 operation_id 和成功/失败结果。
-- `OPERATION_COMPLETED`：其他提交型操作完成时使用，携带 operation_id、操作类型和结果；若具体操作有专用事件则不重复发送。
 - `PLAYBACK_ENDED`：媒体自然播放结束。
-- `ERROR`：无法归属于某个请求操作的播放过程错误或异步运行时错误。
+- `ERROR`：无法归属于某个提交型请求的播放过程错误或异步运行时错误。
 - `MEDIA_INFO_UPDATED`：媒体信息在播放期间发生可独立通知的更新（如确有需要）。
-- `POSITION_UPDATED`：可选的位置更新事件，频率需要限制，避免高频事件挤占其他主动事件。
+- `POSITION_UPDATED`：可选的位置更新事件，频率需要限制，避免高频事件挤占其他事件。
 
-`OPEN_COMPLETED`、`SEEK_COMPLETED` 和 `OPERATION_COMPLETED` 用于报告提交型请求的最终业务结果。它们是与 operation_id 关联的操作完成事件，与不依赖某个请求的主动状态/运行时事件相区分；不得再假设这些结果通过原 C ABI 调用返回。
+`OPEN_COMPLETED` 和 `SEEK_COMPLETED` 报告提交型操作的最终业务结果。同步完成型 `play/pause/stop/close` 的最终结果通过 C ABI 函数返回，不需要再通过操作完成事件重复报告；它们引起的独立状态变化仍可通过 `STATE_CHANGED` 通知。
 
 事件负载使用有明确布局和版本规则的 C ABI 结构体，不传递 C++ 对象、STL 容器或 FFmpeg 类型。扩展结构体时保留 `struct_size`，新增字段只能追加，不能改变既有字段的含义和布局。
+
 
 ### 8.5 回调线程与事件顺序
 
 - Core 不在 Qt GUI 线程或 Android UI 线程执行事件回调。
 - 回调由 Core 自己的事件分发机制调用，平台层负责转发到 UI 线程。
-- 同一 Player 的事件按序分发，且同一 Player 的回调不并发执行；不同 Player 的回调允许并发执行。事件回调由 Runtime 的 Asio 异步分发路径协调，不在业务任务完成线程中直接调用平台 UI。
-- `sequence` 在同一 Player 内单调递增，便于调用方识别事件顺序和排查遗漏。
-- 回调应快速返回，不执行耗时工作，不等待同一 Player 的异步操作完成，也不直接操作 UI 控件。
+- 每个进程只有一个 Player；该 Player 的事件由 Runtime 的 Asio 异步分发路径统一排序，同一 Player 的回调不并发执行。
+- `sequence` 在该 Player 内单调递增，便于调用方识别事件顺序和排查遗漏。
+- 回调应快速返回，不执行耗时工作，不等待同步完成型 C ABI 操作，也不直接操作 UI 控件。
 - Qt 桥接层使用 queued connection 将事件转发到 GUI 线程；Android JNI Bridge 将事件转发到合适的 Kotlin 调度上下文，再由主线程更新 UI。
-- 不得假定回调来自固定线程，也不得假定不同 Player 的回调运行在同一个线程。
+- 不得假定回调来自固定线程。
 
-位置更新属于高频信息，建议通过可配置频率的事件或 UI 定时查询获取；操作完成、状态变化和独立运行时错误等事件必须优先且不能被位置更新淹没。
+位置更新属于高频信息，建议通过可配置频率的事件或 UI 定时查询获取；状态变化和独立运行时错误等事件必须优先且不能被位置更新淹没。
 
 ### 8.6 内存与字符串所有权
 
@@ -692,38 +708,44 @@ C ABI 函数由调用方同步调用，但播放命令采用提交型语义，Co
 
 如果未来确实需要 Core 分配并返回大块数据，应提供配对的 Core 释放函数，且只能由该释放函数释放对应内存；首期没有必要引入这套复杂度。
 
+
 ### 8.7 错误码与错误信息
 
 建议使用固定宽度整数定义稳定错误码，并按类别划分：
 
 - 通用参数错误、无效句柄、资源状态错误。
 - Runtime/Player 生命周期错误。
-- 命令提交失败或当前状态不允许执行。
+- 请求提交失败或命令队列无法接收请求。
 - 媒体输入、格式探测、解码和输出错误。
 - 内存、内部资源和未知错误。
 
-提交型 C ABI 返回码表示请求是否成功进入 Core 请求处理流程，不代表实际业务执行成功。参数错误、无效句柄和请求入口拒绝等提交阶段错误由函数返回码报告；命令状态不允许、媒体探测失败、解码失败等业务阶段错误通过携带 operation_id 的操作完成事件报告。与具体请求无关的运行时错误通过主动错误事件通知。错误码应稳定且可枚举，不能直接把 FFmpeg 内部错误值作为公开 ABI 错误码。需要展示的错误文本应通过稳定的错误码转换接口获得，或由错误响应/错误事件提供 UTF-8 描述。
+提交型 C ABI 返回码表示请求是否成功进入受管理命令队列，不代表实际业务执行成功。参数错误、无效句柄和请求入口拒绝等提交阶段错误由函数返回码报告；媒体探测、定位等异步业务失败通过携带 operation_id 的完成事件报告。
+
+同步完成型 `play/pause/stop/close` 的返回码表示实际操作的最终结果。与具体请求无关的运行时错误通过主动错误事件通知。错误码应稳定且可枚举，不能直接把 FFmpeg 内部错误值作为公开 ABI 错误码。需要展示的错误文本应通过稳定的错误码转换接口获得，或由错误事件提供 UTF-8 描述。若提供 `get_last_error`，必须明确其线程归属，避免把不同调用线程的同步错误混淆。
+
 
 ### 8.8 回调注销与对象销毁
 
 - 注册回调时允许调用方传入 `user_data`，Core 只保存指针，不取得其内存所有权。
 - 注销回调后，不再启动新的回调；同步注销需要等待已开始的回调退出，之后调用方才可释放 `user_data`。
-- 不允许在该 Player 自身的回调中调用会等待该回调退出的同步注销或销毁操作，否则可能发生自等待死锁。
-- Player 销毁时停止接受新命令，取消或终止未完成工作，停止事件分发并等待在途回调退出，然后释放 Session、Controller 和其他实例资源。
-- Runtime 销毁必须保证其事件分发资源和所有 Player 均已停止，不能遗留回调访问已释放的桥接对象。
+- 不允许在 Player 自身的回调中调用会等待该回调退出的同步注销或销毁操作，否则可能发生自等待死锁。
+- 每个进程只有一个 Player。Player 销毁时停止接受新命令，取消或终止未完成工作，停止事件分发并等待在途回调退出，然后释放 Session、Controller 和其他 Player 资源。
+- Runtime 销毁必须等待唯一 Player 销毁完成，并确保事件分发资源停止，不能遗留回调访问已释放的桥接对象。
 
-回调是通知机制，不拥有 Player 生命周期。平台层应在自身退出流程中明确注销回调并销毁 Player。
+回调是通知机制，不拥有 Player 生命周期。平台层应在自身退出流程中明确注销回调并执行销毁屏障。
+
 
 ### 8.9 平台桥接约束
 
 Windows Qt 与 Android JNI 共用同一套 C ABI 语义：
 
-- Windows Qt GUI 主线程直接调用快速返回的提交型 C ABI；事件回调只负责将数据复制/封装后投递到 Qt GUI 线程。
-- Android Kotlin 不直接持有 Core 内部对象；JNI Bridge 负责句柄映射、字符串转换、事件转发和线程切换。Kotlin UI 可直接通过 JNI 调用快速返回的提交型接口。
-- JNI 不重新实现播放状态机、命令顺序或媒体生命周期。
-- 两个平台对请求提交结果、原请求最终响应、主动事件、错误码和内存有效期的理解必须一致。
+- Windows Qt GUI 主线程可调用提交型 `open/seek` 和快速查询；同步完成型 `play/pause/stop/close` 应从后台线程调用，避免阻塞 GUI。
+- Android Kotlin 通过 JNI 调用相同 C ABI；提交型接口和快速查询可直接调用，同步完成型接口应从后台 Dispatcher/线程调用，避免阻塞 Main Thread。
+- JNI Bridge 负责句柄映射、字符串转换、事件转发和线程切换，不重新实现播放状态机、命令顺序或媒体生命周期。
+- 每个进程只有一个 Player；Runtime 创建第二个 Player 必须失败。
+- 两个平台对提交结果、同步操作最终结果、异步操作完成事件、主动事件、错误码和内存有效期的理解必须一致。
 
-本节定义的是接口契约和建议模型，不代表具体函数签名、枚举数值和结构体布局已经冻结。正式实现前应据此设计并审查 `core/include/lnplayer.h`。
+本节定义接口契约和建议模型，不代表具体函数签名、枚举数值和结构体布局已经冻结。正式实现前应据此设计并审查 `core/include/lnplayer.h`。
 
 ## 9. 依赖方向与边界
 
