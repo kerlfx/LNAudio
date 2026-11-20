@@ -484,17 +484,24 @@ private:
             const MediaBackendResult decode_result = read_audio_frame(frame, end_of_stream);
             if (!decode_result.success || end_of_stream)
             {
+                bool stale_result = false;
                 {
                     std::lock_guard<std::mutex> lock(playback_mutex_);
-                    playback_active_ = false;
-                    playing_ = false;
-                    if (decode_result.success && end_of_stream)
-                        playback_ended_.store(true, std::memory_order_relaxed);
-                    else if (!decode_result.success)
-                        playback_failed_.store(true, std::memory_order_relaxed);
+                    stale_result = decode_generation != playback_generation_;
+                    if (!stale_result)
+                    {
+                        playback_active_ = false;
+                        playing_ = false;
+                        if (decode_result.success && end_of_stream)
+                            playback_ended_.store(true, std::memory_order_relaxed);
+                        else if (!decode_result.success)
+                            playback_failed_.store(true, std::memory_order_relaxed);
+                    }
                     playback_condition_.notify_all();
                 }
 
+                if (stale_result)
+                    continue;
                 if (decode_result.success && end_of_stream && playback_end_callback_)
                     playback_end_callback_();
                 else if (!decode_result.success && playback_error_callback_)
