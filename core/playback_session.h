@@ -57,6 +57,7 @@ public:
     SessionResult close();
     void set_volume(float volume);
     void set_playback_end_callback(std::function<void()> callback);
+    void set_playback_error_callback(std::function<void(std::string)> callback);
 
     SessionSnapshot snapshot() const;
 
@@ -70,6 +71,7 @@ private:
     SessionSnapshot snapshot_;
     float volume_ = 1.0f;
     std::function<void()> playback_end_callback_;
+    std::function<void(std::string)> playback_error_callback_;
 };
 
 }
