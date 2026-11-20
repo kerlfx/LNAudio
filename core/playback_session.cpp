@@ -316,6 +316,29 @@ MediaBackendResult PlaybackSession::read_video_frame(VideoFrame& frame, bool& en
     return result;
 }
 
+std::vector<MediaTrackInfo> PlaybackSession::audio_tracks() const
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    return backend_ ? backend_->audio_tracks() : std::vector<MediaTrackInfo>{};
+}
+
+SessionResult PlaybackSession::select_audio_track(int stream_index)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (!backend_ ||
+        (snapshot_.state != SessionState::Ready &&
+         snapshot_.state != SessionState::Paused))
+        return make_result(false, "Audio tracks can only be switched while playback is paused.");
+
+    const MediaBackendResult result = backend_->select_audio_track(stream_index);
+    if (!result.success)
+        return make_result(false, result.message);
+
+    snapshot_.position_ms = backend_->position_ms();
+    ++snapshot_.generation;
+    return make_result(true);
+}
+
 void PlaybackSession::set_volume(float volume)
 {
     std::lock_guard<std::mutex> lock(mutex_);
