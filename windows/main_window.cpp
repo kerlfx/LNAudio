@@ -29,6 +29,7 @@
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QFormLayout>
+#include <QFrame>
 #include <QCheckBox>
 #include <QColor>
 #include <QCryptographicHash>
