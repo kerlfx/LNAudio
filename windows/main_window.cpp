@@ -1159,10 +1159,10 @@ MainWindow::MainWindow(
     settings.setValue(QStringLiteral("Video/Filter/Sharpness"), video_sharpness_);
     settings.setValue(QStringLiteral("Video/Filter/Denoise"), video_denoise_);
     settings.setValue(QStringLiteral("Video/Filter/Grayscale"), video_grayscale_);
-                settings.setValue(QStringLiteral("Video/Filter/HueDegrees"), video_hue_degrees_);
-                settings.setValue(QStringLiteral("Video/Filter/Sharpness"), video_sharpness_);
-                settings.setValue(QStringLiteral("Video/Filter/Denoise"), video_denoise_);
-                settings.setValue(QStringLiteral("Video/Filter/Grayscale"), video_grayscale_);
+    settings.setValue(QStringLiteral("Video/Filter/HueDegrees"), video_hue_degrees_);
+    settings.setValue(QStringLiteral("Video/Filter/Sharpness"), video_sharpness_);
+    settings.setValue(QStringLiteral("Video/Filter/Denoise"), video_denoise_);
+    settings.setValue(QStringLiteral("Video/Filter/Grayscale"), video_grayscale_);
                 settings.sync();
                 pending_video_frame_valid_ = false;
                 requestVideoFrame();
@@ -1699,6 +1699,10 @@ void MainWindow::showPlaybackInfo()
     const QString audio_state = has_audio_
         ? QStringLiteral("有音轨")
         : QStringLiteral("无音轨");
+    const QFileInfo media_file_info(media_path);
+    const QString file_size = media_file_info.exists()
+        ? QLocale().formattedDataSize(media_file_info.size())
+        : QStringLiteral("未知");
     const QString resolution = video_width_ > 0 && video_height_ > 0
         ? QStringLiteral("%1 × %2").arg(video_width_).arg(video_height_)
         : QStringLiteral("未知");
