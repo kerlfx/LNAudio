@@ -1326,6 +1326,8 @@ void MainWindow::loadExternalSubtitle()
         const lnplayer_result_t result = player_
             ? lnplayer_set_external_subtitle(player_, path_utf8.constData())
             : LNPLAYER_RESULT_INVALID_HANDLE;
+        if (result != LNPLAYER_RESULT_OK && player_)
+            lnplayer_set_external_subtitle(player_, "");
         QMetaObject::invokeMethod(this, [this, path, result]
         {
             if (result == LNPLAYER_RESULT_OK)
@@ -1342,8 +1344,6 @@ void MainWindow::loadExternalSubtitle()
                     status_label_->setText(error);
                     return;
                 }
-                if (player_)
-                    lnplayer_set_external_subtitle(player_, "");
                 status_label_->setText(
                     QStringLiteral("已加载外挂字幕（基础文本回退）：%1")
                         .arg(QFileInfo(path).fileName()));
