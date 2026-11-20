@@ -974,7 +974,7 @@ MainWindow::MainWindow(
                 [action = std::move(action)]
             {
                 QWidget* focus = QApplication::focusWidget();
-                if (QApplication::activePopupWidget() ||
+                if (QApplication::activePopupWidget() || QApplication::activeModalWidget() ||
                     qobject_cast<QLineEdit*>(focus) ||
                     qobject_cast<QAbstractItemView*>(focus) ||
                     qobject_cast<QAbstractSlider*>(focus) ||
