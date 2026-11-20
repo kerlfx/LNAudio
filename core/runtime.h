@@ -5,6 +5,8 @@
 
 #include "music_library.h"
 
+#include <mutex>
+#include <string>
 #include <thread>
 
 namespace lnplayer
