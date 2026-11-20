@@ -173,6 +173,14 @@ SessionResult PlaybackSession::close()
     return make_result(true);
 }
 
+MediaBackendResult PlaybackSession::read_video_frame(VideoFrame& frame, bool& end_of_stream)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (!backend_)
+        return MediaBackendResult{false, "No media source is open."};
+    return backend_->read_video_frame(frame, end_of_stream);
+}
+
 void PlaybackSession::set_volume(float volume)
 {
     std::lock_guard<std::mutex> lock(mutex_);
