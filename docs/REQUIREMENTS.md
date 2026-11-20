@@ -54,8 +54,8 @@ Windows 端同时提供音频和视频播放界面，两套 UI 属于同一个 L
 - 核心以动态库形式提供：Windows 生成 DLL，Android 生成 SO。
 - 核心通过独立的对外接口供平台应用调用；C ABI 公共头文件位于 `core/include/lnplayer.h`。
 - 核心内部使用 C++20 实现，不要求内部模块遵循 C 语言编程风格。
-- Core 优先使用 C++ 标准库实现通用容器、字符串、时间、线程、同步、智能指针和回调；仅在标准库不适合或平台 API 必需时引入第三方库。
-- Core 不依赖 Qt，也不使用 Qt 类型或 Qt 并发/时间设施；Standalone Asio 是已确认的必要例外，用于 `io_context`、`thread_pool` 和异步协调，不使用 Boost.Asio。
+- Core 优先使用 C++ 标准库实现通用容器、字符串、数据模型、算法、智能指针等；异步调度、异步流程编排、定时任务和串行执行优先统一使用 Standalone Asio，不再为相同职责重复引入其他并发框架。
+- Core 不依赖 Qt，也不使用 Qt 类型或 Qt 并发/时间设施；Standalone Asio 是已确认的必要基础设施，不使用 Boost.Asio。
 - 内部头文件与对应的 .cpp 放在同一模块目录。
 - 只有对外公开的 C ABI 头文件放在 `core/include/`，不再增加额外的 `lnplayer/` 子目录。
 - Core 不依赖 Qt、Kotlin 或 JNI。
@@ -79,7 +79,10 @@ Windows 端同时提供音频和视频播放界面，两套 UI 属于同一个 L
 - 同步完成型接口：首期 `play`、`pause`、`stop`、`close`。调用线程等待实际操作完成后返回最终结果，不只是返回请求入队结果。
 - 快速查询型接口：如 `get_state`、`get_position`、`get_duration`、`get_media_info`，只读取线程安全状态快照或缓存，不等待媒体探测、解码或阻塞式文件 I/O。
 - 每个进程只有一个 Player。每个进程内的 Core Runtime 维护一个 `asio::io_context`、一套共享 `asio::thread_pool` 和唯一 Player；当前共享 `thread_pool` 固定为 2 个 worker，不按播放器负载创建大量线程。
-- `io_context` 负责命令协调、任务分发、结果回收、状态更新、事件排序和同步等待者唤醒；共享 `thread_pool` 执行实际业务任务。
+- `io_context` 负责命令协调、任务分发、异步操作组合、结果回收、状态更新、事件排序和同步等待者唤醒；共享 `thread_pool` 执行有限时长的后台业务任务。
+- 在适合的异步流程中优先使用 Asio C++20 Coroutine（`asio::awaitable`、`asio::co_spawn`、`asio::use_awaitable`）组织步骤与错误传播；优先使用 Asio Completion Token/Completion Handler 表达异步结果，避免为普通异步流程额外维护大量手写 `std::promise`/`std::future` 和嵌套回调。只有在 C ABI 同步完成语义或外部接口确有需要时，才在边界进行同步等待或结果适配。
+- 定时和延迟调度优先使用 `asio::steady_timer`；需要对同一执行器上的状态变更、命令或回调进行串行化时优先使用 `asio::strand`。`strand` 用于执行顺序约束，不替代对跨执行器共享数据的必要同步。
+- `asio::post` 用于明确切换到指定执行器，`asio::dispatch` 用于允许在当前执行器直接执行的场景，`asio::defer` 用于适合延后调度的连续异步流程；按语义选择，不机械替换。
 - 同步完成型接口的等待发生在调用 C ABI 的线程，`io_context` worker 不得阻塞等待线程池业务任务。快速查询直接读取线程安全快照，是不经过 `io_context` 的明确例外。
 - `open/seek` 的最终成功或失败通过携带 operation_id 的完成事件报告；`play/pause/stop/close` 的最终结果由函数返回。独立状态变化、播放结束和运行时错误通过事件通知。视频帧交付保持独立实时数据通道。
 - Windows 使用 Qt 6 Widgets；Qt GUI 主线程可直接调用提交型接口和快速查询。同步完成型接口应由后台线程调用，避免阻塞 GUI。
@@ -95,7 +98,7 @@ Windows 端同时提供音频和视频播放界面，两套 UI 属于同一个 L
 - Windows 使用单一 `LNPlayer.exe`，通过 `--audio` / `--video` 启动对应界面；每个播放器子进程只创建一个窗口和一个 Player。
 - UI 使用 Qt 6 Widgets，构建要求 Qt 6.12 或更新的 Qt 6 版本。
 - Core 使用独立的 Standalone Asio 头文件依赖，不依赖 Boost；默认从仓库的 `3rd_cache/asio/asio/include` 或 `3rd_cache/asio/include` 查找 `asio.hpp`。
-- Core Runtime 使用单线程 `asio::io_context` 和共享 `asio::thread_pool`。
+- Core Runtime 使用单线程 `asio::io_context` 和共享 `asio::thread_pool`。异步业务优先使用 Asio 原生执行器、Completion Token、C++20 Coroutine、`steady_timer` 和 `strand`；标准库线程/同步原语仅用于 Asio 不适合或平台接口明确要求的边界。
 - 当前 Windows 已接入 FFmpeg 音频解码、WASAPI 输出和 SQLite 音乐库；视频模式已接入 FFmpeg 视频解码、Windows D3D11 Swap Chain 呈现、D3D11VA 尝试与软件回退。
 - 视频帧通过 Windows 专用 `lnplayer_windows.h` Pull 接口交付，不扩展通用播放控制 C ABI。视频 UI 已具备 PTS 基础等待、全屏、快捷键、右键菜单、原始比例/16:9/4:3/拉伸切换、截图和基础逐帧操作。视频播放列表已支持多文件加入、队列展示、双击切换、上一项/下一项和播放结束自动切换；打开文件或拖放文件会整体替换当前队列。队列内增删、拖动排序、随机/循环播放及音乐库与视频播放列表的统一管理仍未实现。
 - 无音频视频播放时钟由 Core 使用 `std::chrono::steady_clock` 实现；暂停冻结时钟，恢复重新计时，Seek 和播放速度变化时重新锚定时钟。Windows UI 不再使用 `QElapsedTimer` 维护视频媒体时钟。
@@ -235,7 +238,7 @@ UI 通过 Core 对外接口执行播放操作，不直接访问 FFmpeg 上下文
 - 视频解码采用硬件解码优先策略；当设备、驱动、媒体编码参数或运行环境不支持可用硬件解码路径时，允许回退到 FFmpeg 软件解码。
 - Core 负责视频帧队列、帧引用生命周期、PTS 调度及与播放时钟的协调；平台 Renderer 负责取得待呈现帧并执行实际 GPU 绘制。
 - Video Frame Queue 必须有界。根据播放时钟和显示能力处理过期帧或背压，不能因解码速度高于显示速度而无限积压。
-- Renderer 采用 Pull 模型，帧就绪、Asio 定时器或平台显示回调触发后，经 Runtime `io_context` 协调并提交共享 `thread_pool` 获取可呈现帧；不采用独立忙轮询循环。FFmpeg 解码线程不直接调用 UI 或 GPU 呈现接口。
+- Renderer 采用 Pull 模型，帧就绪、`asio::steady_timer` 或平台显示回调触发后，经 Runtime `io_context`/对应 `strand` 协调并提交共享 `thread_pool` 获取可呈现帧；不采用独立忙轮询循环。FFmpeg 解码线程不直接调用 UI 或 GPU 呈现接口。
 - 正常音视频播放以音频时钟为主时钟，视频按 PTS 与音频时钟同步；无音频流时使用独立视频时钟。
 - Seek、切换媒体和关闭 Session 时必须清理或隔离旧时间线帧；暂停时保留最后一帧供静态显示。
 - 软件帧和硬件帧均需支持。硬件帧尽可能直接交给 GPU，避免不必要的 GPU→CPU 下载及 CPU→GPU 重传；无法直接互操作时允许必要的数据传输或软件解码回退。
