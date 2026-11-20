@@ -70,7 +70,7 @@ if(WIN32)
         SetRegView 64
         DeleteRegValue HKCU "Software\RegisteredApplications" "LNPlayer"
         DeleteRegKey HKCU "Software\LNPlayer\Capabilities"
-        DeleteRegKey HKCU "Software\LNPlayer"
+        DeleteRegKey /ifempty HKCU "Software\LNPlayer"
         DeleteRegKey HKCU "Software\Classes\LNPlayer.Video"
         DeleteRegKey HKCU "Software\Classes\Applications\LNPlayer.exe"
     ]=])
