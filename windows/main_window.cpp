@@ -1711,6 +1711,7 @@ void MainWindow::showPlaybackInfo()
     const QString metadata = QStringLiteral(
         "容器：%1\n编码：%2（%3）\n解码器：%4\n帧率：%5\n码率：%6\n"
         "像素格式：%7 / %8-bit\n硬件解码：%9\nSAR：%10:%11\n旋转：%12°\n"
+        "HDR：Mastering=%17/%18 nit MaxCLL=%19 MaxFALL=%20\n"
         "色彩：range=%13 primaries=%14 transfer=%15 matrix=%16")
         .arg(QString::fromUtf8(video_info_.container_long_name))
         .arg(QString::fromUtf8(video_info_.codec_name))
@@ -1732,7 +1733,11 @@ void MainWindow::showPlaybackInfo()
         .arg(video_info_.color_range)
         .arg(video_info_.color_primaries)
         .arg(video_info_.color_transfer)
-        .arg(video_info_.color_space);
+        .arg(video_info_.color_space)
+        .arg(video_info_.mastering_max_luminance, 0, 'f', 2)
+        .arg(video_info_.mastering_min_luminance, 0, 'f', 4)
+        .arg(video_info_.max_content_light_level)
+        .arg(video_info_.max_frame_average_light_level);
 
     const QString details = QStringLiteral(
         "媒体：%1\n路径：%2\n状态：%3\n位置：%4 / %5\n"
