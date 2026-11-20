@@ -460,7 +460,7 @@ flowchart TD
         DEV["Shared D3D11 Device"]
         DEC["FFmpeg D3D11VA"]
         Q["Core Video Frame Queue"]
-        R["D3D11 Renderer Thread"]
+        R["D3D11 Renderer Tasks"]
         SWAP["Swap Chain"]
         DEV --> DEC
         DEV --> R
@@ -546,7 +546,7 @@ Core 对外提供稳定的 C ABI，公共头文件位于 `core/include/lnplayer.
 | Runtime | create、destroy、get_version | 初始化和关闭 Core 运行环境 |
 | Player | create、destroy | 创建和销毁播放器实例 |
 | Event | set_callback、clear_callback | 注册或注销事件接收端 |
-| Playback Command | open、play、pause、stop、seek、close | 提交播放操作 |
+| Playback Command | open、play、pause、stop、seek、close | 同步执行播放操作，并在函数返回时给出最终结果 |
 | Playback Query | get_state、get_position、get_duration、get_media_info | 获取当前状态快照 |
 | Error | error_code_to_string、get_last_error（如确有需要） | 获取错误说明 |
 
@@ -580,7 +580,7 @@ C ABI 对调用方采用同步请求/响应模型，Core 内部采用异步执�
 | seek(position) | 等待定位操作完成，返回定位结果并恢复定位前的播放/暂停状态 |
 | close | 关闭当前媒体 Session，回到 Idle，但不销毁 Player |
 
-参数错误、无效句柄、命令无法提交等情况通过 API 的同步返回码报告；已经接受的操作，其最终成功或失败通过事件报告。命令取消 API、命令替换策略和销毁期间的取消细节仍需在实现前进一步确定。
+参数错误、无效句柄、命令无法执行及媒体操作失败等情况，均通过当前同步 C ABI 调用的返回码和输出参数报告；函数返回前，调用方即可取得该操作的最终结果。独立发生的播放结束、状态变化和运行时错误仍通过主动事件报告。命令取消 API、命令替换策略和销毁期间的取消细节仍需在实现前进一步确定。
 
 ### 8.4 事件结构与类型
 
@@ -593,7 +593,7 @@ C ABI 对调用方采用同步请求/响应模型，Core 内部采用异步执�
 | player | 事件所属 Player ID |
 | sequence | 该 Player 内单调递增的事件序号 |
 | operation_id | 关联的异步操作编号；非操作事件为 0 |
-| result | 操作结果或错误码 |
+| result | 主动事件对应的结果或错误码；不用于返回同步 C ABI 请求结果 |
 | data / data_size | 可选的事件负载及其字节数 |
 
 首期事件类型建议包括：
@@ -618,7 +618,7 @@ C ABI 对调用方采用同步请求/响应模型，Core 内部采用异步执�
 - Qt 桥接层使用 queued connection 将事件转发到 GUI 线程；Android JNI Bridge 将事件转发到合适的 Kotlin 调度上下文，再由主线程更新 UI。
 - 不得假定回调来自固定线程，也不得假定不同 Player 的回调运行在同一个线程。
 
-位置更新属于高频信息，建议通过可配置频率的事件或 UI 定时查询获取；状态变化、错误和操作完成事件必须优先且不能被位置更新淹没。
+位置更新属于高频信息，建议通过可配置频率的事件或 UI 定时查询获取；状态变化和独立运行时错误等主动事件必须优先且不能被位置更新淹没。同步请求的完成结果不通过事件发送。
 
 ### 8.6 内存与字符串所有权
 
@@ -642,7 +642,7 @@ C ABI 对调用方采用同步请求/响应模型，Core 内部采用异步执�
 - 媒体输入、格式探测、解码和输出错误。
 - 内存、内部资源和未知错误。
 
-请求入口的同步返回仅表示请求是否成功提交；异步操作的最终成功或失败通过原请求响应通道返回。独立发生的运行时错误通过主动错误事件通知。错误码应稳定且可枚举，不能直接把 FFmpeg 内部错误值作为公开 ABI 错误码。需要展示的错误文本应通过稳定的错误码转换接口获得，或由错误响应/错误事件提供 UTF-8 描述。
+同步 C ABI 返回码表示本次调用的最终执行结果，而不只是请求是否成功提交。请求执行期间的错误通过该次调用的返回码和输出参数返回；独立发生的运行时错误通过主动错误事件通知。错误码应稳定且可枚举，不能直接把 FFmpeg 内部错误值作为公开 ABI 错误码。需要展示的错误文本应通过稳定的错误码转换接口获得，或由错误响应/错误事件提供 UTF-8 描述。
 
 ### 8.8 回调注销与对象销毁
 
