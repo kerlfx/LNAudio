@@ -939,6 +939,7 @@ lnplayer_result_t lnplayer_enumerate_audio_tracks(
                 track.channels,
                 track.sample_rate,
                 track.is_default ? 1 : 0,
+                track.is_selected ? 1 : 0,
                 track.title.c_str(),
                 track.language.c_str(),
                 track.codec.c_str()
