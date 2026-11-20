@@ -26,6 +26,7 @@
 #include <QDialogButtonBox>
 #include <QFormLayout>
 #include <QCheckBox>
+#include <QColor>
 #include <QComboBox>
 #include <QDoubleSpinBox>
 #include <QSpinBox>
@@ -2441,13 +2442,13 @@ void MainWindow::presentPendingVideoFrame()
                     {
                         QPainter painter(&fallback.image);
                         painter.setRenderHint(QPainter::TextAntialiasing, true);
-                        QFont font(QStringLiteral("Segoe UI"));
-                        font.setPixelSize(std::max(20, fallback.image.width() / 40));
+                        QFont font(subtitle_font_family_);
+                        font.setPixelSize(subtitle_font_size_ > 0 ? subtitle_font_size_ : std::max(20, fallback.image.width() / 40));
                         font.setWeight(QFont::DemiBold);
                         painter.setFont(font);
                         const QRect text_rect(
                             fallback.image.width() / 20,
-                            fallback.image.height() * 4 / 5,
+                            fallback.image.height() * subtitle_vertical_position_ / 100,
                             fallback.image.width() * 9 / 10,
                             fallback.image.height() / 6);
                         const int offsets[][2] = {
@@ -2460,7 +2461,7 @@ void MainWindow::presentPendingVideoFrame()
                                 text_rect.translated(offset[0], offset[1]),
                                 Qt::AlignHCenter | Qt::AlignVCenter | Qt::TextWordWrap,
                                 subtitle);
-                        painter.setPen(Qt::white);
+                        painter.setPen(QColor(subtitle_color_));
                         painter.drawText(
                             text_rect,
                             Qt::AlignHCenter | Qt::AlignVCenter | Qt::TextWordWrap,
@@ -2525,12 +2526,12 @@ void MainWindow::presentPendingVideoFrame()
         QPainter painter(&frame);
         painter.setRenderHint(QPainter::TextAntialiasing, true);
         QFont font(QStringLiteral("Segoe UI"));
-        font.setPixelSize(std::max(20, frame.width() / 40));
+        font.setPixelSize(subtitle_font_size_ > 0 ? subtitle_font_size_ : std::max(20, frame.width() / 40));
         font.setWeight(QFont::DemiBold);
         painter.setFont(font);
         const QRect text_rect(
             frame.width() / 20,
-            frame.height() * 4 / 5,
+            frame.height() * subtitle_vertical_position_ / 100,
             frame.width() * 9 / 10,
             frame.height() / 6);
         const int offsets[][2] = {
@@ -2835,12 +2836,12 @@ void MainWindow::presentHistoricalVideoFrame()
             QPainter painter(&overlay);
             painter.setRenderHint(QPainter::TextAntialiasing, true);
             QFont font(QStringLiteral("Segoe UI"));
-            font.setPixelSize(std::max(20, overlay.width() / 40));
+            font.setPixelSize(subtitle_font_size_ > 0 ? subtitle_font_size_ : std::max(20, overlay.width() / 40));
             font.setWeight(QFont::DemiBold);
             painter.setFont(font);
             const QRect text_rect(
                 overlay.width() / 20,
-                overlay.height() * 4 / 5,
+                overlay.height() * subtitle_vertical_position_ / 100,
                 overlay.width() * 9 / 10,
                 overlay.height() / 6);
             const int offsets[][2] = {
