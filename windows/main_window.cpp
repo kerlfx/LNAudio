@@ -902,7 +902,7 @@ void MainWindow::openFiles(const QList<QUrl>& urls)
         return;
 
     playlist_ = std::move(next_playlist);
-    playlist_index_ = -1;
+    playlist_index_ = 0;
     resetShuffleOrder();
     rebuildPlaylistWidget();
     openPlaylistIndex(0);
@@ -920,7 +920,11 @@ void MainWindow::appendPlaylistFiles(const QList<QUrl>& urls)
     resetShuffleOrder();
     rebuildPlaylistWidget();
     if (playlist_index_ < 0 && !playlist_.isEmpty())
+    {
+        playlist_index_ = 0;
+        resetShuffleOrder();
         openPlaylistIndex(0);
+    }
 }
 
 void MainWindow::rebuildPlaylistWidget()
