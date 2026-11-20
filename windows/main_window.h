@@ -17,6 +17,7 @@
 #include "subtitle_manager.h"
 #include "video_surface.h"
 
+class QAction;
 class QLabel;
 class QLineEdit;
 class QListWidget;
@@ -117,6 +118,7 @@ private:
     VideoSurface* video_surface_ = nullptr;
     QWidget* control_panel_ = nullptr;
     QWidget* playlist_panel_ = nullptr;
+    QAction* playlist_visibility_action_ = nullptr;
     QSlider* seek_slider_;
     QSlider* volume_slider_;
     QPushButton* play_button_;
