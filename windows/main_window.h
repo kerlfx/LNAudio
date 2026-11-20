@@ -12,9 +12,14 @@
 #include <QHash>
 #include <QSet>
 
+#include <asio.hpp>
+
 #include <vector>
 #include <memory>
+#include <atomic>
 #include <cstdint>
+#include <thread>
+#include <utility>
 
 #include "lnplayer.h"
 #include "subtitle_manager.h"
@@ -34,7 +39,6 @@ class QResizeEvent;
 class QPushButton;
 class QSlider;
 class QShortcut;
-class QThread;
 class QTimer;
 class QWidget;
 
@@ -134,6 +138,46 @@ private:
     void showFullscreenControls();
     void updateFullscreenUi();
 
+    template <typename Handler>
+    void postCommand(Handler&& handler)
+    {
+        asio::post(ui_io_context_,
+            [this, task = std::forward<Handler>(handler)]() mutable
+            {
+                asio::post(command_executor_, std::move(task));
+            });
+    }
+
+    template <typename Handler>
+    void postFrame(Handler&& handler)
+    {
+        asio::post(ui_io_context_,
+            [this, task = std::forward<Handler>(handler)]() mutable
+            {
+                asio::post(frame_executor_, std::move(task));
+            });
+    }
+
+    template <typename Handler>
+    void postLibrary(Handler&& handler)
+    {
+        asio::post(ui_io_context_,
+            [this, task = std::forward<Handler>(handler)]() mutable
+            {
+                asio::post(library_executor_, std::move(task));
+            });
+    }
+
+    template <typename Handler>
+    void postBackground(Handler&& handler)
+    {
+        asio::post(ui_io_context_,
+            [this, task = std::forward<Handler>(handler)]() mutable
+            {
+                asio::post(ui_thread_pool_, std::move(task));
+            });
+    }
+
     PlayerMode mode_;
     QLabel* status_label_;
     QLabel* position_label_;
@@ -157,19 +201,20 @@ private:
     QPushButton* stop_button_;
     QPushButton* shuffle_button_ = nullptr;
     QPushButton* repeat_button_ = nullptr;
-    QObject* command_worker_;
-    QThread* command_thread_;
-    QObject* frame_worker_;
-    QThread* frame_thread_;
-    QObject* library_worker_;
-    QThread* library_thread_;
+    asio::io_context ui_io_context_;
+    asio::executor_work_guard<asio::io_context::executor_type> ui_io_work_guard_;
+    asio::thread_pool ui_thread_pool_;
+    asio::strand<asio::thread_pool::executor_type> command_executor_;
+    asio::strand<asio::thread_pool::executor_type> frame_executor_;
+    asio::strand<asio::thread_pool::executor_type> library_executor_;
+    std::thread ui_io_thread_;
     QTimer* snapshot_timer_;
     QTimer* video_timer_;
     QTimer* device_timer_;
     QTimer* fullscreen_hide_timer_;
     QTimer* osd_timer_;
     QTimer* volume_settings_timer_;
-    lnplayer_t* player_ = nullptr;
+    std::atomic<lnplayer_t*> player_{nullptr};
     void* video_device_identity_ = nullptr;
     int64_t duration_ms_ = -1;
     bool slider_dragging_ = false;
