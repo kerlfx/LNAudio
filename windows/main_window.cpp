@@ -322,8 +322,8 @@ MainWindow::MainWindow(
     , stop_button_(new QPushButton(QStringLiteral("停止"), this))
     , command_worker_(new QObject())
     , command_thread_(new QThread(this))
-    , library_worker_(new QObject())
-    , library_thread_(new QThread(this))
+    , library_worker_(mode == PlayerMode::Audio ? new QObject() : nullptr)
+    , library_thread_(mode == PlayerMode::Audio ? new QThread(this) : nullptr)
     , snapshot_timer_(new QTimer(this))
     , video_timer_(new QTimer(this))
 {
@@ -972,8 +972,11 @@ MainWindow::MainWindow(
 
     command_worker_->moveToThread(command_thread_);
     command_thread_->start();
-    library_worker_->moveToThread(library_thread_);
-    library_thread_->start();
+    if (library_worker_)
+    {
+        library_worker_->moveToThread(library_thread_);
+        library_thread_->start();
+    }
 
     QMetaObject::invokeMethod(command_worker_, [this]
     {
@@ -1175,7 +1178,7 @@ MainWindow::~MainWindow()
     snapshot_timer_->stop();
     video_timer_->stop();
 
-    if (library_thread_->isRunning())
+    if (library_thread_ && library_thread_->isRunning())
     {
         QMetaObject::invokeMethod(library_worker_, [] {}, Qt::BlockingQueuedConnection);
         library_thread_->quit();
