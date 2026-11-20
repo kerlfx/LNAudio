@@ -313,7 +313,6 @@ public:
         playing_ = false;
         audio_draining_ = false;
         audio_packet_pending_ = false;
-        audio_decoder_eof_ = false;
         return success();
     }
 
@@ -325,6 +324,11 @@ public:
     bool playback_ended() const override
     {
         return playback_ended_.load(std::memory_order_relaxed);
+    }
+
+    void set_volume(float volume) override
+    {
+        volume_.store(volume, std::memory_order_relaxed);
     }
 
     MediaBackendResult read_audio_frame(AudioFrame& output, bool& end_of_stream) override
@@ -450,6 +454,13 @@ private:
                 if (!playback_active_ || playback_stop_)
                     continue;
                 playback_writing_ = true;
+            }
+
+            const float volume = volume_.load(std::memory_order_relaxed);
+            if (volume != 1.0f)
+            {
+                for (float& sample : frame.samples)
+                    sample *= volume;
             }
 
             const bool write_success = output.write(
@@ -578,6 +589,7 @@ private:
     int output_sample_rate_ = kOutputSampleRate;
     std::atomic<int64_t> position_ms_{0};
     std::atomic<bool> playback_ended_{false};
+    std::atomic<float> volume_{1.0f};
     AVCodecContext* audio_decoder_ = nullptr;
     AVPacket* audio_packet_ = nullptr;
     AVFrame* audio_frame_ = nullptr;
