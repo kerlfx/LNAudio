@@ -222,6 +222,8 @@ public:
         std::unique_lock<std::mutex> lock(mutex_);
         if (!pixels || width <= 0 || height <= 0 || stride < width * 4)
             return false;
+        hardware_output_texture_.Reset();
+        hardware_output_render_target_.Reset();
         if (!swap_chain_ || !context_ || !render_target_)
         {
             HWND target = window_;
