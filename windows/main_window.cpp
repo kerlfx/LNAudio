@@ -206,6 +206,17 @@ MainWindow::MainWindow(
         });
     }
 
+    if (menuBar())
+    {
+        menuBar()->installEventFilter(this);
+        const auto menu_widgets = menuBar()->findChildren<QWidget*>();
+        for (QWidget* menu_widget : menu_widgets)
+        {
+            menu_widget->setMouseTracking(true);
+            menu_widget->installEventFilter(this);
+        }
+    }
+
     auto* content = new QWidget(this);
     auto* layout = new QVBoxLayout(content);
 
