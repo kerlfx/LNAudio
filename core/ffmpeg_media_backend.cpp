@@ -1,5 +1,9 @@
 #include "ffmpeg_media_backend.h"
 
+#ifdef _WIN32
+#include "wasapi_audio_output.h"
+#endif
+
 extern "C"
 {
 #include <libavcodec/avcodec.h>
@@ -10,8 +14,11 @@ extern "C"
 #include <libswresample/swresample.h>
 }
 
+#include <condition_variable>
 #include <limits>
+#include <mutex>
 #include <string>
+#include <thread>
 #include <utility>
 
 namespace lnplayer
@@ -128,15 +135,57 @@ public:
     {
         if (!opened_)
             return failure("No media source is open.");
+#ifndef _WIN32
+        return failure("The current platform has no configured audio output.");
+#else
+        if (!audio_decoder_)
+            return failure("This media source has no audio stream.");
+
+        std::unique_lock<std::mutex> lock(playback_mutex_);
+        if (!playback_thread_.joinable())
+        {
+            playback_start_finished_ = false;
+            playback_start_success_ = false;
+            playback_stop_ = false;
+            try
+            {
+                playback_thread_ = std::thread([this] { audio_playback_loop(); });
+            }
+            catch (...)
+            {
+                return failure("Unable to start the audio playback thread.");
+            }
+
+            playback_condition_.wait(lock, [this] { return playback_start_finished_; });
+            if (!playback_start_success_)
+            {
+                lock.unlock();
+                if (playback_thread_.joinable())
+                    playback_thread_.join();
+                return failure("Unable to initialize the Windows audio output device.");
+            }
+        }
+
+        playback_active_ = true;
         playing_ = true;
+        playback_condition_.notify_all();
         return success();
+#endif
     }
 
     MediaBackendResult pause() override
     {
         if (!opened_ || !playing_)
             return failure("The media source is not playing.");
+#ifdef _WIN32
+        std::unique_lock<std::mutex> lock(playback_mutex_);
+        playback_active_ = false;
         playing_ = false;
+        playback_condition_.notify_all();
+        playback_condition_.wait(lock, [this] { return !playback_writing_; });
+#else
+        playing_ = false;
+#endif
         return success();
     }
 
@@ -145,6 +194,16 @@ public:
         if (!opened_ || position_ms < 0)
             return failure("The requested seek position is invalid.");
 
+#ifdef _WIN32
+        std::unique_lock<std::mutex> playback_lock(playback_mutex_);
+        const bool resume_playback = playback_active_;
+        playback_active_ = false;
+        playback_condition_.notify_all();
+        playback_condition_.wait(playback_lock, [this] { return !playback_writing_; });
+        playback_lock.unlock();
+#endif
+
+        std::lock_guard<std::mutex> decode_lock(decode_mutex_);
         const int64_t timestamp = av_rescale_q(
             position_ms,
             AVRational{1, 1000},
@@ -174,6 +233,12 @@ public:
             if (resampler_result < 0)
                 return failure("Unable to reset audio resampler: " + ffmpeg_error(resampler_result));
         }
+#ifdef _WIN32
+        playback_lock.lock();
+        if (resume_playback)
+            playback_active_ = true;
+        playback_condition_.notify_all();
+#endif
         return success();
     }
 
@@ -181,6 +246,13 @@ public:
     {
         if (!opened_)
             return success();
+
+        if (playing_)
+        {
+            const MediaBackendResult pause_result = pause();
+            if (!pause_result.success)
+                return pause_result;
+        }
 
         const MediaBackendResult result = seek(0);
         if (result.success)
@@ -190,6 +262,24 @@ public:
 
     MediaBackendResult close() override
     {
+#ifdef _WIN32
+        {
+            std::lock_guard<std::mutex> lock(playback_mutex_);
+            playback_stop_ = true;
+            playback_active_ = false;
+            playback_condition_.notify_all();
+        }
+        if (playback_thread_.joinable())
+            playback_thread_.join();
+        {
+            std::lock_guard<std::mutex> lock(playback_mutex_);
+            playback_stop_ = false;
+            playback_start_finished_ = false;
+            playback_start_success_ = false;
+            playback_writing_ = false;
+        }
+#endif
+        std::lock_guard<std::mutex> decode_lock(decode_mutex_);
         swr_free(&resampler_);
         av_frame_free(&audio_frame_);
         av_packet_free(&audio_packet_);
@@ -209,6 +299,7 @@ public:
 
     MediaBackendResult read_audio_frame(AudioFrame& output, bool& end_of_stream) override
     {
+        std::lock_guard<std::mutex> decode_lock(decode_mutex_);
         end_of_stream = false;
         output.samples.clear();
 
@@ -277,6 +368,78 @@ public:
     }
 
 private:
+#ifdef _WIN32
+    void audio_playback_loop()
+    {
+        WasapiAudioOutput output;
+        const bool output_opened = output.open();
+
+        {
+            std::lock_guard<std::mutex> lock(playback_mutex_);
+            playback_start_success_ = output_opened;
+            playback_start_finished_ = true;
+            if (output_opened)
+                output_sample_rate_ = output.sample_rate();
+            playback_condition_.notify_all();
+        }
+
+        if (!output_opened)
+            return;
+
+        for (;;)
+        {
+            {
+                std::unique_lock<std::mutex> lock(playback_mutex_);
+                playback_condition_.wait(lock, [this]
+                {
+                    return playback_stop_ || playback_active_;
+                });
+                if (playback_stop_)
+                    break;
+            }
+
+            AudioFrame frame;
+            bool end_of_stream = false;
+            const MediaBackendResult decode_result = read_audio_frame(frame, end_of_stream);
+            if (!decode_result.success || end_of_stream)
+            {
+                std::lock_guard<std::mutex> lock(playback_mutex_);
+                playback_active_ = false;
+                playing_ = false;
+                playback_condition_.notify_all();
+                continue;
+            }
+
+            if (frame.samples.empty())
+                continue;
+
+            {
+                std::lock_guard<std::mutex> lock(playback_mutex_);
+                if (!playback_active_ || playback_stop_)
+                    continue;
+                playback_writing_ = true;
+            }
+
+            const bool write_success = output.write(
+                frame.samples.data(),
+                static_cast<uint32_t>(frame.samples.size() / frame.channels));
+
+            {
+                std::lock_guard<std::mutex> lock(playback_mutex_);
+                playback_writing_ = false;
+                if (!write_success)
+                {
+                    playback_active_ = false;
+                    playing_ = false;
+                }
+                playback_condition_.notify_all();
+            }
+        }
+
+        output.close();
+    }
+#endif
+
     MediaBackendResult convert_audio_frame(AudioFrame& output)
     {
         AVChannelLayout input_layout{};
@@ -294,7 +457,7 @@ private:
                 &resampler_,
                 &output_layout,
                 AV_SAMPLE_FMT_FLT,
-                kOutputSampleRate,
+                output_sample_rate_,
                 &input_layout,
                 static_cast<AVSampleFormat>(audio_frame_->format),
                 audio_frame_->sample_rate,
@@ -321,7 +484,7 @@ private:
 
         const int capacity = static_cast<int>(av_rescale_rnd(
             swr_get_delay(resampler_, audio_frame_->sample_rate) + audio_frame_->nb_samples,
-            kOutputSampleRate,
+            output_sample_rate_,
             audio_frame_->sample_rate,
             AV_ROUND_UP));
 
@@ -344,7 +507,7 @@ private:
         }
 
         output.samples.resize(static_cast<size_t>(converted) * kOutputChannels);
-        output.sample_rate = kOutputSampleRate;
+        output.sample_rate = output_sample_rate_;
         output.channels = kOutputChannels;
 
         const AVStream* stream = format_context_->streams[audio_stream_index_];
@@ -368,6 +531,18 @@ private:
     }
 
     AVFormatContext* format_context_ = nullptr;
+    std::mutex decode_mutex_;
+#ifdef _WIN32
+    std::mutex playback_mutex_;
+    std::condition_variable playback_condition_;
+    std::thread playback_thread_;
+    bool playback_stop_ = false;
+    bool playback_active_ = false;
+    bool playback_writing_ = false;
+    bool playback_start_finished_ = false;
+    bool playback_start_success_ = false;
+#endif
+    int output_sample_rate_ = kOutputSampleRate;
     AVCodecContext* audio_decoder_ = nullptr;
     AVPacket* audio_packet_ = nullptr;
     AVFrame* audio_frame_ = nullptr;
