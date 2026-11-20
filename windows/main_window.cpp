@@ -119,15 +119,16 @@ QString settings_file_path()
 
 void initialize_settings_file()
 {
-    QSettings settings(settings_file_path(), QSettings::IniFormat);
+    const QString target_path = settings_file_path();
+    const QString previous_ini = QDir(QStandardPaths::writableLocation(
+        QStandardPaths::AppConfigLocation)).filePath(QStringLiteral("settings.ini"));
+    if (!QFile::exists(target_path) && QFile::exists(previous_ini))
+        QFile::copy(previous_ini, target_path);
+
+    QSettings settings(target_path, QSettings::IniFormat);
     const QString migration_key = QStringLiteral("Config/LegacySettingsMigrationCompleted");
     if (settings.value(migration_key, false).toBool())
         return;
-
-    const QString previous_ini = QDir(QStandardPaths::writableLocation(
-        QStandardPaths::AppConfigLocation)).filePath(QStringLiteral("settings.ini"));
-    if (!QFile::exists(settings_file_path()) && QFile::exists(previous_ini))
-        QFile::copy(previous_ini, settings_file_path());
 
 #ifdef Q_OS_WIN
     QSettings legacy(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"),
@@ -4204,7 +4205,9 @@ void MainWindow::takeScreenshot()
 
     QSettings settings(settings_file_path(), QSettings::IniFormat);
     if (screenshot_directory_.isEmpty())
-        screenshot_directory_ = QDir::homePath();
+        screenshot_directory_ = QDir(application_data_directory()).filePath(
+            QStringLiteral("Screenshots"));
+    QDir().mkpath(screenshot_directory_);
     QString selected_filter = screenshot_format_ == QStringLiteral("jpg")
         ? QStringLiteral("JPEG 图片 (*.jpg *.jpeg)")
         : screenshot_format_ == QStringLiteral("bmp")
