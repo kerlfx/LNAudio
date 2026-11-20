@@ -385,14 +385,14 @@ Windows 应用使用单一 `LNPlayer.exe`，通过启动参数选择音频或视
 视频链路当前已实现：
 - FFmpeg 音视频流探测、视频解码器初始化及同一解封装上下文的音视频 Packet 分流；音频解码、视频解码分别加锁，只有共享 AVFormatContext 解封装和 Packet Queue 使用独立 Demux 锁，避免视频像素转换长时间阻塞音频解码。
 - 有界 Packet Queue；视频帧转换为 BGRA，保留 FFmpeg sample aspect ratio 并按显示宽高比呈现，支持软件解码。
-- Windows 优先尝试 D3D11VA，硬件帧暂时下载到系统内存，再上传至 Renderer；硬件初始化失败时回退软件解码。
+- Windows 优先尝试与 Renderer 共享设备的 D3D11VA 硬件解码；NV12/P010 硬件帧由 D3D11 Video Processor 转换并呈现。共享设备不可用或硬件初始化失败时使用软件解码与 BGRA 上传路径。
 - Windows 原生 QWidget 子窗口 HWND、D3D11 Device/Swap Chain、纹理采样、原始比例、16:9、4:3、拉伸显示和窗口 resize；ResizeBuffers 失败及 DXGI device removed/reset 时尝试重建 Renderer。
 - Windows 专用 `lnplayer_windows.h` 视频帧 Pull 接口；视频帧传输不加入通用 `lnplayer.h`。
 - 统一按容器起始时间将音频/视频 PTS 归一化到从零开始的时间线；视频 PTS 等待、音频流主时钟的基础调度；音频位置在 PCM 写入后结合 WASAPI `IAudioClock` 硬件设备帧位置与当前待播放缓冲量映射到媒体时间线，硬件时钟查询失败时回退到缓冲量估算；无音频视频使用独立时钟。
 - 视频 Seek 后刷新解码器和 Packet Queue；暂停保留最后一帧。
 - 全屏、快捷键、右键菜单、截图和逐帧操作的基础实现；支持加载外挂 SRT 字幕并在视频帧上叠加显示。
 
-Windows 视频 Renderer 的 D3D11 Device 已通过 Windows C ABI 注入 FFmpeg D3D11VA，解码器优先在 Renderer 所属设备上创建硬件帧；当前仍通过 `av_hwframe_transfer_data` 转入 CPU 帧，尚未完成 D3D11 纹理直通和 GPU 视频处理器呈现，因此 GPU→CPU→GPU 拷贝仍存在。其他未完成项：独立 Core Video Frame Queue/显示 Scheduler、DXVA2 后备、多音轨选择、内嵌字幕解码、字幕样式/时间偏移、音频变速保音高、色彩空间/旋转元数据、滤镜和完整播放列表。当前 D3D11 Present 由 Windows 命令工作线程执行，窗口 resize 由 UI 线程执行并通过 Renderer 锁串行化；尚未验证实际设备和长时间播放稳定性。
+Windows 视频 Renderer 的 D3D11 Device 通过 Windows C ABI 注入 FFmpeg D3D11VA。D3D11 硬件帧由 AVFrame 引用保持生命周期，Renderer 使用 D3D11 Video Processor 转换到 BGRA 输出纹理，并在 GPU 完成查询结束后释放帧引用；硬件路径不下载解码帧到 CPU。Renderer 设备丢失后尝试重建；UI 检测设备身份变化并将新设备注入 Core。Renderer 暂时无法创建设备时，Core detach 旧设备并重建软件解码后端，设备恢复后再切回硬件解码。其他未完成项：独立 Core Video Frame Queue/显示 Scheduler、DXVA2 后备、多音轨选择、内嵌字幕解码、字幕样式/时间偏移、音频变速保音高、色彩空间/旋转元数据、滤镜和完整播放列表。当前 D3D11 Present 由 Windows 命令工作线程执行，窗口 resize 由 UI 线程执行并通过 Renderer 锁串行化；尚未验证实际设备和长时间播放稳定性。
 
 ## 6. Android 运行模型
 
@@ -913,5 +913,5 @@ Windows Qt 与 Android JNI 共用同一套 C ABI 语义：
 - The Windows C ABI extension allows callers to retain/release the AVFrame-backed texture lifetime independently of the synchronous read callback.
 - Qt retains each hardware frame through renderer submission; the renderer keeps the AVFrame owner in a bounded pending queue until a D3D11 event query confirms GPU consumption has completed, preventing the decoder from recycling a texture still being read. When four GPU frames are still in flight, subsequent frames are dropped rather than allowing the queue to grow without bound.
 - The renderer uses `ID3D11VideoDevice` / `ID3D11VideoContext` and a D3D11 Video Processor to convert NV12/P010 hardware surfaces into a retained BGRA output texture, then copies it to the swap-chain back buffer. The retained output texture is the stable source for hardware-frame screenshots; it avoids relying on `DXGI_SWAP_EFFECT_DISCARD` back-buffer contents after Present. Qt rasterizes external subtitle text into a transparent overlay, and the renderer alpha-composites it onto this BGRA output texture before presentation. No CPU BGRA transfer/upload of the decoded video frame is used on this path.
-- Software-decoded frames continue through the existing BGRA upload path. If FFmpeg must use a separate D3D11 device instead of the renderer's shared device, the Core transfers that frame to CPU memory and uses the same BGRA fallback.
+- Software-decoded frames continue through the existing BGRA upload path. FFmpeg does not create an independent D3D11 device when no renderer device is attached; it selects software decoding instead, avoiding a hardware frame that cannot be consumed by the renderer.
 - The hardware path currently supports NV12 and P010 input surfaces. If Video Processor initialization or presentation fails for a retained hardware frame, the Windows C ABI can on demand download that AVFrame with `av_hwframe_transfer_data()`, convert it to BGRA, and let the existing software renderer present it. Device-loss re-injection is not yet implemented. Screenshot readback and external subtitle composition are implemented through the retained BGRA output texture.
