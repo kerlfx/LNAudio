@@ -4550,7 +4550,7 @@ void MainWindow::takeScreenshot()
             screenshot_directory_ = QFileInfo(output_path).absolutePath();
             QSettings settings(settings_file_path(), QSettings::IniFormat);
             settings.setValue(QStringLiteral("Video/Screenshot/Directory"), screenshot_directory_);
-            settings.setValue(QStringLiteral("Video/Screenshot/Format"), screenshot_format_);
+            settings.setValue(QStringLiteral("Video/Screenshot/Format"), output_format);
             settings.sync();
             statusBar()->showMessage(QStringLiteral("截图已保存：%1").arg(output_path));
             showOsd(QStringLiteral("截图已保存"));
