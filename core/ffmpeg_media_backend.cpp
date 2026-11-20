@@ -121,7 +121,6 @@ public:
         opened_ = true;
         audio_draining_ = false;
         audio_packet_pending_ = false;
-        audio_decoder_eof_ = false;
         return success();
     }
 
@@ -169,7 +168,12 @@ public:
         audio_draining_ = false;
         audio_decoder_eof_ = false;
         if (resampler_)
+        {
             swr_close(resampler_);
+            const int resampler_result = swr_init(resampler_);
+            if (resampler_result < 0)
+                return failure("Unable to reset audio resampler: " + ffmpeg_error(resampler_result));
+        }
         return success();
     }
 
@@ -219,7 +223,6 @@ public:
 
             if (result == AVERROR_EOF)
             {
-                audio_decoder_eof_ = true;
                 end_of_stream = true;
                 return success();
             }
@@ -232,7 +235,6 @@ public:
                 result = avcodec_send_packet(audio_decoder_, nullptr);
                 if (result == AVERROR_EOF)
                 {
-                    audio_decoder_eof_ = true;
                     end_of_stream = true;
                     return success();
                 }
@@ -376,7 +378,6 @@ private:
     bool playing_ = false;
     bool audio_draining_ = false;
     bool audio_packet_pending_ = false;
-    bool audio_decoder_eof_ = false;
 };
 
 }
