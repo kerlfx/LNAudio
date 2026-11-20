@@ -378,6 +378,21 @@ MainWindow::MainWindow(
             "QLabel { color: white; background: rgba(0, 0, 0, 185); "
             "border-radius: 8px; padding: 10px 18px; font-size: 18px; }"));
         osd_label_->hide();
+        empty_state_label_ = new QLabel(
+            QStringLiteral("拖放视频文件到此处，或从“文件”菜单打开视频"),
+            video_surface_);
+        empty_state_label_->setAlignment(Qt::AlignCenter);
+        empty_state_label_->setWordWrap(true);
+        empty_state_label_->setMaximumWidth(520);
+        empty_state_label_->setAttribute(Qt::WA_TransparentForMouseEvents);
+        empty_state_label_->setStyleSheet(QStringLiteral(
+            "QLabel { color: #c7ced8; background: rgba(0, 0, 0, 145); "
+            "border-radius: 10px; padding: 16px 24px; font-size: 16px; }"));
+        empty_state_label_->adjustSize();
+        empty_state_label_->move(
+            (video_surface_->width() - empty_state_label_->width()) / 2,
+            (video_surface_->height() - empty_state_label_->height()) / 2);
+        empty_state_label_->show();
         osd_timer_->setSingleShot(true);
         connect(osd_timer_, &QTimer::timeout, osd_label_, &QWidget::hide);
         {
@@ -1595,6 +1610,14 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event)
             (control_panel_ && watched_widget && control_panel_->isAncestorOf(watched_widget)) ||
             watched == menuBar() || (menuBar() && watched_widget && menuBar()->isAncestorOf(watched_widget)) ||
             is_menu_widget;
+        if (watched == video_surface_ && event->type() == QEvent::Resize &&
+            empty_state_label_ && empty_state_label_->isVisible())
+        {
+            empty_state_label_->adjustSize();
+            empty_state_label_->move(
+                (video_surface_->width() - empty_state_label_->width()) / 2,
+                (video_surface_->height() - empty_state_label_->height()) / 2);
+        }
         if (watched == video_surface_ && event->type() == QEvent::Resize && osd_label_ && osd_label_->isVisible())
         {
             osd_label_->adjustSize();
@@ -1857,6 +1880,17 @@ void MainWindow::clearPlaylist()
         playlist_widget_->clear();
     if (video_surface_)
         video_surface_->set_frame(QImage());
+    if (empty_state_label_)
+    {
+        empty_state_label_->setText(
+            QStringLiteral("拖放视频文件到此处，或从“文件”菜单打开视频"));
+        empty_state_label_->adjustSize();
+        empty_state_label_->move(
+            (video_surface_->width() - empty_state_label_->width()) / 2,
+            (video_surface_->height() - empty_state_label_->height()) / 2);
+        empty_state_label_->show();
+        empty_state_label_->raise();
+    }
     media_title_label_->setText(QStringLiteral("未打开媒体"));
     position_label_->setText(QStringLiteral("00:00 / --:--"));
     status_label_->setText(QStringLiteral("播放列表已清空"));
@@ -2323,6 +2357,16 @@ void MainWindow::openPlaylistIndex(int index)
         video_surface_->set_frame(QImage());
 
     media_title_label_->setText(QFileInfo(source).fileName());
+    if (empty_state_label_)
+    {
+        empty_state_label_->setText(QStringLiteral("正在打开视频..."));
+        empty_state_label_->adjustSize();
+        empty_state_label_->move(
+            (video_surface_->width() - empty_state_label_->width()) / 2,
+            (video_surface_->height() - empty_state_label_->height()) / 2);
+        empty_state_label_->show();
+        empty_state_label_->raise();
+    }
     status_label_->setText(QStringLiteral("正在打开：%1").arg(source));
     statusBar()->showMessage(QStringLiteral("正在打开媒体"));
     playlist_open_pending_ = true;
@@ -2638,6 +2682,8 @@ void MainWindow::requestVideoFrame()
                 video_seek_pending_ = false;
                 video_end_of_stream_ = false;
                 video_first_frame_received_ = true;
+                if (empty_state_label_)
+                    empty_state_label_->hide();
                 if (video_surface_)
                 {
                     video_surface_->set_hdr_metadata(
