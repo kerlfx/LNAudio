@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <iterator>
 #include <mutex>
 
 #include <d3d11.h>
@@ -261,6 +262,16 @@ public:
         return SUCCEEDED(swap_chain_->Present(1, 0));
     }
 
+    void clear()
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (!context_ || !render_target_ || !swap_chain_)
+            return;
+        const float black[] = {0.0f, 0.0f, 0.0f, 1.0f};
+        context_->ClearRenderTargetView(render_target_.Get(), black);
+        swap_chain_->Present(1, 0);
+    }
+
     void shutdown()
     {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -379,6 +390,11 @@ void D3D11VideoRenderer::resize(uint32_t width, uint32_t height)
 bool D3D11VideoRenderer::present(const uint8_t* bgra, int width, int height, int stride)
 {
     return impl_->present(bgra, width, height, stride);
+}
+
+void D3D11VideoRenderer::clear()
+{
+    impl_->clear();
 }
 
 void D3D11VideoRenderer::shutdown()
