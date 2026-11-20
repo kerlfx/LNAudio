@@ -866,10 +866,10 @@ Windows Qt 与 Android JNI 共用同一套 C ABI 语义：
 
 ### 11.1 已接入的基础能力（尚不等于全部验收）
 
-- Core C ABI、PlaybackController、PlaybackSession、FFmpegMediaBackend 和 Standalone Asio Runtime。
+- Core C ABI、PlaybackController、PlaybackSession、FFmpegMediaBackend、Standalone Asio Runtime 和 FFmpeg libavfilter/libass 字幕渲染。
 - 视频媒体探测、FFmpeg 解封装/解码、Seek/Flush、PTS、无音频视频时钟。
 - Windows D3D11 Swap Chain、D3D11VA、NV12/P010 Video Processor、软件 BGRA 路径和硬件帧引用保留。
-- 视频多音轨、内嵌字幕文本/位图基础解码、外挂 SRT/ASS/SSA 基础文本读取。
+- 视频多音轨、内嵌字幕文本/位图基础解码；ASS/SSA 内嵌与 SRT/ASS/SSA 外挂字幕已接入 FFmpeg libass filter，外挂字幕保留基础文本回退。
 - 视频旋转软件路径、基础色彩矩阵/范围、基础 PQ/HLG Tone Mapping。
 - 基础 D3D11 画面滤镜、截图、逐帧、播放队列和 QSettings 持久化。
 - Runtime 的 SQLite 音乐库连接按需初始化；视频模式启动不打开数据库，也不创建音乐库 QThread。
@@ -888,7 +888,7 @@ Windows Qt 与 Android JNI 共用同一套 C ABI 语义：
 
 ### 11.3 第二优先级：视频高级功能
 
-1. ASS/SSA 样式、字体、描边、阴影、定位、Override Tags 和常见动画/Karaoke 特效。
+1. ASS/SSA 已通过 FFmpeg `subtitles` filter/libass 接入完整渲染路径；仍需验证样式、字体附件、描边、阴影、定位、Override Tags、动画/Karaoke 特效及长字幕文件性能。
 2. HDR10 Mastering Display、MaxCLL/MaxFALL、色域转换及完整 SDR Tone Mapping。
 3. 软件/硬件解码下的旋转、SAR/DAR、色彩和截图一致性。
 4. 视频滤镜管线、组合顺序、实时参数、质量和设置持久化。
