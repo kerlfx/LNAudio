@@ -106,10 +106,10 @@ void VideoSurface::set_video_filter(
             brightness, contrast, saturation, hue_degrees, sharpness, denoise, grayscale);
 }
 
-void VideoSurface::set_hdr_metadata(int transfer, int color_primaries)
+void VideoSurface::set_hdr_metadata(int transfer, int color_primaries, float peak_luminance)
 {
     if (renderer_)
-        renderer_->set_hdr_metadata(transfer, color_primaries);
+        renderer_->set_hdr_metadata(transfer, color_primaries, peak_luminance);
 }
 
 void VideoSurface::set_video_color_space(int ycbcr_matrix, int full_range)
