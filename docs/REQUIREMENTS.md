@@ -27,10 +27,10 @@ LNPlayer 是一个面向 Windows 和 Android 的本地音乐播放器。
 
 - Windows 和 Android 共用 C++ 播放器核心。
 - 核心以动态库形式提供：Windows 生成 DLL，Android 生成 SO。
-- 核心通过独立的对外接口供平台应用调用；C ABI 公共头文件属于 Core 模块，接口设计仍可继续完善。
+- 核心通过独立的对外接口供平台应用调用；C ABI 公共头文件位于 `core/include/lnplayer.h`。
 - 核心内部使用 C++ 实现，不要求内部模块遵循 C 语言编程风格。
 - 内部头文件与对应的 .cpp 放在同一模块目录。
-- 只有对外公开的 C ABI 头文件额外放在独立的 include/ 目录。
+- 只有对外公开的 C ABI 头文件放在 `core/include/`，不再增加额外的 `lnplayer/` 子目录。
 - Core 不依赖 Qt、Kotlin 或 JNI。
 
 ### 3.2 CMake 组织
