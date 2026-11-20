@@ -482,6 +482,7 @@ MainWindow::MainWindow(PlayerMode mode, const QString& initial_media, QWidget* p
                 int stream_index;
                 QString label;
                 bool is_default;
+                bool is_selected;
             };
             std::vector<AudioTrackMenuEntry> audio_tracks;
             if (player_)
@@ -500,7 +501,7 @@ MainWindow::MainWindow(PlayerMode mode, const QString& initial_media, QWidget* p
                             label += QStringLiteral(" (%1 ch)").arg(track->channels);
                         if (track->is_default)
                             label.prepend(QStringLiteral("[默认] "));
-                        entries->push_back({track->stream_index, label, track->is_default != 0});
+                        entries->push_back({track->stream_index, label, track->is_default != 0, track->is_selected != 0});
                     },
                     &audio_tracks);
             }
@@ -508,7 +509,7 @@ MainWindow::MainWindow(PlayerMode mode, const QString& initial_media, QWidget* p
             {
                 QAction* action = audio_track_menu->addAction(track.label);
                 action->setCheckable(true);
-                action->setChecked(track.is_default);
+                action->setChecked(track.is_selected);
                 action->setData(track.stream_index);
             }
             if (audio_tracks.empty())
