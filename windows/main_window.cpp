@@ -166,6 +166,30 @@ MainWindow::MainWindow(
     auto* exit_action = file_menu->addAction(QStringLiteral("退出"));
     connect(exit_action, &QAction::triggered, this, &QWidget::close);
 
+    if (mode_ == PlayerMode::Video)
+    {
+        auto* playlist_menu = menuBar()->addMenu(QStringLiteral("播放列表"));
+        auto* show_playlist_action = playlist_menu->addAction(QStringLiteral("显示播放列表"));
+        show_playlist_action->setCheckable(true);
+        show_playlist_action->setChecked(playlist_panel_visible_);
+        connect(show_playlist_action, &QAction::toggled, this, [this](bool visible)
+        {
+            playlist_panel_visible_ = visible;
+            if (playlist_panel_)
+                playlist_panel_->setVisible(visible);
+            QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+            settings.setValue(QStringLiteral("Video/UI/PlaylistVisible"), visible);
+            settings.sync();
+            if (visible && isFullScreen())
+                showFullscreenControls();
+        });
+        auto* clear_playlist_action = playlist_menu->addAction(QStringLiteral("清空播放列表"));
+        connect(clear_playlist_action, &QAction::triggered, this, [this]
+        {
+            clearPlaylist();
+        });
+    }
+
     auto* content = new QWidget(this);
     auto* layout = new QVBoxLayout(content);
 
@@ -201,6 +225,8 @@ MainWindow::MainWindow(
                 video_aspect_ratio_override_ = 0.0f;
             video_stretch_ = settings.value(
                 QStringLiteral("Video/Display/Stretch"), false).toBool();
+            playlist_panel_visible_ = settings.value(
+                QStringLiteral("Video/UI/PlaylistVisible"), true).toBool();
         }
         video_surface_->set_aspect_ratio(video_aspect_ratio_override_);
         video_surface_->set_stretch(video_stretch_);
@@ -217,6 +243,7 @@ MainWindow::MainWindow(
         auto* playlist_actions = new QHBoxLayout();
         auto* add_to_queue = new QPushButton(QStringLiteral("添加"), playlist_panel_);
         auto* remove_from_queue = new QPushButton(QStringLiteral("移除"), playlist_panel_);
+        auto* clear_queue = new QPushButton(QStringLiteral("清空"), playlist_panel_);
         auto* move_up = new QPushButton(QStringLiteral("上移"), playlist_panel_);
         auto* move_down = new QPushButton(QStringLiteral("下移"), playlist_panel_);
         auto* shuffle_button = new QPushButton(QStringLiteral("随机：关"), playlist_panel_);
@@ -226,6 +253,7 @@ MainWindow::MainWindow(
         shuffle_button->setCheckable(true);
         playlist_actions->addWidget(add_to_queue);
         playlist_actions->addWidget(remove_from_queue);
+        playlist_actions->addWidget(clear_queue);
         playlist_actions->addWidget(move_up);
         playlist_actions->addWidget(move_down);
         playlist_panel_layout->addLayout(playlist_actions);
@@ -246,6 +274,8 @@ MainWindow::MainWindow(
         });
         connect(remove_from_queue, &QPushButton::clicked, this,
             [this] { removeSelectedPlaylistItem(); });
+        connect(clear_queue, &QPushButton::clicked, this,
+            [this] { clearPlaylist(); });
         connect(move_up, &QPushButton::clicked, this,
             [this] { moveSelectedPlaylistItem(-1); });
         connect(move_down, &QPushButton::clicked, this,
@@ -684,6 +714,7 @@ MainWindow::MainWindow(
         });
         auto* video_layout = new QHBoxLayout();
         video_layout->addWidget(video_surface_, 1);
+        playlist_panel_->setVisible(playlist_panel_visible_);
         video_layout->addWidget(playlist_panel_);
         layout->addLayout(video_layout, 1);
     }
@@ -1134,7 +1165,7 @@ void MainWindow::showFullscreenControls()
     if (menuBar())
         menuBar()->show();
     if (playlist_panel_)
-        playlist_panel_->show();
+        playlist_panel_->setVisible(playlist_panel_visible_);
     fullscreen_controls_visible_ = true;
     fullscreen_hide_timer_->start();
 }
@@ -1150,7 +1181,7 @@ void MainWindow::updateFullscreenUi()
         if (menuBar())
             menuBar()->show();
         if (playlist_panel_)
-            playlist_panel_->show();
+            playlist_panel_->setVisible(playlist_panel_visible_);
         fullscreen_controls_visible_ = true;
         return;
     }
@@ -1336,6 +1367,43 @@ void MainWindow::saveVideoPlaylist() const
     settings.setValue(QStringLiteral("VideoPlaylist/Shuffle"), shuffle_enabled_);
     settings.setValue(QStringLiteral("VideoPlaylist/RepeatMode"), repeat_mode_);
     settings.sync();
+}
+
+void MainWindow::clearPlaylist()
+{
+    if (playlist_.isEmpty())
+        return;
+
+    playlist_.clear();
+    playlist_index_ = -1;
+    shuffle_order_.clear();
+    playing_playlist_item_ = nullptr;
+    playlist_open_pending_ = false;
+    video_seek_pending_ = false;
+    video_end_of_stream_ = false;
+    video_first_frame_received_ = false;
+    video_frame_history_.clear();
+    video_frame_history_index_ = -1;
+    pending_video_frame_valid_ = false;
+    pending_hardware_frame_owner_.reset();
+    pending_hardware_texture_ = nullptr;
+    video_timer_->stop();
+
+    if (playlist_widget_)
+        playlist_widget_->clear();
+    if (video_surface_)
+        video_surface_->set_frame(QImage());
+    media_title_label_->setText(QStringLiteral("未打开媒体"));
+    position_label_->setText(QStringLiteral("00:00 / --:--"));
+    status_label_->setText(QStringLiteral("播放列表已清空"));
+    statusBar()->showMessage(QStringLiteral("播放列表已清空"));
+
+    QMetaObject::invokeMethod(command_worker_, [this]
+    {
+        if (player_)
+            lnplayer_close(player_);
+    }, Qt::QueuedConnection);
+    saveVideoPlaylist();
 }
 
 void MainWindow::removeSelectedPlaylistItem()
