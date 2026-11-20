@@ -221,3 +221,8 @@
 - `03897d786b29f076181c03cbd20a7021af616048` — 异步 open 与 destroy 竞态测试。
 
 - [x] 修正 NSIS 注册的 ProgID 和 Applications Open 命令，双击视频文件或从“打开方式”启动时显式传入 `--video`，避免进入默认音频模式。
+
+- [x] HDR mastering display 与 Content Light Level 元数据优先读取逐帧 side data；逐帧缺失时回退读取 AVStream side data，覆盖只在流级声明 HDR10 元数据的文件。
+- [ ] 仍需用不同容器封装的 HDR10 样本验证 side data 的实际布局和单位。
+
+提交：`1acb3a351159e975fe63305626ec3e38d048cd8a`。
