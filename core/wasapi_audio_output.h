@@ -27,6 +27,7 @@ public:
 
     bool open();
     bool write(const float* interleaved_stereo, uint32_t frames);
+    bool flush();
     void close();
 
     int sample_rate() const;
