@@ -86,7 +86,7 @@ Windows 端同时提供音频和视频播放界面，两套 UI 属于同一个 L
 - 平台相关音频输出、视频渲染、设备管理和系统媒体控制与共享播放逻辑分离。
 - UI 不直接承担音视频解码工作。
 - FFmpeg 负责媒体探测、解封装和解码；Qt 负责 Windows 界面及窗口交互，不另行建立与 Core 并行的媒体播放管线。
-- Core 管理视频帧队列与播放时钟调度；帧就绪、显示节奏或平台呈现时机触发任务，经 Runtime `io_context` 协调后提交到共享 `thread_pool` 执行 GPU 呈现，不默认创建独立渲染线程或渲染线程池。视频帧交付不通过普通播放控制请求响应或主动事件回调逐帧传输。
+- Core 管理视频帧队列与播放时钟调度；有音频时以 WASAPI `IAudioClock` 为主时钟，无音频视频使用 `std::chrono::steady_clock` 维护单调时钟，并由 Core 提供媒体播放位置。平台 UI 只依据 Core 的播放位置和视频帧 PTS 调度呈现，不自行维护媒体时钟。帧就绪、显示节奏或平台呈现时机触发任务，经 Runtime `io_context` 协调后提交到共享 `thread_pool` 执行 GPU 呈现，不默认创建独立渲染线程或渲染线程池。视频帧交付不通过普通播放控制请求响应或主动事件回调逐帧传输。
 
 ### 3.4 Windows 工程现状与目标
 
@@ -96,6 +96,7 @@ Windows 端同时提供音频和视频播放界面，两套 UI 属于同一个 L
 - Core Runtime 使用单线程 `asio::io_context` 和共享 `asio::thread_pool`。
 - 当前 Windows 已接入 FFmpeg 音频解码、WASAPI 输出和 SQLite 音乐库；视频模式已接入 FFmpeg 视频解码、Windows D3D11 Swap Chain 呈现、D3D11VA 尝试与软件回退。
 - 视频帧通过 Windows 专用 `lnplayer_windows.h` Pull 接口交付，不扩展通用播放控制 C ABI。视频 UI 已具备 PTS 基础等待、全屏、快捷键、右键菜单、原始比例/16:9/4:3/拉伸切换、截图和逐帧操作。
+- 无音频视频播放时钟由 Core 使用 `std::chrono::steady_clock` 实现；暂停冻结时钟，恢复重新计时，Seek 和播放速度变化时重新锚定时钟。Windows UI 不再使用 `QElapsedTimer` 维护视频媒体时钟。
 - FFmpeg D3D11VA 已接入 Renderer 的共享 D3D11 Device。NV12/P010 硬件帧通过 AVFrame 引用交给 D3D11 Video Processor，转换到独立 BGRA 输出纹理，再复制到 Swap Chain back buffer；GPU event query 完成前保留 AVFrame，GPU 队列最多保留 4 帧，超出时丢帧。外部字幕通过透明 BGRA overlay 在 GPU 输出纹理上合成；截图从保留的 BGRA 输出纹理读回。共享设备不可用时仍保留 FFmpeg CPU transfer + BGRA 上传路径；Video Processor 初始化或呈现失败时，会保留 AVFrame 并按需调用 FFmpeg `av_hwframe_transfer_data()` 下载和转换为 BGRA，再走软件呈现路径。Renderer 检测到 DXGI device removed/reset/hung 后会释放旧 GPU 资源并尝试重建设备；Windows UI 轮询设备身份，检测到新设备时重新注入 Core。若 Renderer 暂时无法创建设备，则向 Core detach 旧设备并重建软件解码后端；设备恢复后再切回共享 D3D11 Device。Core 在设备切换时重建媒体后端，恢复播放位置以及播放/暂停状态，并递增 generation 使旧帧失效。该恢复流程尚未经过真实 GPU/驱动运行验证。音频主时钟已接入 WASAPI `IAudioClock` 硬件位置计数，并结合待播放缓冲量映射媒体时间，硬件时钟查询失败时回退到缓冲量估算。外挂 SRT 字幕已支持加载和软件 BGRA 帧基础叠加；内嵌字幕解码、多音轨、字幕样式/时间偏移、保音高变速和滤镜仍未实现。播放速度 0.25x–4.0x 已接入，当前通过重采样改变速度，因此音高也会变化。
 - 本节描述的是当前工程状态，不代表 Windows 功能范围仅限于首期骨架；Windows 完整版本范围由第 1.1、1.2 节和后续 Windows 功能章节共同定义。
 
