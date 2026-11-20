@@ -180,15 +180,19 @@ public:
 
     MediaBackendResult pause() override
     {
-        if (!opened_ || !playing_)
+        if (!opened_)
             return failure("The media source is not playing.");
 #ifdef _WIN32
         std::unique_lock<std::mutex> lock(playback_mutex_);
+        if (!playing_)
+            return failure("The media source is not playing.");
         playback_active_ = false;
         playing_ = false;
         playback_condition_.notify_all();
         playback_condition_.wait(lock, [this] { return !playback_writing_; });
 #else
+        if (!playing_)
+            return failure("The media source is not playing.");
         playing_ = false;
 #endif
         return success();
@@ -276,7 +280,16 @@ public:
         if (!opened_)
             return success();
 
-        if (playing_)
+#ifdef _WIN32
+        bool is_playing = false;
+        {
+            std::lock_guard<std::mutex> lock(playback_mutex_);
+            is_playing = playing_;
+        }
+#else
+        const bool is_playing = playing_;
+#endif
+        if (is_playing)
         {
             const MediaBackendResult pause_result = pause();
             if (!pause_result.success)
@@ -285,7 +298,12 @@ public:
 
         const MediaBackendResult result = seek(0);
         if (result.success)
+        {
+#ifdef _WIN32
+            std::lock_guard<std::mutex> lock(playback_mutex_);
+#endif
             playing_ = false;
+        }
         return result;
     }
 
