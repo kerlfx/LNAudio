@@ -555,16 +555,17 @@ MainWindow::MainWindow(PlayerMode mode, const QString& initial_media, QWidget* p
         config.user_data = this;
 
         const lnplayer_result_t result = lnplayer_create(&config, &player_);
+        if (result == LNPLAYER_RESULT_OK &&
+            mode_ == PlayerMode::Video && video_surface_)
+        {
+            void* d3d11_device = video_surface_->native_device();
+            if (d3d11_device)
+                lnplayer_windows_set_d3d11_device(player_, d3d11_device);
+        }
         QMetaObject::invokeMethod(this, [this, result]
         {
             if (result == LNPLAYER_RESULT_OK)
             {
-                if (mode_ == PlayerMode::Video && video_surface_)
-                {
-                    void* d3d11_device = video_surface_->native_device();
-                    if (d3d11_device)
-                        lnplayer_windows_set_d3d11_device(player_, d3d11_device);
-                }
                 status_label_->setText(QStringLiteral("播放器已就绪"));
                 statusBar()->showMessage(QStringLiteral("就绪"));
                 if (mode_ == PlayerMode::Audio)
