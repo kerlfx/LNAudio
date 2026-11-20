@@ -2866,7 +2866,8 @@ void MainWindow::openVideoSettings()
         const QString directory = QFileDialog::getExistingDirectory(
             &dialog, QStringLiteral("选择截图保存目录"),
             screenshot_directory->text().isEmpty()
-                ? QDir::homePath() : screenshot_directory->text());
+                ? QDir(application_data_directory()).filePath(QStringLiteral("Screenshots"))
+                : screenshot_directory->text());
         if (!directory.isEmpty())
             screenshot_directory->setText(directory);
     });
@@ -2928,7 +2929,8 @@ void MainWindow::openVideoSettings()
         subtitle_size->setValue(0);
         subtitle_color->setCurrentIndex(0);
         subtitle_position->setValue(80);
-        screenshot_directory->setText(QDir::homePath());
+        screenshot_directory->setText(QDir(application_data_directory()).filePath(
+            QStringLiteral("Screenshots")));
         screenshot_format->setCurrentIndex(0);
         for (auto it = shortcuts_.cbegin(); it != shortcuts_.cend(); ++it)
         {
@@ -3019,7 +3021,8 @@ void MainWindow::openVideoSettings()
     subtitle_color_ = subtitle_color->currentData().toString();
     subtitle_vertical_position_ = subtitle_position->value();
     screenshot_directory_ = screenshot_directory->text().trimmed().isEmpty()
-        ? QDir::homePath() : screenshot_directory->text().trimmed();
+        ? QDir(application_data_directory()).filePath(QStringLiteral("Screenshots"))
+        : screenshot_directory->text().trimmed();
     screenshot_format_ = screenshot_format->currentData().toString();
     video_surface_->set_aspect_ratio(video_aspect_ratio_override_);
     video_surface_->set_stretch(video_stretch_);
