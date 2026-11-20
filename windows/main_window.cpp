@@ -15,6 +15,7 @@
 #include <QFont>
 #include <QDragEnterEvent>
 #include <QDropEvent>
+#include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QHBoxLayout>
@@ -33,6 +34,7 @@
 #include <QPainter>
 #include <QPaintEvent>
 #include <QResizeEvent>
+#include <QRegularExpression>
 #include <QSlider>
 #include <QStatusBar>
 #include <QThread>
@@ -265,6 +267,14 @@ MainWindow::MainWindow(PlayerMode mode, const QString& initial_media, QWidget* p
     {
         openFile();
     });
+    if (mode_ == PlayerMode::Video)
+    {
+        auto* subtitle_action = file_menu->addAction(QStringLiteral("加载外挂字幕..."));
+        connect(subtitle_action, &QAction::triggered, this, [this]
+        {
+            loadExternalSubtitle();
+        });
+    }
     if (mode_ == PlayerMode::Audio)
     {
         auto* import_action = file_menu->addAction(QStringLiteral("导入音乐目录..."));
@@ -720,6 +730,96 @@ void MainWindow::openFiles(const QList<QUrl>& urls)
     }, Qt::QueuedConnection);
 }
 
+void MainWindow::loadExternalSubtitle()
+{
+    const QString path = QFileDialog::getOpenFileName(
+        this,
+        QStringLiteral("加载外挂字幕"),
+        QString(),
+        QStringLiteral("SubRip 字幕 (*.srt);;所有文件 (*)"));
+    if (path.isEmpty())
+        return;
+
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly))
+    {
+        status_label_->setText(QStringLiteral("无法打开字幕文件"));
+        return;
+    }
+
+    const QStringList lines = QString::fromUtf8(file.readAll()).split(
+        QRegularExpression(QStringLiteral("\\r?\\n")));
+    const QRegularExpression timestamp(
+        QStringLiteral("^(\\d+):(\\d{2}):(\\d{2})[,.](\\d{1,3})$"));
+
+    const auto parse_timestamp = [&timestamp](const QString& value, int64_t& output)
+    {
+        const auto match = timestamp.match(value.trimmed());
+        if (!match.hasMatch())
+            return false;
+
+        const int hours = match.captured(1).toInt();
+        const int minutes = match.captured(2).toInt();
+        const int seconds = match.captured(3).toInt();
+        QString fraction = match.captured(4);
+        while (fraction.size() < 3)
+            fraction.append(QLatin1Char('0'));
+        const int milliseconds = fraction.left(3).toInt();
+        output = ((static_cast<int64_t>(hours) * 60 + minutes) * 60 + seconds) *
+            1000 + milliseconds;
+        return true;
+    };
+
+    std::vector<SubtitleCue> cues;
+    for (int i = 0; i < lines.size(); ++i)
+    {
+        if (!lines[i].contains(QStringLiteral("-->")))
+            continue;
+
+        const QStringList times = lines[i].split(QStringLiteral("-->"));
+        if (times.size() != 2)
+            continue;
+
+        SubtitleCue cue;
+        if (!parse_timestamp(times[0], cue.start_ms) ||
+            !parse_timestamp(times[1].section(QLatin1Char(' '), 0, 0), cue.end_ms) ||
+            cue.end_ms <= cue.start_ms)
+            continue;
+
+        QStringList text_lines;
+        for (++i; i < lines.size() && !lines[i].trimmed().isEmpty(); ++i)
+            text_lines.append(lines[i].trimmed());
+
+        cue.text = text_lines.join(QLatin1Char('\n'));
+        cue.text.remove(QRegularExpression(QStringLiteral("<[^>]*>")));
+        cue.text.replace(QStringLiteral("&amp;"), QStringLiteral("&"));
+        cue.text.replace(QStringLiteral("&lt;"), QStringLiteral("<"));
+        cue.text.replace(QStringLiteral("&gt;"), QStringLiteral(">"));
+        if (!cue.text.isEmpty())
+            cues.push_back(std::move(cue));
+    }
+
+    std::sort(cues.begin(), cues.end(), [](const SubtitleCue& left, const SubtitleCue& right)
+    {
+        return left.start_ms < right.start_ms;
+    });
+
+    subtitle_cues_ = std::move(cues);
+    status_label_->setText(QStringLiteral("已加载 %1 条字幕").arg(subtitle_cues_.size()));
+}
+
+QString MainWindow::subtitleAt(int64_t position_ms) const
+{
+    for (const SubtitleCue& cue : subtitle_cues_)
+    {
+        if (position_ms < cue.start_ms)
+            break;
+        if (position_ms < cue.end_ms)
+            return cue.text;
+    }
+    return {};
+}
+
 void MainWindow::refreshLibrary()
 {
     lnplayer_t* player_handle = nullptr;
@@ -869,7 +969,37 @@ void MainWindow::presentPendingVideoFrame()
             return;
     }
 
-    const QImage frame = pending_video_frame_;
+    QImage frame = pending_video_frame_;
+    const QString subtitle = subtitleAt(pending_video_pts_ms_);
+    if (!subtitle.isEmpty())
+    {
+        QPainter painter(&frame);
+        painter.setRenderHint(QPainter::TextAntialiasing, true);
+        QFont font(QStringLiteral("Segoe UI"));
+        font.setPixelSize(std::max(20, frame.width() / 40));
+        font.setWeight(QFont::DemiBold);
+        painter.setFont(font);
+        const QRect text_rect(
+            frame.width() / 20,
+            frame.height() * 4 / 5,
+            frame.width() * 9 / 10,
+            frame.height() / 6);
+        const int offsets[][2] = {
+            {-2, -2}, {0, -2}, {2, -2}, {-2, 0},
+            {2, 0}, {-2, 2}, {0, 2}, {2, 2}
+        };
+        painter.setPen(Qt::black);
+        for (const auto& offset : offsets)
+            painter.drawText(
+                text_rect.translated(offset[0], offset[1]),
+                Qt::AlignHCenter | Qt::AlignVCenter | Qt::TextWordWrap,
+                subtitle);
+        painter.setPen(Qt::white);
+        painter.drawText(
+            text_rect,
+            Qt::AlignHCenter | Qt::AlignVCenter | Qt::TextWordWrap,
+            subtitle);
+    }
     last_video_frame_ = frame;
     if (video_surface_->has_renderer())
     {
