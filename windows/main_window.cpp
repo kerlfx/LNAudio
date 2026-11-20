@@ -476,6 +476,49 @@ MainWindow::MainWindow(
         connect(previous_action, &QAction::triggered, this, [this] { playPrevious(); });
         connect(next_action, &QAction::triggered, this, [this] { playNext(); });
 
+        auto* chapter_menu = playback_menu->addMenu(QStringLiteral("章节"));
+        connect(chapter_menu, &QMenu::aboutToShow, this, [this, chapter_menu]
+        {
+            chapter_menu->clear();
+            struct ChapterEntry
+            {
+                int64_t start_ms;
+                QString title;
+            };
+            std::vector<ChapterEntry> chapters;
+            if (player_)
+            {
+                lnplayer_enumerate_chapters(
+                    player_,
+                    [](const lnplayer_chapter_info_t* chapter, void* user_data)
+                    {
+                        auto* entries = static_cast<std::vector<ChapterEntry>*>(user_data);
+                        entries->push_back({
+                            chapter->start_ms,
+                            QString::fromUtf8(chapter->title_utf8
+                                ? chapter->title_utf8 : "")});
+                    },
+                    &chapters);
+            }
+
+            for (const ChapterEntry& chapter : chapters)
+            {
+                const QString label = QStringLiteral("%1  %2")
+                    .arg(format_position(chapter.start_ms), chapter.title);
+                QAction* action = chapter_menu->addAction(label);
+                connect(action, &QAction::triggered, this, [this, chapter]
+                {
+                    seekToPosition(chapter.start_ms,
+                        QStringLiteral("跳转章节：%1").arg(chapter.title));
+                });
+            }
+            if (chapters.empty())
+            {
+                QAction* unavailable = chapter_menu->addAction(QStringLiteral("当前文件没有章节"));
+                unavailable->setEnabled(false);
+            }
+        });
+
         auto* speed_menu = playback_menu->addMenu(QStringLiteral("播放速度"));
         QList<QAction*> speed_actions;
         const float playback_speeds[] = {0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f, 3.0f, 4.0f};
@@ -3827,12 +3870,18 @@ void MainWindow::togglePlayback()
 
 void MainWindow::seekRelative(int64_t offset_ms)
 {
-    showOsd(offset_ms < 0
+    const QString message = offset_ms < 0
         ? QStringLiteral("后退 %1 秒").arg(-offset_ms / 1000)
-        : QStringLiteral("前进 %1 秒").arg(offset_ms / 1000));
+        : QStringLiteral("前进 %1 秒").arg(offset_ms / 1000);
+    seekToPosition(current_position_ms_ + offset_ms, message);
+}
+
+void MainWindow::seekToPosition(int64_t position_ms, const QString& message)
+{
     if (duration_ms_ <= 0 || video_seek_pending_)
         return;
 
+    showOsd(message);
     viewing_historical_frame_ = false;
     video_seek_pending_ = true;
     seek_slider_->setEnabled(false);
@@ -3841,8 +3890,7 @@ void MainWindow::seekRelative(int64_t offset_ms)
     pending_video_frame_valid_ = false;
     video_end_of_stream_ = false;
     video_timer_->start();
-    const int64_t target = std::clamp<int64_t>(
-        current_position_ms_ + offset_ms, 0, duration_ms_);
+    const int64_t target = std::clamp<int64_t>(position_ms, 0, duration_ms_);
     QMetaObject::invokeMethod(command_worker_, [this, target]
     {
         uint64_t operation_id = 0;
