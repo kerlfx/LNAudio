@@ -554,6 +554,58 @@ lnplayer_result_t lnplayer_close(lnplayer_t* player)
     return finish_result(player->controller->close());
 }
 
+lnplayer_result_t lnplayer_library_add_directory(
+    lnplayer_t* player,
+    const char* path_utf8,
+    int recursive)
+{
+    if (!is_current_player(player))
+        return set_error(LNPLAYER_RESULT_INVALID_HANDLE, "Invalid Player handle.");
+    if (!path_utf8 || !path_utf8[0])
+        return set_error(LNPLAYER_RESULT_INVALID_ARGUMENT, "Library directory path is empty.");
+
+    std::string error;
+    if (!player->runtime.music_library().add_directory(path_utf8, recursive != 0, error))
+        return set_error(LNPLAYER_RESULT_INTERNAL_ERROR, error.c_str());
+    return finish_result(LNPLAYER_RESULT_OK);
+}
+
+lnplayer_result_t lnplayer_library_remove_directory(
+    lnplayer_t* player,
+    const char* path_utf8)
+{
+    if (!is_current_player(player))
+        return set_error(LNPLAYER_RESULT_INVALID_HANDLE, "Invalid Player handle.");
+    if (!path_utf8 || !path_utf8[0])
+        return set_error(LNPLAYER_RESULT_INVALID_ARGUMENT, "Library directory path is empty.");
+
+    std::string error;
+    if (!player->runtime.music_library().remove_directory(path_utf8, error))
+        return set_error(LNPLAYER_RESULT_INTERNAL_ERROR, error.c_str());
+    return finish_result(LNPLAYER_RESULT_OK);
+}
+
+lnplayer_result_t lnplayer_library_scan_directory(
+    lnplayer_t* player,
+    const char* path_utf8,
+    int recursive,
+    int32_t* imported_count)
+{
+    if (!is_current_player(player))
+        return set_error(LNPLAYER_RESULT_INVALID_HANDLE, "Invalid Player handle.");
+    if (!path_utf8 || !path_utf8[0] || !imported_count)
+        return set_error(LNPLAYER_RESULT_INVALID_ARGUMENT, "Invalid library scan arguments.");
+
+    std::string error;
+    int count = 0;
+    if (!player->runtime.music_library().scan_directory(
+        path_utf8, recursive != 0, count, error))
+        return set_error(LNPLAYER_RESULT_INTERNAL_ERROR, error.c_str());
+
+    *imported_count = count;
+    return finish_result(LNPLAYER_RESULT_OK);
+}
+
 lnplayer_result_t lnplayer_get_snapshot(
     lnplayer_t* player,
     lnplayer_snapshot_t* snapshot)
