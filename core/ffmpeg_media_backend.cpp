@@ -950,17 +950,21 @@ private:
                 {
                     playback_flush_requested_ = false;
                     lock.unlock();
-                    if (!output.flush())
+                    const bool flush_success = output.flush();
                     {
+                        std::lock_guard<std::mutex> state_lock(playback_mutex_);
+                        playback_flush_success_ = flush_success;
+                        playback_flush_completed_ = true;
+                        if (!flush_success)
                         {
-                            std::lock_guard<std::mutex> state_lock(playback_mutex_);
                             playback_active_ = false;
                             playing_ = false;
                             playback_failed_.store(true, std::memory_order_relaxed);
                         }
-                        if (playback_error_callback_)
-                            playback_error_callback_("WASAPI failed to flush its render buffer.");
+                        playback_condition_.notify_all();
                     }
+                    if (!flush_success && playback_error_callback_)
+                        playback_error_callback_("WASAPI failed to flush its render buffer.");
                     continue;
                 }
                 decode_generation = playback_generation_;
