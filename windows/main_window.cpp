@@ -481,7 +481,6 @@ MainWindow::MainWindow(PlayerMode mode, const QString& initial_media, QWidget* p
             {
                 int stream_index;
                 QString label;
-                bool is_default;
                 bool is_selected;
             };
             std::vector<AudioTrackMenuEntry> audio_tracks;
@@ -501,7 +500,7 @@ MainWindow::MainWindow(PlayerMode mode, const QString& initial_media, QWidget* p
                             label += QStringLiteral(" (%1 ch)").arg(track->channels);
                         if (track->is_default)
                             label.prepend(QStringLiteral("[默认] "));
-                        entries->push_back({track->stream_index, label, track->is_default != 0, track->is_selected != 0});
+                        entries->push_back({track->stream_index, label, track->is_selected != 0});
                     },
                     &audio_tracks);
             }
@@ -581,19 +580,23 @@ MainWindow::MainWindow(PlayerMode mode, const QString& initial_media, QWidget* p
 
                     const lnplayer_result_t result =
                         lnplayer_select_audio_track(player_, stream_index);
-                    if (result == LNPLAYER_RESULT_OK && resume_playback)
-                        lnplayer_play(player_);
+                    const lnplayer_result_t resume_result = resume_playback
+                        ? lnplayer_play(player_)
+                        : LNPLAYER_RESULT_OK;
 
-                    QMetaObject::invokeMethod(this, [this, result, resume_playback]
+                    QMetaObject::invokeMethod(this, [this, result, resume_playback, resume_result]
                     {
+                        is_playing_ = resume_playback && resume_result == LNPLAYER_RESULT_OK;
                         if (result == LNPLAYER_RESULT_OK)
                         {
-                            is_playing_ = resume_playback;
                             video_frame_history_.clear();
                             video_frame_history_index_ = -1;
                             pending_video_frame_valid_ = false;
                             requestVideoFrame();
-                            statusBar()->showMessage(QStringLiteral("音轨已切换"));
+                            statusBar()->showMessage(
+                                resume_result == LNPLAYER_RESULT_OK
+                                    ? QStringLiteral("音轨已切换")
+                                    : QStringLiteral("音轨已切换，但恢复播放失败"));
                         }
                         else
                         {
