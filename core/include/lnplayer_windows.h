@@ -17,6 +17,7 @@ typedef struct lnplayer_windows_video_frame
     int32_t height;
     int32_t stride;
     int64_t pts_ms;
+    uint64_t generation;
 } lnplayer_windows_video_frame_t;
 
 typedef void (*lnplayer_windows_video_frame_callback_t)(
