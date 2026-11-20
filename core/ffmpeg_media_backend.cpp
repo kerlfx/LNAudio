@@ -1618,7 +1618,16 @@ private:
             video_frame_->color_range != AVCOL_RANGE_UNSPECIFIED
                 ? video_frame_->color_range
                 : video_stream->codecpar->color_range;
-        output.ycbcr_matrix = frame_color_space == AVCOL_SPC_BT709 ? 1 : 0;
+        output.ycbcr_matrix = frame_color_space == AVCOL_SPC_BT709
+            ? 1
+            : frame_color_space == AVCOL_SPC_BT2020_NCL ||
+                frame_color_space == AVCOL_SPC_BT2020_CL
+                ? 2
+                : frame_color_space == AVCOL_SPC_UNSPECIFIED ||
+                    frame_color_space == AVCOL_SPC_BT470BG ||
+                    frame_color_space == AVCOL_SPC_SMPTE170M
+                    ? 0
+                    : 3;
         output.ycbcr_full_range = frame_color_range == AVCOL_RANGE_JPEG ? 1 : 0;
         const bool hardware_matrix_supported =
             frame_color_space == AVCOL_SPC_UNSPECIFIED ||
