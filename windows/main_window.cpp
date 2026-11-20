@@ -2620,11 +2620,11 @@ void MainWindow::updatePlaybackState(
     int64_t duration_ms)
 {
     duration_ms_ = duration_ms;
-    if (viewing_historical_frame_ && state != LNPLAYER_STATE_PLAYING &&
+    if (viewing_historical_frame_ && state == LNPLAYER_STATE_PAUSED &&
         video_frame_history_index_ >= 0 &&
-        video_frame_history_index_ < video_frame_history_.size())
+        video_frame_history_index_ < static_cast<int>(video_frame_history_.size()))
         position_ms = video_frame_history_[video_frame_history_index_].pts_ms;
-    else if (state == LNPLAYER_STATE_PLAYING)
+    else if (state != LNPLAYER_STATE_PAUSED)
         viewing_historical_frame_ = false;
     current_position_ms_ = position_ms;
 
