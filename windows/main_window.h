@@ -185,6 +185,7 @@ private:
     int subtitle_font_size_ = 0;
     int subtitle_vertical_position_ = 80;
     int middle_click_action_ = 1;
+    int double_click_action_ = 0;
     int wheel_action_ = 0;
     bool auto_match_subtitle_ = true;
     bool mouse_gestures_enabled_ = false;
