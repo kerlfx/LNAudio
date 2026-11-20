@@ -14,6 +14,7 @@
 
 #include <QAbstractItemModel>
 #include <QAbstractItemView>
+#include <QAbstractButton>
 #include <QAbstractSlider>
 #include <QAbstractSpinBox>
 #include <QByteArray>
@@ -1224,6 +1225,7 @@ MainWindow::MainWindow(
                 if (QApplication::activePopupWidget() || QApplication::activeModalWidget() ||
                     qobject_cast<QLineEdit*>(focus) ||
                     qobject_cast<QAbstractItemView*>(focus) ||
+                    qobject_cast<QAbstractButton*>(focus) ||
                     qobject_cast<QAbstractSlider*>(focus) ||
                     qobject_cast<QAbstractSpinBox*>(focus) ||
                     qobject_cast<QComboBox*>(focus) ||
