@@ -25,6 +25,7 @@ public:
     bool initialize(HWND window);
     void resize(uint32_t width, uint32_t height);
     bool present(const uint8_t* bgra, int width, int height, int stride);
+    void clear();
     void shutdown();
 
 private:
