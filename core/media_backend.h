@@ -45,6 +45,9 @@ struct VideoFrame
 class MediaBackend
 {
 public:
+#ifdef _WIN32
+    virtual void set_video_device(void* device) = 0;
+#endif
     virtual ~MediaBackend() = default;
 
     virtual MediaBackendResult open(const std::string& source, MediaInfo& info) = 0;
