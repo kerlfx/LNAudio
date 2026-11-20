@@ -22,6 +22,8 @@ add_library(lnplayer SHARED
 target_include_directories(lnplayer
     PUBLIC
         "${CMAKE_CURRENT_SOURCE_DIR}/include"
+    PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/core"
 )
 
 target_compile_definitions(lnplayer
