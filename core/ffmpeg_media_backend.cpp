@@ -24,6 +24,7 @@ extern "C"
 #include <cerrno>
 #include <cmath>
 #include <condition_variable>
+#include <cstdlib>
 #include <deque>
 #include <limits>
 #include <mutex>
@@ -991,17 +992,30 @@ public:
 private:
     struct DecodedSubtitleCue
     {
+        struct BitmapRect
+        {
+            int x = 0;
+            int y = 0;
+            int width = 0;
+            int height = 0;
+            int stride = 0;
+            std::vector<uint8_t> bgra;
+        };
+
         int64_t start_ms = 0;
         int64_t end_ms = 0;
         std::string text;
+        std::vector<BitmapRect> bitmaps;
     };
 
     static int normalize_rotation(double angle)
     {
         if (!std::isfinite(angle))
             return 0;
-        int degrees = static_cast<int>(std::lround(angle / 90.0)) * 90;
-        degrees %= 360;
+        const int nearest = static_cast<int>(std::lround(angle / 90.0)) * 90;
+        if (std::abs(angle - nearest) > 2.0)
+            return 0;
+        int degrees = nearest % 360;
         if (degrees < 0)
             degrees += 360;
         return degrees;
@@ -1182,6 +1196,36 @@ private:
                                 cue.text += ass.substr(comma + 1);
                             }
                         }
+
+                        if (rect->data[0] && rect->data[1] &&
+                            rect->w > 0 && rect->h > 0 && rect->linesize[0] > 0)
+                        {
+                            DecodedSubtitleCue::BitmapRect bitmap;
+                            bitmap.x = rect->x;
+                            bitmap.y = rect->y;
+                            bitmap.width = rect->w;
+                            bitmap.height = rect->h;
+                            bitmap.stride = rect->w * 4;
+                            bitmap.bgra.resize(static_cast<size_t>(bitmap.stride) * bitmap.height);
+                            const auto* palette =
+                                reinterpret_cast<const uint32_t*>(rect->data[1]);
+                            for (int row = 0; row < bitmap.height; ++row)
+                            {
+                                const uint8_t* indices = rect->data[0] +
+                                    static_cast<size_t>(row) * rect->linesize[0];
+                                uint8_t* pixels = bitmap.bgra.data() +
+                                    static_cast<size_t>(row) * bitmap.stride;
+                                for (int column = 0; column < bitmap.width; ++column)
+                                {
+                                    const uint32_t color = palette[indices[column]];
+                                    pixels[column * 4 + 0] = static_cast<uint8_t>(color);
+                                    pixels[column * 4 + 1] = static_cast<uint8_t>(color >> 8);
+                                    pixels[column * 4 + 2] = static_cast<uint8_t>(color >> 16);
+                                    pixels[column * 4 + 3] = static_cast<uint8_t>(color >> 24);
+                                }
+                            }
+                            cue.bitmaps.push_back(std::move(bitmap));
+                        }
                     }
 
                     const auto replace_all = [](std::string& value, const std::string& from,
@@ -1211,7 +1255,8 @@ private:
                         }
                     }
 
-                    if (!cue.text.empty() && cue.end_ms > cue.start_ms)
+                    if ((!cue.text.empty() || !cue.bitmaps.empty()) &&
+                        cue.end_ms > cue.start_ms)
                     {
                         active_subtitle_cues_.push_back(std::move(cue));
                         while (active_subtitle_cues_.size() > 128)
@@ -1227,14 +1272,73 @@ private:
             active_subtitle_cues_.front().end_ms <= position_ms)
             active_subtitle_cues_.pop_front();
 
+        bool has_bitmap = false;
         for (const DecodedSubtitleCue& cue : active_subtitle_cues_)
         {
             if (cue.start_ms <= position_ms && position_ms < cue.end_ms)
             {
-                if (!output.subtitle_text.empty())
-                    output.subtitle_text.push_back('\n');
-                output.subtitle_text += cue.text;
+                if (!cue.text.empty())
+                {
+                    if (!output.subtitle_text.empty())
+                        output.subtitle_text.push_back('\n');
+                    output.subtitle_text += cue.text;
+                }
+                has_bitmap = has_bitmap || !cue.bitmaps.empty();
             }
+        }
+
+        if (has_bitmap)
+        {
+            const int source_width = video_frame_->width;
+            const int source_height = video_frame_->height;
+            const int source_stride = source_width * 4;
+            std::vector<uint8_t> overlay(
+                static_cast<size_t>(source_stride) * source_height, 0);
+            for (const DecodedSubtitleCue& cue : active_subtitle_cues_)
+            {
+                if (cue.start_ms > position_ms || position_ms >= cue.end_ms)
+                    continue;
+                for (const auto& bitmap : cue.bitmaps)
+                {
+                    for (int row = 0; row < bitmap.height; ++row)
+                    {
+                        const int target_y = bitmap.y + row;
+                        if (target_y < 0 || target_y >= source_height)
+                            continue;
+                        const uint8_t* source = bitmap.bgra.data() +
+                            static_cast<size_t>(row) * bitmap.stride;
+                        for (int column = 0; column < bitmap.width; ++column)
+                        {
+                            const int target_x = bitmap.x + column;
+                            if (target_x < 0 || target_x >= source_width)
+                                continue;
+                            const uint8_t* source_pixel = source + column * 4;
+                            uint8_t* target_pixel = overlay.data() +
+                                static_cast<size_t>(target_y) * source_stride +
+                                static_cast<size_t>(target_x) * 4;
+                            const unsigned int alpha = source_pixel[3];
+                            const unsigned int inverse_alpha = 255 - alpha;
+                            for (int channel = 0; channel < 3; ++channel)
+                                target_pixel[channel] = static_cast<uint8_t>(
+                                    (source_pixel[channel] * alpha +
+                                     target_pixel[channel] * inverse_alpha) / 255);
+                            target_pixel[3] = static_cast<uint8_t>(
+                                alpha + (target_pixel[3] * inverse_alpha) / 255);
+                        }
+                    }
+                }
+            }
+
+            VideoFrame bitmap_frame;
+            bitmap_frame.bgra = std::move(overlay);
+            bitmap_frame.width = source_width;
+            bitmap_frame.height = source_height;
+            bitmap_frame.stride = source_stride;
+            rotate_bgra(bitmap_frame, get_frame_rotation_degrees(video_frame_));
+            output.subtitle_bgra = std::move(bitmap_frame.bgra);
+            output.subtitle_width = bitmap_frame.width;
+            output.subtitle_height = bitmap_frame.height;
+            output.subtitle_stride = bitmap_frame.stride;
         }
     }
 

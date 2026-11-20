@@ -24,6 +24,10 @@ typedef struct lnplayer_windows_video_frame
     uint32_t dxgi_format;
     const void* frame_owner;
     const char* subtitle_utf8;
+    const uint8_t* subtitle_bgra;
+    int32_t subtitle_width;
+    int32_t subtitle_height;
+    int32_t subtitle_stride;
 } lnplayer_windows_video_frame_t;
 
 typedef void (*lnplayer_windows_video_frame_callback_t)(

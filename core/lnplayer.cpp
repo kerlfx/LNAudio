@@ -333,7 +333,11 @@ public:
                 read.frame.hardware_frame_owner
                     ? static_cast<const void*>(&read.frame.hardware_frame_owner)
                     : nullptr,
-                read.frame.subtitle_text.c_str()
+                read.frame.subtitle_text.c_str(),
+                read.frame.subtitle_bgra.data(),
+                read.frame.subtitle_width,
+                read.frame.subtitle_height,
+                read.frame.subtitle_stride
             };
             callback(&frame, user_data);
         }
