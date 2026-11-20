@@ -1591,6 +1591,9 @@ void MainWindow::showPlaybackInfo()
     const QString audio_state = has_audio_
         ? QStringLiteral("有音轨")
         : QStringLiteral("无音轨");
+    const QString resolution = video_width_ > 0 && video_height_ > 0
+        ? QStringLiteral("%1 × %2").arg(video_width_).arg(video_height_)
+        : QStringLiteral("未知");
     const QString renderer_state = video_surface_ && video_surface_->has_renderer()
         ? QStringLiteral("D3D11 渲染器已初始化")
         : QStringLiteral("D3D11 渲染器不可用");
@@ -1605,6 +1608,7 @@ void MainWindow::showPlaybackInfo()
         .arg(position)
         .arg(duration)
         .arg(video_state)
+        .arg(resolution)
         .arg(audio_state)
         .arg(playback_rate_, 0, 'f', 2)
         .arg(volume_slider_->value() / 10)
@@ -1971,6 +1975,8 @@ void MainWindow::clearPlaylist()
     is_playing_ = false;
     duration_ms_ = -1;
     current_position_ms_ = 0;
+    video_width_ = 0;
+    video_height_ = 0;
     if (seek_slider_)
     {
         seek_slider_->setEnabled(false);
@@ -2148,6 +2154,20 @@ void MainWindow::openVideoSettings()
     shortcut_scroll->setWidget(shortcut_form_widget);
     shortcut_layout->addWidget(shortcut_scroll);
     tabs->addTab(shortcut_page, QStringLiteral("快捷键"));
+
+    auto* performance_page = new QWidget(tabs);
+    auto* performance_form = new QFormLayout(performance_page);
+    const QString renderer_description = video_surface_ && video_surface_->has_renderer()
+        ? QStringLiteral("D3D11 renderer 已初始化")
+        : QStringLiteral("D3D11 renderer 未初始化");
+    performance_form->addRow(QStringLiteral("渲染器"), new QLabel(renderer_description, performance_page));
+    performance_form->addRow(QStringLiteral("视频分辨率"),
+        new QLabel(video_width_ > 0
+            ? QStringLiteral("%1 × %2").arg(video_width_).arg(video_height_)
+            : QStringLiteral("尚未取得首帧"), performance_page));
+    performance_form->addRow(QStringLiteral("说明"),
+        new QLabel(QStringLiteral("解码器和硬件加速由 Core/FFmpeg 根据媒体与设备自动选择。"), performance_page));
+    tabs->addTab(performance_page, QStringLiteral("性能"));
 
     root->addWidget(tabs, 1);
     auto* buttons = new QDialogButtonBox(
@@ -2931,6 +2951,8 @@ void MainWindow::requestVideoFrame()
                     video_surface_->set_source_aspect_ratio(display_aspect_ratio);
                 }
                 pending_video_frame_ = image;
+                video_width_ = hardware_owner ? hardware_width : image.width();
+                video_height_ = hardware_owner ? hardware_height : image.height();
                 pending_hardware_frame_owner_ = hardware_owner;
                 pending_hardware_texture_ = const_cast<void*>(hardware_texture);
                 pending_hardware_array_slice_ = hardware_array_slice;
