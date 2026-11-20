@@ -252,6 +252,16 @@ MainWindow::MainWindow(PlayerMode mode, const QString& initial_media, QWidget* p
                 : QStringLiteral("全屏"));
             QAction* screenshot = menu.addAction(QStringLiteral("截图..."));
             QAction* next_frame = menu.addAction(QStringLiteral("下一帧"));
+            QMenu* speed_menu = menu.addMenu(QStringLiteral("播放速度"));
+            const float speeds[] = {0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f};
+            for (float speed : speeds)
+            {
+                QAction* speed_action = speed_menu->addAction(
+                    QStringLiteral("%1x").arg(speed, 0, 'f', 2));
+                speed_action->setCheckable(true);
+                speed_action->setChecked(std::abs(playback_rate_ - speed) < 0.001f);
+                speed_action->setData(speed);
+            }
             menu.addSeparator();
             QMenu* aspect_menu = menu.addMenu(QStringLiteral("画面比例"));
             QAction* fit = aspect_menu->addAction(QStringLiteral("保持比例"));
@@ -281,6 +291,8 @@ MainWindow::MainWindow(PlayerMode mode, const QString& initial_media, QWidget* p
                 takeScreenshot();
             else if (selected == next_frame)
                 stepVideoFrame();
+            else if (selected && selected->parent() == speed_menu)
+                setPlaybackRate(selected->data().toFloat());
             else if (selected == fit)
                 video_surface_->set_stretch(false);
             else if (selected == stretch)
@@ -748,7 +760,8 @@ void MainWindow::presentPendingVideoFrame()
     {
         int64_t clock_ms = current_position_ms_;
         if (!has_audio_ && video_clock_.isValid())
-            clock_ms = video_clock_base_pts_ms_ + video_clock_.elapsed();
+            clock_ms = video_clock_base_pts_ms_ +
+                static_cast<int64_t>(video_clock_.elapsed() * playback_rate_);
 
         if (pending_video_pts_ms_ > clock_ms + 8)
             return;
@@ -820,6 +833,24 @@ void MainWindow::takeScreenshot()
         QStringLiteral("PNG 图片 (*.png);;JPEG 图片 (*.jpg *.jpeg)"));
     if (!path.isEmpty())
         last_video_frame_.save(path);
+}
+
+void MainWindow::setPlaybackRate(float rate)
+{
+    playback_rate_ = rate;
+    if (!has_audio_ && video_clock_.isValid())
+    {
+        const int64_t current_clock = video_clock_base_pts_ms_ +
+            static_cast<int64_t>(video_clock_.elapsed() * rate);
+        video_clock_base_pts_ms_ = current_clock;
+        video_clock_.restart();
+    }
+
+    QMetaObject::invokeMethod(command_worker_, [this, rate]
+    {
+        if (player_)
+            lnplayer_set_playback_rate(player_, rate);
+    }, Qt::QueuedConnection);
 }
 
 void MainWindow::stepVideoFrame()
