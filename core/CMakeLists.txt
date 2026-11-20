@@ -1,3 +1,8 @@
+include(FetchContent)
+
+set(FETCHCONTENT_BASE_DIR "${PROJECT_SOURCE_DIR}/3rd_cache/fetchcontent" CACHE PATH
+    "Base directory for FetchContent downloads and build metadata")
+
 find_path(ASIO_INCLUDE_DIR
     NAMES asio.hpp
     HINTS
@@ -46,36 +51,55 @@ if(NOT EXISTS "${LNPLAYER_FFMPEG_ROOT}/include/libavformat/avformat.h")
 
     set(_ffmpeg_archive_name
         "ffmpeg-${LNPLAYER_FFMPEG_VERSION}_x64-windows-shared-${LNPLAYER_FFMPEG_LICENSE}.zip")
-    set(_ffmpeg_download_dir "${PROJECT_SOURCE_DIR}/3rd_cache/downloads")
-    set(_ffmpeg_archive "${_ffmpeg_download_dir}/${_ffmpeg_archive_name}")
     set(_ffmpeg_url
         "https://github.com/System233/ffmpeg-msvc-prebuilt/releases/download/ffmpeg-${LNPLAYER_FFMPEG_VERSION}/${_ffmpeg_archive_name}")
 
-    file(MAKE_DIRECTORY "${_ffmpeg_download_dir}")
-    message(STATUS "Downloading FFmpeg SDK to repository cache: ${_ffmpeg_archive}")
-    file(DOWNLOAD
-        "${_ffmpeg_url}"
-        "${_ffmpeg_archive}"
-        EXPECTED_HASH SHA256=80dc78fd43aa32e7c3b75401d0aae8bcd260127e528999198ac9d0b033a854df
-        SHOW_PROGRESS
-        TLS_VERIFY ON
-        STATUS _ffmpeg_download_status
+    FetchContent_Declare(
+        FFmpeg
+        URL "${_ffmpeg_url}"
+        URL_HASH SHA256=80dc78fd43aa32e7c3b75401d0aae8bcd260127e528999198ac9d0b033a854df
+        DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+        SOURCE_DIR "${LNPLAYER_FFMPEG_ROOT}"
     )
 
-    list(GET _ffmpeg_download_status 0 _ffmpeg_download_code)
-    list(GET _ffmpeg_download_status 1 _ffmpeg_download_message)
-    if(NOT _ffmpeg_download_code EQUAL 0)
-        file(REMOVE "${_ffmpeg_archive}")
-        message(FATAL_ERROR
-            "Failed to download FFmpeg SDK: ${_ffmpeg_download_message}")
+    FetchContent_GetProperties(FFmpeg)
+    if(NOT ffmpeg_POPULATED)
+        message(STATUS "Fetching prebuilt FFmpeg SDK into ${LNPLAYER_FFMPEG_ROOT}")
+        FetchContent_Populate(FFmpeg)
     endif()
-
-    file(MAKE_DIRECTORY "${LNPLAYER_FFMPEG_ROOT}")
-    file(ARCHIVE_EXTRACT
-        INPUT "${_ffmpeg_archive}"
-        DESTINATION "${LNPLAYER_FFMPEG_ROOT}"
-    )
 endif()
+
+set(LNPLAYER_SQLITE_VERSION "3.50.4" CACHE STRING
+    "Pinned SQLite amalgamation version")
+set(LNPLAYER_SQLITE_ROOT "${PROJECT_SOURCE_DIR}/3rd_cache/sqlite" CACHE PATH
+    "Root directory of the SQLite amalgamation source")
+
+if(NOT EXISTS "${LNPLAYER_SQLITE_ROOT}/sqlite-amalgamation-3500400/sqlite3.c"
+   AND NOT EXISTS "${LNPLAYER_SQLITE_ROOT}/sqlite3.c")
+    FetchContent_Declare(
+        SQLite
+        URL "https://www.sqlite.org/2025/sqlite-amalgamation-3500400.zip"
+        URL_HASH SHA3_256=f131b68e6ba5fb891cc13ebb5ff955054c77294cb92d8d1268bad5dba4fa2a1
+        DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+        SOURCE_DIR "${LNPLAYER_SQLITE_ROOT}"
+    )
+
+    FetchContent_GetProperties(SQLite)
+    if(NOT sqlite_POPULATED)
+        message(STATUS "Fetching SQLite ${LNPLAYER_SQLITE_VERSION} amalgamation")
+        FetchContent_Populate(SQLite)
+    endif()
+endif()
+
+find_file(SQLITE3_C_SOURCE
+    NAMES sqlite3.c
+    PATHS
+        "${LNPLAYER_SQLITE_ROOT}"
+        "${LNPLAYER_SQLITE_ROOT}/sqlite-amalgamation-3500400"
+    NO_DEFAULT_PATH
+    REQUIRED
+)
+get_filename_component(SQLITE_INCLUDE_DIR "${SQLITE3_C_SOURCE}" DIRECTORY)
 
 find_path(FFMPEG_INCLUDE_DIR
     NAMES libavformat/avformat.h
@@ -111,6 +135,7 @@ aux_source_directory("${CMAKE_CURRENT_SOURCE_DIR}" LNPLAYER_CORE_SOURCES)
 
 add_library(lnplayer SHARED
     ${LNPLAYER_CORE_SOURCES}
+    "${SQLITE3_C_SOURCE}"
 )
 
 target_include_directories(lnplayer
@@ -119,6 +144,7 @@ target_include_directories(lnplayer
     PRIVATE
         "${ASIO_INCLUDE_DIR}"
         "${FFMPEG_INCLUDE_DIR}"
+        "${SQLITE_INCLUDE_DIR}"
 )
 
 target_compile_definitions(lnplayer
