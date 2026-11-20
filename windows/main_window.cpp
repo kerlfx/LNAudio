@@ -1085,9 +1085,11 @@ MainWindow::MainWindow(
         video_frame_history_.clear();
         video_frame_history_index_ = -1;
         pending_video_frame_valid_ = false;
+        video_end_of_stream_ = false;
         if (duration_ms_ <= 0)
             return;
 
+        video_timer_->start();
         const int64_t target = duration_ms_ * seek_slider_->value() / 1000;
         QMetaObject::invokeMethod(command_worker_, [this, target]
         {
@@ -2301,6 +2303,8 @@ void MainWindow::seekRelative(int64_t offset_ms)
     video_frame_history_.clear();
     video_frame_history_index_ = -1;
     pending_video_frame_valid_ = false;
+    video_end_of_stream_ = false;
+    video_timer_->start();
     const int64_t target = std::clamp<int64_t>(
         current_position_ms_ + offset_ms, 0, duration_ms_);
     QMetaObject::invokeMethod(command_worker_, [this, target]
