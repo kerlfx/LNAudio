@@ -89,6 +89,21 @@ typedef struct lnplayer_config
     void* user_data;
 } lnplayer_config_t;
 
+typedef struct lnplayer_library_track
+{
+    uint32_t struct_size;
+    int64_t track_id;
+    int64_t duration_ms;
+    const char* path_utf8;
+    const char* title_utf8;
+    const char* artist_utf8;
+    const char* album_utf8;
+} lnplayer_library_track_t;
+
+typedef void (*lnplayer_library_track_callback_t)(
+    const lnplayer_library_track_t* track,
+    void* user_data);
+
 typedef struct lnplayer_snapshot
 {
     uint32_t struct_size;
@@ -149,6 +164,14 @@ LNPLAYER_API lnplayer_result_t lnplayer_library_scan_directory(
     const char* path_utf8,
     int recursive,
     int32_t* imported_count);
+
+/* Track strings are valid only during the callback. */
+LNPLAYER_API lnplayer_result_t lnplayer_library_search_tracks(
+    lnplayer_t* player,
+    const char* query_utf8,
+    int32_t limit,
+    lnplayer_library_track_callback_t callback,
+    void* user_data);
 
 /* Snapshot queries do not wait for the event loop or worker pool. */
 LNPLAYER_API lnplayer_result_t lnplayer_get_snapshot(
