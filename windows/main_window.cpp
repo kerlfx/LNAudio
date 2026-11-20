@@ -4514,7 +4514,6 @@ void MainWindow::takeScreenshot()
 
     const QString output_format = screenshot_format_;
     const QByteArray image_format = output_format.toLatin1();
-    screenshot = screenshot.copy();
     postBackground([this, screenshot = std::move(screenshot), output_path, output_format, image_format]() mutable
     {
         QDir().mkpath(QFileInfo(output_path).absolutePath());
