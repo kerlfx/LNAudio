@@ -983,3 +983,12 @@ Windows UI 的正式完成条件统一由 [`docs/WINDOWS_UI_ACCEPTANCE.md`](WIND
 实现提交：
 - `e4637f29367f15170ef1d13a3d2c46c0be3cdab2` — 声明 PTS 调度入口。
 - `9c017f09779234a6ef7cd76b208e77bea9970e1e`、`f4dcdbe4697de66b0f947de7eed962b78c3fbb0c`、`d7866f1a69a04efd58b789feccb66a5199be808f` — 单次 timer、PTS 计算与呈现完成后续帧请求。
+
+
+### 2026-11-21 — UI 关闭期间取消目录扫描
+
+- [x] `UiTaskTracker` 增加 accepting 状态查询；窗口析构停止接收任务后，递归播放列表扫描在遍历循环中检查取消状态并提前退出。
+- [x] `openFiles()` 与 `appendPlaylistFiles()` 共用该取消状态，避免关闭窗口时仍继续扫描整个目录树。
+- [ ] 单次文件系统调用、媒体探测和 Core 帧 Pull 仍无法由该标志中断；需在超大目录、网络路径和关闭期间解码场景验证等待时间。
+
+实现提交：`7b13e33d17695b3eb8959819624a168fc182e026`、`014018afa9ccddb5bfa9240ecadd3928baf4953b`、`073d122de129daf4be5ea571839c4991afba3dc3`。
