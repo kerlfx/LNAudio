@@ -32,6 +32,10 @@ struct MediaVideoInfo
     int color_transfer = 0;
     int color_space = 0;
     int bit_depth = 0;
+    float mastering_max_luminance = 0.0f;
+    float mastering_min_luminance = 0.0f;
+    uint32_t max_content_light_level = 0;
+    uint32_t max_frame_average_light_level = 0;
     bool hardware_decoding = false;
 };
 
