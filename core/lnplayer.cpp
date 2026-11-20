@@ -82,6 +82,7 @@ public:
         {
             asio::post(runtime_.io_context(), [this, id, position_ms]
             {
+                (void)position_ms;
                 const lnplayer_state_t current = state();
                 const bool seekable =
                     current == LNPLAYER_STATE_READY ||
@@ -378,6 +379,9 @@ lnplayer_result_t lnplayer_create(
 
 lnplayer_result_t lnplayer_destroy(lnplayer_t* player)
 {
+    if (player && is_current_player(player) && player->runtime.running_in_io_thread())
+        return set_error(LNPLAYER_RESULT_WOULD_DEADLOCK, "Player cannot be destroyed from its event thread.");
+
     {
         std::lock_guard<std::mutex> lock(g_player_mutex);
         if (!player || player != g_player || g_destroying)
