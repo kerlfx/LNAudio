@@ -219,3 +219,5 @@
 提交：
 - `c4d99cd43c7bf99ff5e56d00e466d7b4c729b873` — Runtime 两阶段排空。
 - `03897d786b29f076181c03cbd20a7021af616048` — 异步 open 与 destroy 竞态测试。
+
+- [x] 修正 NSIS 注册的 ProgID 和 Applications Open 命令，双击视频文件或从“打开方式”启动时显式传入 `--video`，避免进入默认音频模式。
