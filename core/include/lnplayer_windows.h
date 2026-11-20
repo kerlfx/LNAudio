@@ -19,6 +19,10 @@ typedef struct lnplayer_windows_video_frame
     int64_t pts_ms;
     uint64_t generation;
     float display_aspect_ratio;
+    void* d3d11_texture;
+    uint32_t d3d11_array_slice;
+    uint32_t dxgi_format;
+    const void* frame_owner;
 } lnplayer_windows_video_frame_t;
 
 typedef void (*lnplayer_windows_video_frame_callback_t)(
@@ -39,6 +43,12 @@ LNPLAYER_API lnplayer_result_t lnplayer_windows_set_d3d11_device(
  * on the calling thread and the pixel buffer is valid only during callback.
  * Call from a dedicated background thread, never from the UI or event thread.
  */
+LNPLAYER_API lnplayer_result_t lnplayer_windows_retain_video_frame(
+    const lnplayer_windows_video_frame_t* frame,
+    void** retained_owner);
+
+LNPLAYER_API void lnplayer_windows_release_video_frame(void* retained_owner);
+
 LNPLAYER_API lnplayer_result_t lnplayer_windows_read_video_frame(
     lnplayer_t* player,
     lnplayer_windows_video_frame_callback_t callback,
