@@ -119,6 +119,12 @@ find_library(FFMPEG_AVCODEC_LIBRARY
     REQUIRED
 )
 
+find_library(FFMPEG_AVFILTER_LIBRARY
+    NAMES avfilter avfilter-11 avfilter-10 avfilter-9
+    HINTS "${LNPLAYER_FFMPEG_ROOT}/lib"
+    REQUIRED
+)
+
 find_library(FFMPEG_AVUTIL_LIBRARY
     NAMES avutil avutil-60 avutil-59 avutil-58
     HINTS "${LNPLAYER_FFMPEG_ROOT}/lib"
@@ -163,6 +169,7 @@ target_link_libraries(lnplayer
     PRIVATE
         "${FFMPEG_AVFORMAT_LIBRARY}"
         "${FFMPEG_AVCODEC_LIBRARY}"
+        "${FFMPEG_AVFILTER_LIBRARY}"
         "${FFMPEG_AVUTIL_LIBRARY}"
         "${FFMPEG_SWRESAMPLE_LIBRARY}"
         "${FFMPEG_SWSCALE_LIBRARY}"
