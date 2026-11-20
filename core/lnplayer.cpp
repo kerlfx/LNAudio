@@ -89,10 +89,10 @@ public:
     lnplayer_result_t open(const char* source, uint64_t* operation_id)
     {
         const uint64_t id = next_operation_id_.fetch_add(1, std::memory_order_relaxed);
-        const std::string source_copy(source);
 
         try
         {
+            const std::string source_copy(source);
             asio::post(runtime_.io_context(), [this, id, source_copy]
             {
                 update_state(LNPLAYER_STATE_OPENING);
@@ -508,11 +508,13 @@ private:
         if (runtime_.running_in_io_thread())
             return LNPLAYER_RESULT_WOULD_DEADLOCK;
 
-        auto result = std::make_shared<std::promise<lnplayer_result_t>>();
-        auto future = result->get_future();
+        std::shared_ptr<std::promise<lnplayer_result_t>> result;
+        std::future<lnplayer_result_t> future;
 
         try
         {
+            result = std::make_shared<std::promise<lnplayer_result_t>>();
+            future = result->get_future();
             asio::post(runtime_.io_context(), [this, result, operation = std::move(operation), closing]() mutable
             {
                 try
