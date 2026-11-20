@@ -134,6 +134,7 @@ private:
     QLabel* osd_label_ = nullptr;
     QWidget* playlist_panel_ = nullptr;
     QAction* playlist_visibility_action_ = nullptr;
+    QAction* always_on_top_action_ = nullptr;
     QHash<QString, QShortcut*> shortcuts_;
     QSlider* seek_slider_;
     QSlider* volume_slider_;
