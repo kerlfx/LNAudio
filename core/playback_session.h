@@ -4,6 +4,7 @@
 #include "media_backend.h"
 
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -55,6 +56,7 @@ public:
     SessionResult stop();
     SessionResult close();
     void set_volume(float volume);
+    void set_playback_end_callback(std::function<void()> callback);
 
     SessionSnapshot snapshot() const;
 
@@ -67,6 +69,7 @@ private:
     std::unique_ptr<MediaBackend> backend_;
     SessionSnapshot snapshot_;
     float volume_ = 1.0f;
+    std::function<void()> playback_end_callback_;
 };
 
 }
