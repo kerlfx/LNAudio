@@ -10,6 +10,7 @@
 #include <QList>
 #include <QUrl>
 #include <QHash>
+#include <QSet>
 
 #include <vector>
 #include <memory>
@@ -89,6 +90,8 @@ private:
     void openFiles(const QList<QUrl>& urls);
     void appendPlaylistFiles(const QList<QUrl>& urls);
     void rebuildPlaylistWidget();
+    void schedulePlaylistMetadataProbe(const QString& path);
+    void updatePlaylistItemMetadata(const QString& path);
     void loadVideoPlaylist();
     void saveVideoPlaylist() const;
     void savePlaybackPosition() const;
@@ -234,6 +237,9 @@ private:
     uint64_t media_generation_ = 0;
     SubtitleManager subtitle_manager_;
     QList<QUrl> playlist_;
+    QHash<QString, lnplayer_video_info_t> playlist_video_metadata_;
+    QHash<QString, int64_t> playlist_durations_;
+    QSet<QString> playlist_probe_pending_;
     int playlist_index_ = -1;
     QString current_media_path_;
     QListWidgetItem* playing_playlist_item_ = nullptr;
