@@ -1213,6 +1213,10 @@ lnplayer_result_t lnplayer_get_video_info(
         info->color_transfer = source.color_transfer;
         info->color_space = source.color_space;
         info->bit_depth = source.bit_depth;
+        info->mastering_max_luminance = source.mastering_max_luminance;
+        info->mastering_min_luminance = source.mastering_min_luminance;
+        info->max_content_light_level = source.max_content_light_level;
+        info->max_frame_average_light_level = source.max_frame_average_light_level;
         info->hardware_decoding = source.hardware_decoding ? 1 : 0;
         const auto copy_text = [](char* destination, size_t capacity, const std::string& value)
         {
@@ -1269,6 +1273,10 @@ lnplayer_result_t lnplayer_probe_media(
         info->color_transfer = source.color_transfer;
         info->color_space = source.color_space;
         info->bit_depth = source.bit_depth;
+        info->mastering_max_luminance = source.mastering_max_luminance;
+        info->mastering_min_luminance = source.mastering_min_luminance;
+        info->max_content_light_level = source.max_content_light_level;
+        info->max_frame_average_light_level = source.max_frame_average_light_level;
         const auto copy_text = [](char* destination, size_t capacity, const std::string& value)
         {
             if (capacity != 0)
