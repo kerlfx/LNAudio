@@ -532,14 +532,14 @@ Core 内部可以使用 FFmpeg AVFrame 和 AVBufferRef 管理帧生命周期，�
 
 ### 7.6 平台 UI 与 C ABI 调用模型
 
-平台 UI 不负责调度 Core 内部的 FFmpeg 业务，但 Windows Qt UI 有一层轻量的 Asio 任务调度器，用于隔离同步 C ABI 调用和 UI 本地耗时任务。它与 Core Runtime 相互独立，不共享执行器或线程池。
+平台 UI 不负责调度 Core 内部的 FFmpeg 业务，但 Windows Qt UI 有一套进程级共享的 Asio 任务调度器，用于隔离同步 C ABI 调用和 UI 本地耗时任务。所有 MainWindow/Player 窗口共享同一个 UI `io_context` 和线程池；它与 Core Runtime 相互独立，不与 Core 共享执行器或线程池。
 
-- **Windows / Qt**：GUI 主线程只提交任务、处理输入和更新 QWidget。UI 调度器拥有一个单线程 `io_context` 作为提交/分发入口，以及一套三线程共享 `asio::thread_pool`。所有后台任务先通过 `asio::post(ui_io_context, ...)` 进入调度入口，再投递到线程池执行。
+- **Windows / Qt**：GUI 主线程只提交任务、处理输入和更新 QWidget。进程级 UI 调度器拥有一个单线程 `io_context` 作为提交/分发入口，以及一套三线程共享 `asio::thread_pool`。每个 MainWindow 只持有自己的 command/frame/library strand 和任务跟踪器，不创建独立线程；所有后台任务先通过 `asio::post(ui_io_context, ...)` 进入调度入口，再投递到共享线程池执行。
 - **Windows 命令执行器**：同步完成型 `play/pause/stop/close`、轨道切换、设备更新等 C ABI 调用通过绑定在线程池的 Player command strand 串行执行，避免 UI 阻塞并保持调用顺序。提交型 `open/seek` 也通过该入口提交；其 C ABI 返回只表示请求已入队，实际完成仍由 Core 事件回调通知。
 - **Windows 视频帧执行器**：同步视频帧 Pull 通过独立 frame strand 执行，避免帧读取等待占住命令 strand。UI 只允许一个帧读取任务在途；CPU 字幕位图/文本叠加和软件帧图像处理在 UI 共享线程池执行，最终 QWidget 更新仍回到 GUI 线程；硬件帧交接遵守 D3D11 Renderer 的线程约束。帧完成后使用 Qt queued connection 回到 GUI 线程更新状态。帧队列必须有界，不能持续向线程池堆积帧任务。
 - **Windows 媒体/音乐库执行器**：目录扫描、媒体探测、音乐库扫描和查询通过 library strand 执行，避免共享音乐库访问并发冲突；播放列表媒体探测采用单任务在途队列，避免大量文件一次性向线程池堆积；外挂字幕基础文本回退解析也在后台执行。截图 GPU Readback、编码/写入，普通帧与历史帧的字幕叠加等独立 CPU/图像任务可以直接投递共享线程池。
 - **快速查询**：只有经确认不会等待媒体会话锁的纯缓存/原子快照才可在 GUI 线程直接调用。当前 `lnplayer_get_snapshot` 会读取 `PlaybackSession`，可能与持有 Session 锁的视频帧 Pull 竞争；Windows UI 因此将其放在 command strand，并限制同一时刻最多一个快照查询在途。后续应将 Core 快照改为独立缓存后再考虑直接查询。
-- **完成通知**：UI 层使用 Qt queued connection/回调更新界面，不在正常交互路径调用 `future.get()`、`wait()` 或同步等待线程池。窗口析构时允许执行一次关闭屏障：先停止接收新提交、排空已提交任务，再销毁 Player。Asio `use_future` 只适用于确实需要 Future 语义且不会阻塞 UI 的调用路径。
+- **完成通知**：UI 层使用 Qt queued connection/回调更新界面，不在正常交互路径调用 `future.get()`、`wait()` 或同步等待线程池。窗口析构时由该窗口的任务跟踪器停止接收新提交并等待本窗口已提交任务完成，再销毁 Player；关闭一个窗口不会停止其他窗口共享的 UI 线程池。Asio `use_future` 只适用于确实需要 Future 语义且不会阻塞 UI 的调用路径。
 - **Android / Kotlin**：Kotlin 通过 JNI 调用相同 C ABI。提交型接口和快速查询可直接调用；同步完成型接口应由后台 Dispatcher/线程调用，不得阻塞 Android Main Thread。
 - **Core 内部**：命令由 Core Runtime 的 `io_context` 协调，实际业务由 Core 共享 `thread_pool` 执行。Windows UI 调度器不替代、不访问 Core 的执行器。
 
