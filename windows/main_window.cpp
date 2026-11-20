@@ -2033,7 +2033,7 @@ MainWindow::MainWindow(
     snapshot_timer_->setInterval(250);
     connect(snapshot_timer_, &QTimer::timeout, this, &MainWindow::refreshSnapshot);
 
-    video_timer_->setInterval(4);
+    video_timer_->setSingleShot(true);
     video_timer_->setTimerType(Qt::PreciseTimer);
     connect(video_timer_, &QTimer::timeout, this, [this]
     {
@@ -4134,6 +4134,8 @@ void MainWindow::requestVideoFrame()
                 pending_video_ycbcr_full_range_ = ycbcr_full_range;
                 pending_video_frame_valid_ = true;
                 presentPendingVideoFrame();
+                if (pending_video_frame_valid_)
+                    scheduleVideoPresentation();
             }
             else if (!video_seek_pending_ && generation != requested_generation)
             {
@@ -4141,6 +4143,24 @@ void MainWindow::requestVideoFrame()
             }
         }, Qt::QueuedConnection);
     });
+}
+
+void MainWindow::scheduleVideoPresentation()
+{
+    if (!pending_video_frame_valid_ || !is_playing_ || !video_timer_)
+        return;
+
+    int64_t clock_ms = current_position_ms_;
+    if (video_clock_timer_.isValid())
+        clock_ms = video_clock_anchor_position_ms_ +
+            static_cast<int64_t>(video_clock_timer_.elapsed() * playback_rate_);
+
+    const double remaining_ms =
+        static_cast<double>(pending_video_pts_ms_ - clock_ms - 8) /
+        std::max(0.25f, playback_rate_);
+    const int delay_ms = static_cast<int>(std::clamp(
+        std::ceil(remaining_ms), 0.0, 1000.0));
+    video_timer_->start(delay_ms);
 }
 
 void MainWindow::presentPendingVideoFrame()
@@ -4155,7 +4175,10 @@ void MainWindow::presentPendingVideoFrame()
             clock_ms = video_clock_anchor_position_ms_ +
                 static_cast<int64_t>(video_clock_timer_.elapsed() * playback_rate_);
         if (pending_video_pts_ms_ > clock_ms + 8)
+        {
+            scheduleVideoPresentation();
             return;
+        }
     }
 
     viewing_historical_frame_ = false;
