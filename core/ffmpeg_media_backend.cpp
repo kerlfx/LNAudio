@@ -1628,7 +1628,7 @@ private:
 #ifdef _WIN32
         if (video_frame_->format == AV_PIX_FMT_D3D11 &&
             video_device_shared_ && frame_rotation == 0 && output.hdr_transfer == 0 &&
-            hardware_matrix_supported)
+            output.color_primaries == 0 && hardware_matrix_supported)
         {
             AVFrame* retained_frame = av_frame_clone(video_frame_);
             if (!retained_frame)
