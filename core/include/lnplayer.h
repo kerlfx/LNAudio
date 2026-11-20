@@ -248,6 +248,12 @@ LNPLAYER_API lnplayer_result_t lnplayer_get_video_info(
     lnplayer_t* player,
     lnplayer_video_info_t* info);
 
+/* Probe a media path without opening or changing the active Player session. */
+LNPLAYER_API lnplayer_result_t lnplayer_probe_media(
+    const char* source_utf8,
+    int64_t* duration_ms,
+    lnplayer_video_info_t* info);
+
 /* Volume range: 0 (muted) through 1000 (100%). */
 LNPLAYER_API lnplayer_result_t lnplayer_set_volume(
     lnplayer_t* player,
