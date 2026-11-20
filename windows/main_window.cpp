@@ -1744,7 +1744,7 @@ void MainWindow::showPlaybackInfo()
         .arg(video_info_.max_frame_average_light_level);
 
     const QString details = QStringLiteral(
-        "媒体：%1\n路径：%2\n状态：%3\n位置：%4 / %5\n"
+        "媒体：%1\n路径：%2\n大小：%14\n状态：%3\n位置：%4 / %5\n"
         "视频：%6\n分辨率：%7\n音轨：%8\n播放速度：%9x\n音量：%10%\n"
         "字幕偏移：%11 ms\n渲染：%12\n\n%13")
         .arg(media_title_label_->text())
@@ -1759,7 +1759,8 @@ void MainWindow::showPlaybackInfo()
         .arg(volume_slider_->value() / 10)
         .arg(subtitle_offset_ms_)
         .arg(renderer_state)
-        .arg(metadata);
+        .arg(metadata)
+        .arg(file_size);
     const bool fullscreen_before_dialog = isFullScreen();
     if (fullscreen_before_dialog)
         fullscreen_hide_timer_->stop();
