@@ -35,6 +35,8 @@
 #include <QTabWidget>
 #include <QDropEvent>
 #include <QEvent>
+#include <QMoveEvent>
+#include <QResizeEvent>
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -131,6 +133,8 @@ MainWindow::MainWindow(
             QStringLiteral("Video/Subtitle/AutoMatch"), true).toBool();
         remember_position_ = settings.value(
             QStringLiteral("Video/Playback/RememberPosition"), true).toBool();
+        always_on_top_ = settings.value(
+            QStringLiteral("Video/Window/AlwaysOnTop"), false).toBool();
         subtitle_offset_ms_ = settings.value(
             QStringLiteral("Video/Subtitle/OffsetMs"), 0).toLongLong();
     }
@@ -139,6 +143,15 @@ MainWindow::MainWindow(
     setWindowTitle(mode_ == PlayerMode::Video
         ? QStringLiteral("LNPlayer - Video")
         : QStringLiteral("LNPlayer - Audio"));
+    if (mode_ == PlayerMode::Video)
+    {
+        QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+        const QByteArray geometry = settings.value(QStringLiteral("Video/Window/Geometry")).toByteArray();
+        if (!geometry.isEmpty())
+            restoreGeometry(geometry);
+        setWindowFlag(Qt::WindowStaysOnTopHint, always_on_top_);
+        normal_geometry_ = saveGeometry();
+    }
 
     setStyleSheet(QStringLiteral(
         "QMainWindow, QDialog { background: #171a20; color: #e8eaf0; }"
@@ -293,6 +306,22 @@ MainWindow::MainWindow(
         connect(playback_info_action, &QAction::triggered, this, [this] { showPlaybackInfo(); });
         auto* screenshot_action = video_menu->addAction(QStringLiteral("截图..."));
         connect(screenshot_action, &QAction::triggered, this, [this] { takeScreenshot(); });
+        auto* always_on_top_action = video_menu->addAction(QStringLiteral("窗口置顶"));
+        always_on_top_action->setCheckable(true);
+        always_on_top_action->setChecked(always_on_top_);
+        connect(always_on_top_action, &QAction::toggled, this, [this](bool enabled)
+        {
+            always_on_top_ = enabled;
+            const bool was_fullscreen = isFullScreen();
+            setWindowFlag(Qt::WindowStaysOnTopHint, enabled);
+            if (was_fullscreen)
+                showFullScreen();
+            else
+                show();
+            QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+            settings.setValue(QStringLiteral("Video/Window/AlwaysOnTop"), enabled);
+            settings.sync();
+        });
     }
 
     if (mode_ == PlayerMode::Video)
@@ -1390,6 +1419,14 @@ MainWindow::MainWindow(
 MainWindow::~MainWindow()
 {
     savePlaybackPosition();
+    if (mode_ == PlayerMode::Video)
+    {
+        QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
+        settings.setValue(QStringLiteral("Video/Window/Geometry"),
+            normal_geometry_.isEmpty() ? saveGeometry() : normal_geometry_);
+        settings.setValue(QStringLiteral("Video/Window/AlwaysOnTop"), always_on_top_);
+        settings.sync();
+    }
     saveVideoPlaylist();
     snapshot_timer_->stop();
     video_timer_->stop();
@@ -1595,7 +1632,25 @@ void MainWindow::changeEvent(QEvent* event)
 {
     QMainWindow::changeEvent(event);
     if (event->type() == QEvent::WindowStateChange)
+    {
+        if (!isFullScreen() && !isMinimized())
+            normal_geometry_ = saveGeometry();
         updateFullscreenUi();
+    }
+}
+
+void MainWindow::resizeEvent(QResizeEvent* event)
+{
+    QMainWindow::resizeEvent(event);
+    if (!isFullScreen() && !isMinimized())
+        normal_geometry_ = saveGeometry();
+}
+
+void MainWindow::moveEvent(QMoveEvent* event)
+{
+    QMainWindow::moveEvent(event);
+    if (!isFullScreen() && !isMinimized())
+        normal_geometry_ = saveGeometry();
 }
 
 void MainWindow::dragEnterEvent(QDragEnterEvent* event)
@@ -1834,6 +1889,8 @@ void MainWindow::openVideoSettings()
     hide_delay->setValue(fullscreen_hide_delay_ms_ / 1000);
     auto* show_playlist = new QCheckBox(QStringLiteral("显示播放列表侧栏"), interface_page);
     show_playlist->setChecked(playlist_panel_visible_);
+    auto* always_on_top = new QCheckBox(QStringLiteral("窗口始终置顶"), interface_page);
+    always_on_top->setChecked(always_on_top_);
     auto* middle_click = new QComboBox(interface_page);
     middle_click->addItem(QStringLiteral("无动作"), 0);
     middle_click->addItem(QStringLiteral("播放/暂停"), 1);
@@ -1841,6 +1898,7 @@ void MainWindow::openVideoSettings()
     middle_click->setCurrentIndex(middle_click_action_);
     interface_form->addRow(QStringLiteral("全屏控制栏自动隐藏"), hide_delay);
     interface_form->addRow(show_playlist);
+    interface_form->addRow(always_on_top);
     interface_form->addRow(QStringLiteral("画面中键操作"), middle_click);
     tabs->addTab(interface_page, QStringLiteral("界面"));
 
@@ -1939,6 +1997,7 @@ void MainWindow::openVideoSettings()
         remember_position->setChecked(true);
         hide_delay->setValue(2);
         show_playlist->setChecked(true);
+        always_on_top->setChecked(false);
         middle_click->setCurrentIndex(1);
         aspect->setCurrentIndex(0);
         brightness->setValue(0.0);
@@ -1988,11 +2047,18 @@ void MainWindow::openVideoSettings()
     fullscreen_hide_delay_ms_ = hide_delay->value() * 1000;
     fullscreen_hide_timer_->setInterval(fullscreen_hide_delay_ms_);
     playlist_panel_visible_ = show_playlist->isChecked();
+    always_on_top_ = always_on_top->isChecked();
     middle_click_action_ = middle_click->currentData().toInt();
     if (playlist_visibility_action_)
         playlist_visibility_action_->setChecked(playlist_panel_visible_);
     if (playlist_panel_)
         playlist_panel_->setVisible(playlist_panel_visible_);
+    const bool was_fullscreen = isFullScreen();
+    setWindowFlag(Qt::WindowStaysOnTopHint, always_on_top_);
+    if (was_fullscreen)
+        showFullScreen();
+    else
+        show();
 
     const int selected_aspect = aspect->currentData().toInt();
     video_stretch_ = selected_aspect == 3;
@@ -2015,6 +2081,7 @@ void MainWindow::openVideoSettings()
 
     QSettings settings(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"));
     settings.setValue(QStringLiteral("Video/Playback/RememberPosition"), remember_position_);
+    settings.setValue(QStringLiteral("Video/Window/AlwaysOnTop"), always_on_top_);
     settings.setValue(QStringLiteral("Video/UI/FullscreenHideDelayMs"), fullscreen_hide_delay_ms_);
     for (auto it = shortcuts_.begin(); it != shortcuts_.end(); ++it)
     {
