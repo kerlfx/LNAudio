@@ -26,6 +26,7 @@ struct MediaTrackInfo
     int channels = 0;
     int sample_rate = 0;
     bool is_default = false;
+    bool is_selected = false;
 };
 
 struct MediaBackendResult
