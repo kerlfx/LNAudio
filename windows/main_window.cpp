@@ -781,13 +781,25 @@ MainWindow::MainWindow(
             else if (selected && selected->parent() == speed_menu)
                 setPlaybackRate(selected->data().toFloat());
             else if (selected == fit)
+            {
                 video_surface_->set_aspect_ratio(0.0f);
+                requestVideoFrame();
+            }
             else if (selected == ratio_16_9)
+            {
                 video_surface_->set_aspect_ratio(16.0f / 9.0f);
+                requestVideoFrame();
+            }
             else if (selected == ratio_4_3)
+            {
                 video_surface_->set_aspect_ratio(4.0f / 3.0f);
+                requestVideoFrame();
+            }
             else if (selected == stretch)
+            {
                 video_surface_->set_stretch(true);
+                requestVideoFrame();
+            }
             else if (selected == brightness_down || selected == brightness_up ||
                 selected == contrast_down || selected == contrast_up ||
                 selected == saturation_down || selected == saturation_up ||
@@ -836,6 +848,8 @@ MainWindow::MainWindow(
                 video_surface_->set_video_filter(
                     video_brightness_, video_contrast_, video_saturation_,
                     video_hue_degrees_, video_sharpness_, video_denoise_, video_grayscale_);
+                pending_video_frame_valid_ = false;
+                requestVideoFrame();
                 statusBar()->showMessage(QStringLiteral("视频滤镜已更新"));
             }
         });
