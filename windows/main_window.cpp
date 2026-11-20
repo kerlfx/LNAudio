@@ -1222,8 +1222,6 @@ void MainWindow::handleCoreEvent(
             pending_video_frame_valid_ = false;
             pending_hardware_frame_owner_.reset();
             pending_hardware_texture_ = nullptr;
-            pending_hardware_frame_owner_.reset();
-            pending_hardware_texture_ = nullptr;
             video_first_frame_received_ = false;
             video_end_of_stream_ = false;
             last_video_frame_ = {};
@@ -1244,6 +1242,8 @@ void MainWindow::handleCoreEvent(
         if (result == LNPLAYER_RESULT_OK && mode_ == PlayerMode::Video)
         {
             pending_video_frame_valid_ = false;
+            pending_hardware_frame_owner_.reset();
+            pending_hardware_texture_ = nullptr;
             video_first_frame_received_ = false;
             video_end_of_stream_ = false;
             video_clock_.invalidate();
