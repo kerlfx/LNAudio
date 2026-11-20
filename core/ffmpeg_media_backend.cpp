@@ -16,6 +16,7 @@ extern "C"
 #include <libavutil/hwcontext_d3d11va.h>
 #include <libavutil/mathematics.h>
 #include <libavutil/mastering_display_metadata.h>
+#include <libavutil/pixdesc.h>
 #include <libswresample/swresample.h>
 #include <libswscale/swscale.h>
 }
@@ -101,6 +102,61 @@ public:
                 format_context_->duration,
                 AVRational{1, AV_TIME_BASE},
                 AVRational{1, 1000});
+
+        if (format_context_->iformat)
+        {
+            info.video.container_format = format_context_->iformat->name
+                ? format_context_->iformat->name : "";
+            info.video.container_long_name = format_context_->iformat->long_name
+                ? format_context_->iformat->long_name : "";
+        }
+
+        if (info.has_video)
+        {
+            AVStream* video_stream = format_context_->streams[video_stream_index_];
+            const AVCodecParameters* parameters = video_stream->codecpar;
+            const AVCodec* decoder = avcodec_find_decoder(parameters->codec_id);
+            const AVRational frame_rate =
+                video_stream->avg_frame_rate.num > 0 && video_stream->avg_frame_rate.den > 0
+                ? video_stream->avg_frame_rate
+                : video_stream->r_frame_rate;
+            const AVRational sample_aspect_ratio =
+                video_stream->sample_aspect_ratio.num > 0 &&
+                video_stream->sample_aspect_ratio.den > 0
+                ? video_stream->sample_aspect_ratio
+                : parameters->sample_aspect_ratio;
+            const AVPixFmtDescriptor* pixel_descriptor =
+                av_pix_fmt_desc_get(static_cast<AVPixelFormat>(parameters->format));
+
+            info.video.codec_name = avcodec_get_name(parameters->codec_id);
+            info.video.codec_long_name = decoder && decoder->long_name
+                ? decoder->long_name : info.video.codec_name;
+            info.video.decoder_name = decoder && decoder->name
+                ? decoder->name : "";
+            const char* profile = avcodec_profile_name(
+                parameters->codec_id, parameters->profile);
+            info.video.profile = profile ? profile : "";
+            const char* pixel_format = av_get_pix_fmt_name(
+                static_cast<AVPixelFormat>(parameters->format));
+            info.video.pixel_format = pixel_format ? pixel_format : "";
+            info.video.width = parameters->width;
+            info.video.height = parameters->height;
+            info.video.bit_rate = parameters->bit_rate > 0
+                ? parameters->bit_rate : format_context_->bit_rate;
+            info.video.frame_rate_num = frame_rate.num;
+            info.video.frame_rate_den = frame_rate.den > 0 ? frame_rate.den : 1;
+            info.video.sample_aspect_ratio_num = sample_aspect_ratio.num > 0
+                ? sample_aspect_ratio.num : 1;
+            info.video.sample_aspect_ratio_den = sample_aspect_ratio.den > 0
+                ? sample_aspect_ratio.den : 1;
+            info.video.rotation_degrees = stream_rotation_degrees_;
+            info.video.color_range = parameters->color_range;
+            info.video.color_primaries = parameters->color_primaries;
+            info.video.color_transfer = parameters->color_trc;
+            info.video.color_space = parameters->color_space;
+            info.video.bit_depth = pixel_descriptor && pixel_descriptor->nb_components > 0
+                ? pixel_descriptor->comp[0].depth : 0;
+        }
 
         if (!info.has_audio && !info.has_video)
         {
