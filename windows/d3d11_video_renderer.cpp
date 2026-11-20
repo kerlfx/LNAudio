@@ -310,6 +310,12 @@ public:
         stretch_ = false;
     }
 
+    void set_zoom(float zoom)
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        zoom_ = std::clamp(zoom, 1.0f, 3.0f);
+    }
+
     void set_video_filter(
         float brightness, float contrast, float saturation, float hue_degrees,
         float sharpness, float denoise, bool grayscale)
@@ -409,6 +415,9 @@ public:
             else
                 viewport_height = target_width / display_aspect;
         }
+
+        viewport_width *= zoom_;
+        viewport_height *= zoom_;
 
         D3D11_VIEWPORT viewport{};
         viewport.TopLeftX = (target_width - viewport_width) * 0.5f;
@@ -596,6 +605,8 @@ public:
                 target_height = target_width / source_aspect;
         }
 
+        target_width *= zoom_;
+        target_height *= zoom_;
         RECT target_rect{
             static_cast<LONG>((output_width - target_width) * 0.5f),
             static_cast<LONG>((output_height - target_height) * 0.5f),
@@ -969,6 +980,7 @@ private:
     UINT texture_height_ = 0;
     bool stretch_ = false;
     float aspect_ratio_ = 0.0f;
+    float zoom_ = 1.0f;
     float brightness_ = 0.0f;
     float contrast_ = 1.0f;
     float saturation_ = 1.0f;
@@ -1045,6 +1057,11 @@ void D3D11VideoRenderer::set_stretch(bool enabled)
 void D3D11VideoRenderer::set_aspect_ratio(float ratio)
 {
     impl_->set_aspect_ratio(ratio);
+}
+
+void D3D11VideoRenderer::set_zoom(float zoom)
+{
+    impl_->set_zoom(zoom);
 }
 
 void D3D11VideoRenderer::set_video_filter(
