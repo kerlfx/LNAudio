@@ -256,3 +256,20 @@
 
 - [x] D3D11 Device identity 的所有写入统一回到 GUI 线程；初始化时在 GUI 线程取得 COM 引用并转移给 Core，避免 UI timer 与命令 worker 并发读写普通指针。
 提交：`1a9d2aca59a524d29901d366a1b3d200f33c1118`。
+
+### 2026-11-21 — 视频帧读取与播放命令解耦
+
+- [x] PlaybackController 增加独立 video_frame_strand，与播放命令 strand 分离；仍共享固定 2-worker thread_pool。
+- [x] PlaybackSession backend 所有权改为 shared_ptr，帧读取只在锁内获取 backend 和 generation，不再持有 Session mutex 执行解码。
+- [x] 媒体替换、Seek、Stop、Close、轨道/字幕切换在操作前推进 generation；解码结束后若 generation 已变化则丢弃旧帧并携带新 generation 通知 UI 重取。
+- [x] MainWindow 增加专用 frame_worker QThread；同步视频帧 Pull 与硬件帧 fallback conversion 不再占用 command_worker。
+- [x] 窗口销毁先停止 frame worker 并等待当前帧请求退出，再销毁 Player。
+- [x] 新增 Session 并发测试：帧解码阻塞时 Pause/Seek 仍能完成；Seek 跨代帧必须被丢弃。
+- [ ] 尚未在 Windows 下运行测试；需要高负载软解码时验证 Pause/Seek/Close 延迟与资源释放。
+
+提交：
+- `13b37314ebccfcc7f8b7beb75cce397bce3b62be` — 独立帧解码 strand。
+- `a72ec890417942e26c62d1d85b33b1f163ac84d2`、`10edc88ed7719c2dca346341561083b67dc7da65` — UI 专用 frame worker。
+- `6abe1e3088a546929a4e2ea98946959e251cd58c` — 字幕设置变更推进 generation。
+- `41936aa343905ef3008d6392853a6ac9fc2a9217`、`0c5d171152868db32ea933fdb906e2f9f5dd20bc`、`6241cb248430c7ee3834aaac457f47330ed53bf8` — stale frame 通知与 UI 重取。
+- `3c11bbb7c2df104868d827f3cc753307277e8189`、`d15398381fe2ba2734dea5e7ab19b3e01b3f6312` — Session 并发回归测试。
