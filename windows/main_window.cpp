@@ -138,6 +138,8 @@ MainWindow::MainWindow(
             settings.value(QStringLiteral("Video/Subtitle/VerticalPosition"), 80).toInt(), 60, 80);
         middle_click_action_ = std::clamp(
             settings.value(QStringLiteral("Video/Mouse/MiddleClickAction"), 1).toInt(), 0, 2);
+        mouse_gestures_enabled_ = settings.value(
+            QStringLiteral("Video/Mouse/RightDragGestures"), false).toBool();
         auto_match_subtitle_ = settings.value(
             QStringLiteral("Video/Subtitle/AutoMatch"), true).toBool();
         remember_position_ = settings.value(
@@ -747,6 +749,17 @@ MainWindow::MainWindow(
                     else
                         showFullScreen();
                 }
+            },
+            [this](int direction)
+            {
+                if (direction == 0)
+                    seekRelative(-5000);
+                else if (direction == 1)
+                    seekRelative(5000);
+                else if (direction == 2)
+                    volume_slider_->setValue(std::clamp(volume_slider_->value() + 50, 0, 1000));
+                else
+                    volume_slider_->setValue(std::clamp(volume_slider_->value() - 50, 0, 1000));
             });
         video_surface_->setContextMenuPolicy(Qt::CustomContextMenu);
         connect(video_surface_, &QWidget::customContextMenuRequested, this, [this](const QPoint& point)
@@ -1169,6 +1182,7 @@ MainWindow::MainWindow(
     if (video_surface_)
     {
         video_surface_->setMouseTracking(true);
+        video_surface_->set_gesture_enabled(mouse_gestures_enabled_);
         video_surface_->installEventFilter(this);
     }
     control_panel_->setMouseTracking(true);
@@ -2069,12 +2083,16 @@ void MainWindow::openVideoSettings()
     middle_click->addItem(QStringLiteral("播放/暂停"), 1);
     middle_click->addItem(QStringLiteral("切换全屏"), 2);
     middle_click->setCurrentIndex(middle_click_action_);
+    auto* mouse_gestures = new QCheckBox(
+        QStringLiteral("启用右键拖动手势（左/右：快退/快进，上/下：音量）"), interface_page);
+    mouse_gestures->setChecked(mouse_gestures_enabled_);
     interface_form->addRow(QStringLiteral("全屏控制栏自动隐藏"), hide_delay);
     interface_form->addRow(QStringLiteral("OSD 显示时长"), osd_duration);
     interface_form->addRow(QStringLiteral("OSD 位置"), osd_position);
     interface_form->addRow(show_playlist);
     interface_form->addRow(always_on_top);
     interface_form->addRow(QStringLiteral("画面中键操作"), middle_click);
+    interface_form->addRow(mouse_gestures);
     tabs->addTab(interface_page, QStringLiteral("界面"));
 
     auto* video_page = new QWidget(tabs);
@@ -2203,6 +2221,7 @@ void MainWindow::openVideoSettings()
         show_playlist->setChecked(true);
         always_on_top->setChecked(false);
         middle_click->setCurrentIndex(1);
+        mouse_gestures->setChecked(false);
         aspect->setCurrentIndex(0);
         brightness->setValue(0.0);
         contrast->setValue(1.0);
@@ -2259,6 +2278,9 @@ void MainWindow::openVideoSettings()
     playlist_panel_visible_ = show_playlist->isChecked();
     always_on_top_ = always_on_top->isChecked();
     middle_click_action_ = middle_click->currentData().toInt();
+    mouse_gestures_enabled_ = mouse_gestures->isChecked();
+    if (video_surface_)
+        video_surface_->set_gesture_enabled(mouse_gestures_enabled_);
     if (playlist_visibility_action_)
         playlist_visibility_action_->setChecked(playlist_panel_visible_);
     if (playlist_panel_)
@@ -2312,6 +2334,7 @@ void MainWindow::openVideoSettings()
     }
     settings.setValue(QStringLiteral("Video/UI/PlaylistVisible"), playlist_panel_visible_);
     settings.setValue(QStringLiteral("Video/Mouse/MiddleClickAction"), middle_click_action_);
+    settings.setValue(QStringLiteral("Video/Mouse/RightDragGestures"), mouse_gestures_enabled_);
     settings.setValue(QStringLiteral("Video/Display/AspectRatio"), video_aspect_ratio_override_);
     settings.setValue(QStringLiteral("Video/Display/Stretch"), video_stretch_);
     settings.setValue(QStringLiteral("Video/Filter/Brightness"), video_brightness_);
