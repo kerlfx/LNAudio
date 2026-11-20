@@ -109,6 +109,7 @@ private:
     int pending_hardware_height_ = 0;
     QImage last_video_frame_;
     int64_t pending_video_pts_ms_ = 0;
+    uint64_t pending_video_generation_ = 0;
     int64_t current_position_ms_ = 0;
     int64_t video_clock_base_pts_ms_ = 0;
     QElapsedTimer video_clock_;
