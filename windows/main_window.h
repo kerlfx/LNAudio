@@ -58,6 +58,7 @@ private:
         uint32_t hardware_format = 0;
         int hardware_width = 0;
         int hardware_height = 0;
+        QString embedded_subtitle;
         int64_t pts_ms = 0;
         uint64_t generation = 0;
     };
@@ -127,6 +128,7 @@ private:
     bool video_first_frame_received_ = false;
     bool video_end_of_stream_ = false;
     QImage pending_video_frame_;
+    QString pending_embedded_subtitle_;
     std::shared_ptr<void> pending_hardware_frame_owner_;
     void* pending_hardware_texture_ = nullptr;
     uint32_t pending_hardware_array_slice_ = 0;

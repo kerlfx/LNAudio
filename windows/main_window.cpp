@@ -521,6 +521,52 @@ MainWindow::MainWindow(PlayerMode mode, const QString& initial_media, QWidget* p
             QAction* subtitles_enabled = subtitle_menu->addAction(QStringLiteral("启用字幕"));
             subtitles_enabled->setCheckable(true);
             subtitles_enabled->setChecked(subtitles_enabled_);
+            QMenu* embedded_subtitle_menu = subtitle_menu->addMenu(QStringLiteral("内嵌字幕"));
+            QAction* disable_embedded_subtitle =
+                embedded_subtitle_menu->addAction(QStringLiteral("禁用内嵌字幕"));
+            disable_embedded_subtitle->setCheckable(true);
+            struct SubtitleTrackMenuEntry
+            {
+                int stream_index;
+                QString label;
+                bool is_selected;
+            };
+            std::vector<SubtitleTrackMenuEntry> embedded_subtitle_tracks;
+            if (player_)
+            {
+                lnplayer_enumerate_subtitle_tracks(
+                    player_,
+                    [](const lnplayer_subtitle_track_info_t* track, void* user_data)
+                    {
+                        auto* entries = static_cast<std::vector<SubtitleTrackMenuEntry>*>(user_data);
+                        QString label = track->title_utf8 && track->title_utf8[0]
+                            ? QString::fromUtf8(track->title_utf8)
+                            : QString::fromUtf8(track->language_utf8 ? track->language_utf8 : "");
+                        if (label.isEmpty())
+                            label = QString::fromUtf8(track->codec_utf8 ? track->codec_utf8 : "Subtitle");
+                        if (track->is_default)
+                            label.prepend(QStringLiteral("[默认] "));
+                        entries->push_back({track->stream_index, label, track->is_selected != 0});
+                    },
+                    &embedded_subtitle_tracks);
+            }
+            bool has_selected_embedded_subtitle = false;
+            for (const auto& track : embedded_subtitle_tracks)
+            {
+                QAction* action = embedded_subtitle_menu->addAction(track.label);
+                action->setCheckable(true);
+                action->setChecked(track.is_selected);
+                action->setData(track.stream_index);
+                has_selected_embedded_subtitle =
+                    has_selected_embedded_subtitle || track.is_selected;
+            }
+            disable_embedded_subtitle->setChecked(!has_selected_embedded_subtitle);
+            if (embedded_subtitle_tracks.empty())
+            {
+                QAction* unavailable =
+                    embedded_subtitle_menu->addAction(QStringLiteral("无可用内嵌字幕"));
+                unavailable->setEnabled(false);
+            }
             QAction* subtitle_delay = subtitle_menu->addAction(QStringLiteral("字幕延迟 +500 ms"));
             QAction* subtitle_advance = subtitle_menu->addAction(QStringLiteral("字幕提前 500 ms"));
             QAction* subtitle_reset = subtitle_menu->addAction(QStringLiteral("重置字幕时间"));
@@ -601,6 +647,54 @@ MainWindow::MainWindow(PlayerMode mode, const QString& initial_media, QWidget* p
                         else
                         {
                             statusBar()->showMessage(QStringLiteral("音轨切换失败"));
+                        }
+                    }, Qt::QueuedConnection);
+                }, Qt::QueuedConnection);
+            }
+            else if (selected == disable_embedded_subtitle ||
+                (selected && selected->parent() == embedded_subtitle_menu))
+            {
+                const int stream_index = selected == disable_embedded_subtitle
+                    ? -1
+                    : selected->data().toInt();
+                QMetaObject::invokeMethod(command_worker_, [this, stream_index]
+                {
+                    if (!player_)
+                        return;
+
+                    lnplayer_snapshot_t snapshot{};
+                    snapshot.struct_size = sizeof(snapshot);
+                    if (lnplayer_get_snapshot(player_, &snapshot) != LNPLAYER_RESULT_OK)
+                        return;
+
+                    const bool resume_playback = snapshot.state == LNPLAYER_STATE_PLAYING;
+                    if (resume_playback && lnplayer_pause(player_) != LNPLAYER_RESULT_OK)
+                        return;
+
+                    const lnplayer_result_t result =
+                        lnplayer_select_subtitle_track(player_, stream_index);
+                    const lnplayer_result_t resume_result = resume_playback
+                        ? lnplayer_play(player_)
+                        : LNPLAYER_RESULT_OK;
+
+                    QMetaObject::invokeMethod(this, [this, result, resume_playback, resume_result]
+                    {
+                        is_playing_ = resume_playback && resume_result == LNPLAYER_RESULT_OK;
+                        if (result == LNPLAYER_RESULT_OK)
+                        {
+                            pending_embedded_subtitle_.clear();
+                            video_frame_history_.clear();
+                            video_frame_history_index_ = -1;
+                            pending_video_frame_valid_ = false;
+                            requestVideoFrame();
+                            statusBar()->showMessage(
+                                resume_result == LNPLAYER_RESULT_OK
+                                    ? QStringLiteral("内嵌字幕已切换")
+                                    : QStringLiteral("内嵌字幕已切换，但恢复播放失败"));
+                        }
+                        else
+                        {
+                            statusBar()->showMessage(QStringLiteral("内嵌字幕切换失败"));
                         }
                     }, Qt::QueuedConnection);
                 }, Qt::QueuedConnection);
@@ -1161,6 +1255,7 @@ void MainWindow::openPlaylistIndex(int index)
         return;
 
     subtitle_cues_.clear();
+    pending_embedded_subtitle_.clear();
     video_frame_history_.clear();
     video_frame_history_index_ = -1;
     pending_video_frame_valid_ = false;
@@ -1525,6 +1620,7 @@ void MainWindow::requestVideoFrame()
             int64_t pts_ms = 0;
             uint64_t generation = 0;
             float display_aspect_ratio = 0.0f;
+            QString subtitle;
         } context;
 
         int end_of_stream = 0;
@@ -1536,6 +1632,8 @@ void MainWindow::requestVideoFrame()
                 context->pts_ms = frame->pts_ms;
                 context->generation = frame->generation;
                 context->display_aspect_ratio = frame->display_aspect_ratio;
+                context->subtitle = QString::fromUtf8(
+                    frame->subtitle_utf8 ? frame->subtitle_utf8 : "");
                 if (frame->d3d11_texture)
                 {
                     void* retained_owner = nullptr;
@@ -1574,10 +1672,11 @@ void MainWindow::requestVideoFrame()
         const int64_t pts_ms = context.pts_ms;
         const uint64_t generation = context.generation;
         const float display_aspect_ratio = context.display_aspect_ratio;
+        const QString embedded_subtitle = context.subtitle;
         QMetaObject::invokeMethod(this,
             [this, result, end_of_stream, image, hardware_owner, hardware_texture,
              hardware_array_slice, hardware_format, hardware_width, hardware_height,
-             pts_ms, generation, display_aspect_ratio]
+             pts_ms, generation, display_aspect_ratio, embedded_subtitle]
         {
             video_frame_pending_ = false;
             if (result != LNPLAYER_RESULT_OK)
@@ -1608,6 +1707,7 @@ void MainWindow::requestVideoFrame()
                 pending_hardware_height_ = hardware_height;
                 pending_video_pts_ms_ = pts_ms;
                 pending_video_generation_ = generation;
+                pending_embedded_subtitle_ = embedded_subtitle;
                 pending_video_frame_valid_ = true;
                 presentPendingVideoFrame();
             }
@@ -1629,7 +1729,13 @@ void MainWindow::presentPendingVideoFrame()
 
     if (pending_hardware_frame_owner_)
     {
-        const QString subtitle = subtitleAt(pending_video_pts_ms_);
+        QString subtitle = subtitleAt(pending_video_pts_ms_);
+        if (subtitles_enabled_ && !pending_embedded_subtitle_.isEmpty())
+        {
+            if (!subtitle.isEmpty())
+                subtitle += QLatin1Char('\n');
+            subtitle += pending_embedded_subtitle_;
+        }
         QImage overlay(video_surface_->size(), QImage::Format_ARGB32);
         overlay.fill(Qt::transparent);
         if (!subtitle.isEmpty())
@@ -1669,6 +1775,7 @@ void MainWindow::presentPendingVideoFrame()
         history_entry.hardware_format = pending_hardware_format_;
         history_entry.hardware_width = pending_hardware_width_;
         history_entry.hardware_height = pending_hardware_height_;
+        history_entry.embedded_subtitle = pending_embedded_subtitle_;
         history_entry.pts_ms = pending_video_pts_ms_;
         history_entry.generation = pending_video_generation_;
         if (video_frame_history_index_ + 1 < video_frame_history_.size())
@@ -1787,6 +1894,7 @@ void MainWindow::presentPendingVideoFrame()
     QImage frame = pending_video_frame_;
     VideoFrameHistoryEntry history_entry;
     history_entry.image = frame;
+    history_entry.embedded_subtitle = pending_embedded_subtitle_;
     history_entry.pts_ms = pending_video_pts_ms_;
     history_entry.generation = pending_video_generation_;
     if (video_frame_history_index_ + 1 < video_frame_history_.size())
@@ -1798,7 +1906,13 @@ void MainWindow::presentPendingVideoFrame()
     if (video_frame_history_.size() > maximum_history_frames)
         video_frame_history_.removeFirst();
     video_frame_history_index_ = video_frame_history_.size() - 1;
-    const QString subtitle = subtitleAt(pending_video_pts_ms_);
+    QString subtitle = subtitleAt(pending_video_pts_ms_);
+    if (subtitles_enabled_ && !pending_embedded_subtitle_.isEmpty())
+    {
+        if (!subtitle.isEmpty())
+            subtitle += QLatin1Char('\n');
+        subtitle += pending_embedded_subtitle_;
+    }
     if (!subtitle.isEmpty())
     {
         QPainter painter(&frame);
@@ -1962,7 +2076,13 @@ void MainWindow::presentHistoricalVideoFrame()
         return;
 
     const VideoFrameHistoryEntry entry = video_frame_history_[video_frame_history_index_];
-    const QString subtitle = subtitleAt(entry.pts_ms);
+    QString subtitle = subtitleAt(entry.pts_ms);
+    if (subtitles_enabled_ && !entry.embedded_subtitle.isEmpty())
+    {
+        if (!subtitle.isEmpty())
+            subtitle += QLatin1Char('\n');
+        subtitle += entry.embedded_subtitle;
+    }
     if (entry.hardware_owner)
     {
         QImage overlay(video_surface_->size(), QImage::Format_ARGB32);
