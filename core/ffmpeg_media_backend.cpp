@@ -184,7 +184,7 @@ public:
         demux_eof_ = false;
         resampler_drained_ = false;
         clear_packet_queues();
-        audio_consumer_active_ = false;
+        audio_consumer_active_ = audio_decoder_ != nullptr;
         video_consumer_active_ = false;
         return success();
     }
@@ -422,6 +422,8 @@ public:
         video_packet_pending_ = false;
         demux_eof_ = false;
         resampler_drained_ = false;
+        audio_consumer_active_ = false;
+        video_consumer_active_ = false;
         return success();
     }
 
@@ -545,6 +547,8 @@ public:
                 audio_draining_ = true;
                 continue;
             }
+            if (result == AVERROR(EAGAIN))
+                return success();
             if (result < 0)
                 return failure("Unable to read media packet: " + ffmpeg_error(result));
 
@@ -617,6 +621,8 @@ public:
                 video_draining_ = true;
                 continue;
             }
+            if (result == AVERROR(EAGAIN))
+                return success();
             if (result < 0)
                 return failure("Unable to read media packet: " + ffmpeg_error(result));
 
