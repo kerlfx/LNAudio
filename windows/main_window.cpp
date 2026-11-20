@@ -492,12 +492,21 @@ void MainWindow::refreshLibrary()
 
 void MainWindow::requestVideoFrame()
 {
-    if (mode_ != PlayerMode::Video || !has_video_ || video_frame_pending_ || !player_)
+    if (mode_ != PlayerMode::Video || !has_video_ || video_frame_pending_)
         return;
 
     video_frame_pending_ = true;
     QMetaObject::invokeMethod(command_worker_, [this]
     {
+        if (!player_)
+        {
+            QMetaObject::invokeMethod(this, [this]
+            {
+                video_frame_pending_ = false;
+            }, Qt::QueuedConnection);
+            return;
+        }
+
         struct FrameContext
         {
             QImage image;
@@ -593,7 +602,12 @@ void MainWindow::handleCoreEvent(
             status_label_->setText(QStringLiteral("媒体已打开"));
             statusBar()->showMessage(QStringLiteral("就绪"));
             seek_slider_->setEnabled(duration_ms > 0);
+            snapshot_timer_->setInterval(mode_ == PlayerMode::Video ? 16 : 250);
             snapshot_timer_->start();
+            pending_video_frame_valid_ = false;
+            video_clock_.invalidate();
+            if (video_surface_)
+                video_surface_->set_frame(QImage());
         }
         else
         {
@@ -604,7 +618,17 @@ void MainWindow::handleCoreEvent(
         }
         break;
 
+    case LNPLAYER_EVENT_SEEK_COMPLETED:
+        if (result == LNPLAYER_RESULT_OK && mode_ == PlayerMode::Video)
+        {
+            pending_video_frame_valid_ = false;
+            video_clock_.invalidate();
+            requestVideoFrame();
+        }
+        break;
+
     case LNPLAYER_EVENT_PLAYBACK_ENDED:
+        video_timer_->stop();
         status_label_->setText(QStringLiteral("播放结束"));
         break;
 
@@ -615,7 +639,6 @@ void MainWindow::handleCoreEvent(
         break;
 
     case LNPLAYER_EVENT_STATE_CHANGED:
-    case LNPLAYER_EVENT_SEEK_COMPLETED:
     default:
         break;
     }
