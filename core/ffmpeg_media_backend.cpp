@@ -1024,7 +1024,7 @@ private:
     MediaBackendResult convert_audio_frame(AudioFrame& output)
     {
         const int target_sample_rate = static_cast<int>(std::lround(
-            output_sample_rate_ * playback_rate_.load(std::memory_order_relaxed)));
+            output_sample_rate_ / playback_rate_.load(std::memory_order_relaxed)));
 
         AVChannelLayout input_layout{};
         if (audio_frame_->ch_layout.nb_channels > 0)
