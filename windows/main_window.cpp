@@ -41,6 +41,7 @@
 #include <QResizeEvent>
 #include <QRegularExpression>
 #include <QRandomGenerator>
+#include <QStringDecoder>
 #include <QSlider>
 #include <QStatusBar>
 #include <QThread>
@@ -453,6 +454,13 @@ MainWindow::MainWindow(PlayerMode mode, const QString& initial_media, QWidget* p
                 ? QStringLiteral("退出全屏")
                 : QStringLiteral("全屏"));
             QAction* screenshot = menu.addAction(QStringLiteral("截图..."));
+            QMenu* subtitle_menu = menu.addMenu(QStringLiteral("字幕"));
+            QAction* subtitles_enabled = subtitle_menu->addAction(QStringLiteral("启用字幕"));
+            subtitles_enabled->setCheckable(true);
+            subtitles_enabled->setChecked(subtitles_enabled_);
+            QAction* subtitle_delay = subtitle_menu->addAction(QStringLiteral("字幕延迟 +500 ms"));
+            QAction* subtitle_advance = subtitle_menu->addAction(QStringLiteral("字幕提前 500 ms"));
+            QAction* subtitle_reset = subtitle_menu->addAction(QStringLiteral("重置字幕时间"));
             QAction* next_frame = menu.addAction(QStringLiteral("下一帧"));
             QMenu* speed_menu = menu.addMenu(QStringLiteral("播放速度"));
             const float speeds[] = {0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f};
@@ -489,6 +497,24 @@ MainWindow::MainWindow(PlayerMode mode, const QString& initial_media, QWidget* p
             }
             else if (selected == screenshot)
                 takeScreenshot();
+            else if (selected == subtitles_enabled)
+            {
+                subtitles_enabled_ = subtitles_enabled->isChecked();
+                pending_video_frame_valid_ = false;
+                requestVideoFrame();
+            }
+            else if (selected == subtitle_delay || selected == subtitle_advance || selected == subtitle_reset)
+            {
+                if (selected == subtitle_delay)
+                    subtitle_offset_ms_ += 500;
+                else if (selected == subtitle_advance)
+                    subtitle_offset_ms_ -= 500;
+                else
+                    subtitle_offset_ms_ = 0;
+                pending_video_frame_valid_ = false;
+                requestVideoFrame();
+                statusBar()->showMessage(QStringLiteral("字幕时间偏移：%1 ms").arg(subtitle_offset_ms_));
+            }
             else if (selected == next_frame)
                 stepVideoFrame();
             else if (selected && selected->parent() == speed_menu)
@@ -1082,7 +1108,34 @@ void MainWindow::loadExternalSubtitle()
         return;
     }
 
-    const QStringList lines = QString::fromUtf8(file.readAll()).split(
+    QByteArray subtitle_data = file.readAll();
+    QString subtitle_text;
+    if (subtitle_data.startsWith("\\xEF\\xBB\\xBF"))
+    {
+        subtitle_text = QString::fromUtf8(subtitle_data.constData() + 3, subtitle_data.size() - 3);
+    }
+    else if (subtitle_data.startsWith("\\xFF\\xFE"))
+    {
+        QStringDecoder decoder("UTF-16LE");
+        subtitle_text = decoder(QByteArrayView(subtitle_data).sliced(2));
+        if (decoder.hasError())
+            subtitle_text = QString::fromLocal8Bit(subtitle_data);
+    }
+    else if (subtitle_data.startsWith("\\xFE\\xFF"))
+    {
+        QStringDecoder decoder("UTF-16BE");
+        subtitle_text = decoder(QByteArrayView(subtitle_data).sliced(2));
+        if (decoder.hasError())
+            subtitle_text = QString::fromLocal8Bit(subtitle_data);
+    }
+    else
+    {
+        QStringDecoder decoder(QStringDecoder::Utf8);
+        subtitle_text = decoder(subtitle_data);
+        if (decoder.hasError())
+            subtitle_text = QString::fromLocal8Bit(subtitle_data);
+    }
+    const QStringList lines = subtitle_text.split(
         QRegularExpression(QStringLiteral("\\r?\\n")));
     const QRegularExpression timestamp(
         QStringLiteral("^(\\d+):(\\d{2}):(\\d{2})[,.](\\d{1,3})$"));
@@ -1142,10 +1195,15 @@ void MainWindow::loadExternalSubtitle()
 
     subtitle_cues_ = std::move(cues);
     status_label_->setText(QStringLiteral("已加载 %1 条字幕").arg(subtitle_cues_.size()));
+    pending_video_frame_valid_ = false;
+    requestVideoFrame();
 }
 
 QString MainWindow::subtitleAt(int64_t position_ms) const
 {
+    if (!subtitles_enabled_)
+        return {};
+    position_ms -= subtitle_offset_ms_;
     const auto next = std::upper_bound(
         subtitle_cues_.begin(),
         subtitle_cues_.end(),
