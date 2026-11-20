@@ -6,7 +6,7 @@ add_library(lnplayer SHARED
 
 target_include_directories(lnplayer
     PUBLIC
-        "${PROJECT_SOURCE_DIR}/include"
+        "${CMAKE_CURRENT_LIST_DIR}/../include"
 )
 
 target_compile_definitions(lnplayer
