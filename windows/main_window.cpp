@@ -321,6 +321,8 @@ MainWindow::MainWindow(
             QStringLiteral("Video/Mouse/RightDragGestures"), false).toBool();
         auto_match_subtitle_ = settings.value(
             QStringLiteral("Video/Subtitle/AutoMatch"), true).toBool();
+        subtitles_enabled_ = settings.value(
+            QStringLiteral("Video/Subtitle/Enabled"), true).toBool();
         remember_position_ = settings.value(
             QStringLiteral("Video/Playback/RememberPosition"), true).toBool();
         always_on_top_ = settings.value(
@@ -775,6 +777,9 @@ MainWindow::MainWindow(
         connect(subtitles_enabled_action, &QAction::toggled, this, [this](bool enabled)
         {
             subtitles_enabled_ = enabled;
+            QSettings settings(settings_file_path(), QSettings::IniFormat);
+            settings.setValue(QStringLiteral("Video/Subtitle/Enabled"), enabled);
+            settings.sync();
             QMetaObject::invokeMethod(command_worker_, [this, enabled]
             {
                 if (player_)
@@ -1646,13 +1651,14 @@ MainWindow::MainWindow(
     const uint32_t initial_volume = static_cast<uint32_t>(volume_slider_->value());
     const float initial_playback_rate = playback_rate_;
     const int64_t initial_subtitle_offset_ms = subtitle_offset_ms_;
+    const bool initial_subtitles_enabled = subtitles_enabled_;
     void* initial_video_device = mode_ == PlayerMode::Video && video_surface_
         ? video_surface_->native_device()
         : nullptr;
     video_device_identity_ = initial_video_device;
     QMetaObject::invokeMethod(
         command_worker_,
-        [this, initial_volume, initial_playback_rate, initial_subtitle_offset_ms, initial_video_device]
+        [this, initial_volume, initial_playback_rate, initial_subtitle_offset_ms, initial_subtitles_enabled, initial_video_device]
     {
         lnplayer_config_t config{};
         config.struct_size = sizeof(config);
@@ -1694,6 +1700,7 @@ MainWindow::MainWindow(
             {
                 lnplayer_set_playback_rate(player_, initial_playback_rate);
                 lnplayer_set_subtitle_offset(player_, initial_subtitle_offset_ms);
+                lnplayer_set_subtitles_enabled(player_, initial_subtitles_enabled ? 1 : 0);
             }
         }
 
@@ -2729,6 +2736,9 @@ void MainWindow::openVideoSettings()
 
     auto* subtitle_page = new QWidget(tabs);
     auto* subtitle_form = new QFormLayout(subtitle_page);
+    auto* subtitle_enabled = new QCheckBox(
+        QStringLiteral("启用字幕显示"), subtitle_page);
+    subtitle_enabled->setChecked(subtitles_enabled_);
     auto* auto_match_subtitle = new QCheckBox(
         QStringLiteral("自动加载同名外挂字幕"), subtitle_page);
     auto_match_subtitle->setChecked(auto_match_subtitle_);
@@ -2755,6 +2765,7 @@ void MainWindow::openVideoSettings()
     subtitle_position->setRange(60, 80);
     subtitle_position->setSuffix(QStringLiteral(" %"));
     subtitle_position->setValue(subtitle_vertical_position_);
+    subtitle_form->addRow(subtitle_enabled);
     subtitle_form->addRow(auto_match_subtitle);
     subtitle_form->addRow(QStringLiteral("默认时间偏移"), subtitle_offset);
     subtitle_form->addRow(QStringLiteral("字体"), subtitle_font);
@@ -2850,6 +2861,7 @@ void MainWindow::openVideoSettings()
         sharpness->setValue(0.0);
         denoise->setValue(0.0);
         grayscale->setChecked(false);
+        subtitle_enabled->setChecked(true);
         auto_match_subtitle->setChecked(true);
         subtitle_offset->setValue(0);
         subtitle_font->setCurrentFont(QFont(QStringLiteral("Segoe UI")));
@@ -2934,6 +2946,7 @@ void MainWindow::openVideoSettings()
     video_sharpness_ = static_cast<float>(sharpness->value());
     video_denoise_ = static_cast<float>(denoise->value());
     video_grayscale_ = grayscale->isChecked();
+    subtitles_enabled_ = subtitle_enabled->isChecked();
     auto_match_subtitle_ = auto_match_subtitle->isChecked();
     subtitle_offset_ms_ = subtitle_offset->value();
     subtitle_font_family_ = subtitle_font->currentFont().family();
@@ -2975,6 +2988,7 @@ void MainWindow::openVideoSettings()
     settings.setValue(QStringLiteral("Video/Filter/Sharpness"), video_sharpness_);
     settings.setValue(QStringLiteral("Video/Filter/Denoise"), video_denoise_);
     settings.setValue(QStringLiteral("Video/Filter/Grayscale"), video_grayscale_);
+    settings.setValue(QStringLiteral("Video/Subtitle/Enabled"), subtitles_enabled_);
     settings.setValue(QStringLiteral("Video/Subtitle/AutoMatch"), auto_match_subtitle_);
     settings.setValue(QStringLiteral("Video/Subtitle/OffsetMs"), subtitle_offset_ms_);
     settings.setValue(QStringLiteral("Video/Subtitle/FontFamily"), subtitle_font_family_);
@@ -2986,6 +3000,13 @@ void MainWindow::openVideoSettings()
     settings.sync();
 
     setSubtitleOffset(subtitle_offset_ms_);
+    QMetaObject::invokeMethod(command_worker_, [this, enabled = subtitles_enabled_]
+    {
+        if (player_)
+            lnplayer_set_subtitles_enabled(player_, enabled ? 1 : 0);
+    }, Qt::QueuedConnection);
+    pending_video_frame_valid_ = false;
+    requestVideoFrame();
     if (isFullScreen())
     {
         showFullscreenControls();
