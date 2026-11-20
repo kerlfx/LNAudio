@@ -4106,7 +4106,7 @@ void MainWindow::takeScreenshot()
     QSettings settings(settings_file_path(), QSettings::IniFormat);
     if (screenshot_directory_.isEmpty())
         screenshot_directory_ = QDir::homePath();
-    const QString selected_filter = screenshot_format_ == QStringLiteral("jpg")
+    QString selected_filter = screenshot_format_ == QStringLiteral("jpg")
         ? QStringLiteral("JPEG 图片 (*.jpg *.jpeg)")
         : screenshot_format_ == QStringLiteral("bmp")
             ? QStringLiteral("BMP 图片 (*.bmp)")
@@ -4122,11 +4122,26 @@ void MainWindow::takeScreenshot()
     if (path.isEmpty())
         return;
 
+    if (selected_filter.startsWith(QStringLiteral("JPEG")))
+        screenshot_format_ = QStringLiteral("jpg");
+    else if (selected_filter.startsWith(QStringLiteral("BMP")))
+        screenshot_format_ = QStringLiteral("bmp");
+    else
+        screenshot_format_ = QStringLiteral("png");
+
     QString output_path = path;
-    const QFileInfo output_info(output_path);
-    if (output_info.suffix().isEmpty())
+    const QString suffix = QFileInfo(output_path).suffix().toLower();
+    if (suffix.isEmpty())
         output_path += QStringLiteral(".") + screenshot_format_;
-    if (!screenshot.save(output_path))
+    else if (suffix == QStringLiteral("jpg") || suffix == QStringLiteral("jpeg"))
+        screenshot_format_ = QStringLiteral("jpg");
+    else if (suffix == QStringLiteral("bmp"))
+        screenshot_format_ = QStringLiteral("bmp");
+    else if (suffix == QStringLiteral("png"))
+        screenshot_format_ = QStringLiteral("png");
+
+    const QByteArray image_format = screenshot_format_.toLatin1();
+    if (!screenshot.save(output_path, image_format.constData()))
     {
         statusBar()->showMessage(QStringLiteral("截图保存失败"));
         return;
