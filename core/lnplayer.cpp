@@ -10,6 +10,7 @@
 #include <atomic>
 #include <cstring>
 #include <cmath>
+#include <condition_variable>
 #include <future>
 #include <functional>
 #include <memory>
@@ -574,20 +575,43 @@ private:
 };
 
 std::mutex g_player_mutex;
+std::condition_variable g_player_condition;
 lnplayer_t* g_player = nullptr;
 bool g_destroying = false;
+std::size_t g_active_player_calls = 0;
 thread_local std::string g_last_error;
+
+class PlayerAccess
+{
+public:
+    explicit PlayerAccess(lnplayer_t* player)
+    {
+        std::lock_guard<std::mutex> lock(g_player_mutex);
+        if (!player || player != g_player || g_destroying)
+            return;
+        ++g_active_player_calls;
+        player_ = player;
+    }
+
+    ~PlayerAccess()
+    {
+        if (!player_)
+            return;
+        std::lock_guard<std::mutex> lock(g_player_mutex);
+        if (--g_active_player_calls == 0)
+            g_player_condition.notify_all();
+    }
+
+    explicit operator bool() const { return player_ != nullptr; }
+
+private:
+    lnplayer_t* player_ = nullptr;
+};
 
 lnplayer_result_t set_error(lnplayer_result_t result, const char* message)
 {
     g_last_error = message;
     return result;
-}
-
-bool is_current_player(lnplayer_t* player)
-{
-    std::lock_guard<std::mutex> lock(g_player_mutex);
-    return player && player == g_player && !g_destroying;
 }
 
 lnplayer_result_t finish_result(lnplayer_result_t result)
@@ -671,25 +695,27 @@ lnplayer_result_t lnplayer_create(
 
 lnplayer_result_t lnplayer_destroy(lnplayer_t* player)
 {
-    if (player && is_current_player(player) && player->runtime.running_in_io_thread())
+    std::unique_lock<std::mutex> lock(g_player_mutex);
+    if (!player || player != g_player || g_destroying)
+        return set_error(LNPLAYER_RESULT_INVALID_HANDLE, "Invalid Player handle.");
+
+    if (player->runtime.running_in_io_thread())
         return set_error(LNPLAYER_RESULT_WOULD_DEADLOCK, "Player cannot be destroyed from its event thread.");
 
+    g_destroying = true;
+    g_player = nullptr;
+    g_player_condition.wait(lock, []
     {
-        std::lock_guard<std::mutex> lock(g_player_mutex);
-        if (!player || player != g_player || g_destroying)
-            return set_error(LNPLAYER_RESULT_INVALID_HANDLE, "Invalid Player handle.");
-
-        g_destroying = true;
-        g_player = nullptr;
-    }
+        return g_active_player_calls == 0;
+    });
+    lock.unlock();
 
     const lnplayer_result_t shutdown_result = player->controller->shutdown();
     delete player;
 
-    {
-        std::lock_guard<std::mutex> lock(g_player_mutex);
-        g_destroying = false;
-    }
+    lock.lock();
+    g_destroying = false;
+    lock.unlock();
 
     return finish_result(shutdown_result);
 }
@@ -699,7 +725,8 @@ lnplayer_result_t lnplayer_open(
     const char* source_utf8,
     uint64_t* operation_id)
 {
-    if (!is_current_player(player))
+    PlayerAccess access(player);
+    if (!access)
         return set_error(LNPLAYER_RESULT_INVALID_HANDLE, "Invalid Player handle.");
     if (!source_utf8 || !source_utf8[0] || !operation_id)
         return set_error(LNPLAYER_RESULT_INVALID_ARGUMENT, "Invalid open arguments.");
@@ -713,7 +740,8 @@ lnplayer_result_t lnplayer_seek(
     int64_t position_ms,
     uint64_t* operation_id)
 {
-    if (!is_current_player(player))
+    PlayerAccess access(player);
+    if (!access)
         return set_error(LNPLAYER_RESULT_INVALID_HANDLE, "Invalid Player handle.");
     if (position_ms < 0 || !operation_id)
         return set_error(LNPLAYER_RESULT_INVALID_ARGUMENT, "Invalid seek arguments.");
@@ -724,28 +752,32 @@ lnplayer_result_t lnplayer_seek(
 
 lnplayer_result_t lnplayer_play(lnplayer_t* player)
 {
-    if (!is_current_player(player))
+    PlayerAccess access(player);
+    if (!access)
         return set_error(LNPLAYER_RESULT_INVALID_HANDLE, "Invalid Player handle.");
     return finish_result(player->controller->play());
 }
 
 lnplayer_result_t lnplayer_pause(lnplayer_t* player)
 {
-    if (!is_current_player(player))
+    PlayerAccess access(player);
+    if (!access)
         return set_error(LNPLAYER_RESULT_INVALID_HANDLE, "Invalid Player handle.");
     return finish_result(player->controller->pause());
 }
 
 lnplayer_result_t lnplayer_stop(lnplayer_t* player)
 {
-    if (!is_current_player(player))
+    PlayerAccess access(player);
+    if (!access)
         return set_error(LNPLAYER_RESULT_INVALID_HANDLE, "Invalid Player handle.");
     return finish_result(player->controller->stop());
 }
 
 lnplayer_result_t lnplayer_close(lnplayer_t* player)
 {
-    if (!is_current_player(player))
+    PlayerAccess access(player);
+    if (!access)
         return set_error(LNPLAYER_RESULT_INVALID_HANDLE, "Invalid Player handle.");
     return finish_result(player->controller->close());
 }
@@ -755,7 +787,8 @@ lnplayer_result_t lnplayer_library_add_directory(
     const char* path_utf8,
     int recursive)
 {
-    if (!is_current_player(player))
+    PlayerAccess access(player);
+    if (!access)
         return set_error(LNPLAYER_RESULT_INVALID_HANDLE, "Invalid Player handle.");
     if (!path_utf8 || !path_utf8[0])
         return set_error(LNPLAYER_RESULT_INVALID_ARGUMENT, "Library directory path is empty.");
@@ -772,7 +805,8 @@ lnplayer_result_t lnplayer_library_remove_directory(
     lnplayer_t* player,
     const char* path_utf8)
 {
-    if (!is_current_player(player))
+    PlayerAccess access(player);
+    if (!access)
         return set_error(LNPLAYER_RESULT_INVALID_HANDLE, "Invalid Player handle.");
     if (!path_utf8 || !path_utf8[0])
         return set_error(LNPLAYER_RESULT_INVALID_ARGUMENT, "Library directory path is empty.");
@@ -791,7 +825,8 @@ lnplayer_result_t lnplayer_library_scan_directory(
     int recursive,
     int32_t* imported_count)
 {
-    if (!is_current_player(player))
+    PlayerAccess access(player);
+    if (!access)
         return set_error(LNPLAYER_RESULT_INVALID_HANDLE, "Invalid Player handle.");
     if (!path_utf8 || !path_utf8[0] || !imported_count)
         return set_error(LNPLAYER_RESULT_INVALID_ARGUMENT, "Invalid library scan arguments.");
@@ -822,7 +857,8 @@ lnplayer_result_t lnplayer_library_search_tracks(
     lnplayer_library_track_callback_t callback,
     void* user_data)
 {
-    if (!is_current_player(player))
+    PlayerAccess access(player);
+    if (!access)
         return set_error(LNPLAYER_RESULT_INVALID_HANDLE, "Invalid Player handle.");
     if (!query_utf8 || !callback)
         return set_error(LNPLAYER_RESULT_INVALID_ARGUMENT, "Invalid library search arguments.");
@@ -864,7 +900,8 @@ lnplayer_result_t lnplayer_windows_set_d3d11_device(
     lnplayer_t* player,
     void* d3d11_device)
 {
-    if (!is_current_player(player))
+    PlayerAccess access(player);
+    if (!access)
         return set_error(LNPLAYER_RESULT_INVALID_HANDLE, "Invalid Player handle.");
     const lnplayer_result_t result = player->controller->set_video_device(d3d11_device);
     if (result != LNPLAYER_RESULT_OK)
@@ -952,7 +989,8 @@ lnplayer_result_t lnplayer_windows_read_video_frame(
     void* user_data,
     int* end_of_stream)
 {
-    if (!is_current_player(player))
+    PlayerAccess access(player);
+    if (!access)
         return set_error(LNPLAYER_RESULT_INVALID_HANDLE, "Invalid Player handle.");
     if (!callback || !end_of_stream)
         return set_error(LNPLAYER_RESULT_INVALID_ARGUMENT, "Video frame callback or end-of-stream output is null.");
@@ -982,7 +1020,8 @@ lnplayer_result_t lnplayer_get_snapshot(
     lnplayer_t* player,
     lnplayer_snapshot_t* snapshot)
 {
-    if (!is_current_player(player))
+    PlayerAccess access(player);
+    if (!access)
         return set_error(LNPLAYER_RESULT_INVALID_HANDLE, "Invalid Player handle.");
     if (!snapshot || snapshot->struct_size < sizeof(lnplayer_snapshot_t))
         return set_error(LNPLAYER_RESULT_INVALID_ARGUMENT, "Snapshot structure is null or too small.");
@@ -994,7 +1033,8 @@ lnplayer_result_t lnplayer_get_snapshot(
 
 lnplayer_result_t lnplayer_set_volume(lnplayer_t* player, uint32_t volume)
 {
-    if (!is_current_player(player))
+    PlayerAccess access(player);
+    if (!access)
         return set_error(LNPLAYER_RESULT_INVALID_HANDLE, "Invalid Player handle.");
     if (volume > 1000)
         return set_error(LNPLAYER_RESULT_INVALID_ARGUMENT, "Volume must be between 0 and 1000.");
@@ -1006,7 +1046,8 @@ lnplayer_result_t lnplayer_set_volume(lnplayer_t* player, uint32_t volume)
 
 lnplayer_result_t lnplayer_set_playback_rate(lnplayer_t* player, float rate)
 {
-    if (!is_current_player(player))
+    PlayerAccess access(player);
+    if (!access)
         return set_error(LNPLAYER_RESULT_INVALID_HANDLE, "Invalid Player handle.");
     if (!std::isfinite(rate) || rate < 0.25f || rate > 4.0f)
         return set_error(LNPLAYER_RESULT_INVALID_ARGUMENT, "Playback rate must be between 0.25 and 4.0.");
@@ -1020,7 +1061,8 @@ lnplayer_result_t lnplayer_enumerate_audio_tracks(
     lnplayer_audio_track_callback_t callback,
     void* user_data)
 {
-    if (!is_current_player(player))
+    PlayerAccess access(player);
+    if (!access)
         return set_error(LNPLAYER_RESULT_INVALID_HANDLE, "Invalid Player handle.");
     if (!callback)
         return set_error(LNPLAYER_RESULT_INVALID_ARGUMENT, "Audio track callback is null.");
@@ -1053,7 +1095,8 @@ lnplayer_result_t lnplayer_enumerate_audio_tracks(
 
 lnplayer_result_t lnplayer_select_audio_track(lnplayer_t* player, int32_t stream_index)
 {
-    if (!is_current_player(player))
+    PlayerAccess access(player);
+    if (!access)
         return set_error(LNPLAYER_RESULT_INVALID_HANDLE, "Invalid Player handle.");
     if (stream_index < 0)
         return set_error(LNPLAYER_RESULT_INVALID_ARGUMENT, "Audio stream index is invalid.");
@@ -1065,7 +1108,8 @@ lnplayer_result_t lnplayer_enumerate_subtitle_tracks(
     lnplayer_subtitle_track_callback_t callback,
     void* user_data)
 {
-    if (!is_current_player(player))
+    PlayerAccess access(player);
+    if (!access)
         return set_error(LNPLAYER_RESULT_INVALID_HANDLE, "Invalid Player handle.");
     if (!callback)
         return set_error(LNPLAYER_RESULT_INVALID_ARGUMENT, "Subtitle track callback is null.");
@@ -1096,7 +1140,8 @@ lnplayer_result_t lnplayer_enumerate_subtitle_tracks(
 
 lnplayer_result_t lnplayer_select_subtitle_track(lnplayer_t* player, int32_t stream_index)
 {
-    if (!is_current_player(player))
+    PlayerAccess access(player);
+    if (!access)
         return set_error(LNPLAYER_RESULT_INVALID_HANDLE, "Invalid Player handle.");
     if (stream_index < -1)
         return set_error(LNPLAYER_RESULT_INVALID_ARGUMENT, "Subtitle stream index must be -1 or a valid stream index.");
@@ -1107,7 +1152,8 @@ lnplayer_result_t lnplayer_set_external_subtitle(
     lnplayer_t* player,
     const char* path_utf8)
 {
-    if (!is_current_player(player))
+    PlayerAccess access(player);
+    if (!access)
         return set_error(LNPLAYER_RESULT_INVALID_HANDLE, "Invalid Player handle.");
     if (!path_utf8)
         return set_error(LNPLAYER_RESULT_INVALID_ARGUMENT, "External subtitle path is null.");
@@ -1116,7 +1162,8 @@ lnplayer_result_t lnplayer_set_external_subtitle(
 
 lnplayer_result_t lnplayer_set_subtitles_enabled(lnplayer_t* player, int enabled)
 {
-    if (!is_current_player(player))
+    PlayerAccess access(player);
+    if (!access)
         return set_error(LNPLAYER_RESULT_INVALID_HANDLE, "Invalid Player handle.");
     player->controller->set_subtitles_enabled(enabled != 0);
     return finish_result(LNPLAYER_RESULT_OK);
@@ -1124,7 +1171,8 @@ lnplayer_result_t lnplayer_set_subtitles_enabled(lnplayer_t* player, int enabled
 
 lnplayer_result_t lnplayer_set_subtitle_offset(lnplayer_t* player, int64_t offset_ms)
 {
-    if (!is_current_player(player))
+    PlayerAccess access(player);
+    if (!access)
         return set_error(LNPLAYER_RESULT_INVALID_HANDLE, "Invalid Player handle.");
     player->controller->set_subtitle_offset_ms(offset_ms);
     return finish_result(LNPLAYER_RESULT_OK);
