@@ -444,6 +444,10 @@ MainWindow::MainWindow(
         auto* subtitles_enabled_action = subtitle_menu->addAction(QStringLiteral("启用字幕"));
         subtitles_enabled_action->setCheckable(true);
         subtitles_enabled_action->setChecked(subtitles_enabled_);
+        connect(subtitle_menu, &QMenu::aboutToShow, this, [this, subtitles_enabled_action]
+        {
+            subtitles_enabled_action->setChecked(subtitles_enabled_);
+        });
         connect(subtitles_enabled_action, &QAction::toggled, this, [this](bool enabled)
         {
             subtitles_enabled_ = enabled;
