@@ -902,3 +902,6 @@ Windows UI 的正式完成条件统一由 [`docs/WINDOWS_UI_ACCEPTANCE.md`](WIND
 
 
 - 清理视频画面滤镜右键菜单保存逻辑：删除重复写入 Hue/Sharpness/Denoise/Grayscale 的 INI 项，并统一缩进；每项滤镜配置现在只写入一次。此项为代码清理，不代表滤镜效果已完成运行验收。
+
+
+- 时间轴交互：将普通 QSlider 替换为专用 SeekSlider，点击滑轨直接定位到对应比例，按住滑轨可连续拖动，释放时复用既有 sliderReleased Seek 流程；方向映射使用 QStyleOptionSlider::upsideDown，兼容反向布局。尚未进行 Windows 运行验收。
