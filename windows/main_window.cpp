@@ -1810,6 +1810,18 @@ void MainWindow::requestVideoFrame()
             return;
         }
 
+        lnplayer_snapshot_t request_snapshot{};
+        request_snapshot.struct_size = sizeof(request_snapshot);
+        if (lnplayer_get_snapshot(player_, &request_snapshot) != LNPLAYER_RESULT_OK)
+        {
+            QMetaObject::invokeMethod(this, [this]
+            {
+                video_frame_pending_ = false;
+            }, Qt::QueuedConnection);
+            return;
+        }
+        const uint64_t requested_generation = request_snapshot.generation;
+
         struct FrameContext
         {
             QImage image;
@@ -1903,8 +1915,9 @@ void MainWindow::requestVideoFrame()
         QMetaObject::invokeMethod(this,
             [this, result, end_of_stream, image, hardware_owner, hardware_texture,
              hardware_array_slice, hardware_format, hardware_width, hardware_height,
-             pts_ms, generation, display_aspect_ratio, hdr_transfer, color_primaries,
-             ycbcr_matrix, ycbcr_full_range, embedded_subtitle, embedded_subtitle_bitmap]
+             pts_ms, generation, requested_generation, display_aspect_ratio,
+             hdr_transfer, color_primaries, ycbcr_matrix, ycbcr_full_range,
+             embedded_subtitle, embedded_subtitle_bitmap]
         {
             video_frame_pending_ = false;
             if (result != LNPLAYER_RESULT_OK)
@@ -1921,8 +1934,10 @@ void MainWindow::requestVideoFrame()
                 return;
             }
 
-            if ((!image.isNull() || hardware_owner) && generation == media_generation_)
+            if ((!image.isNull() || hardware_owner) &&
+                generation == requested_generation && generation >= media_generation_)
             {
+                media_generation_ = generation;
                 video_first_frame_received_ = true;
                 if (video_surface_)
                 {
