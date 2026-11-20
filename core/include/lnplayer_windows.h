@@ -30,8 +30,10 @@ typedef void (*lnplayer_windows_video_frame_callback_t)(
     void* user_data);
 
 /*
- * Attach the D3D11 device owned by the video renderer before opening media.
- * The function takes ownership of one COM reference supplied by the caller.
+ * Attach or replace the D3D11 device owned by the video renderer.
+ * Replacing the device rebuilds the active media backend and restores its
+ * playback position and playing/paused state. The function takes ownership
+ * of one COM reference supplied by the caller.
  */
 LNPLAYER_API lnplayer_result_t lnplayer_windows_set_d3d11_device(
     lnplayer_t* player,
