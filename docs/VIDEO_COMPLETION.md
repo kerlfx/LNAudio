@@ -1032,3 +1032,11 @@ Windows UI 的正式完成条件统一由 [`docs/WINDOWS_UI_ACCEPTANCE.md`](WIND
 - [x] 硬件帧历史最多保留 8 个解码表面 owner；淘汰时同步维护逐帧历史索引。
 - [ ] Windows/MSVC 构建、软件/硬件解码长时间播放、逐帧后退范围和实际 Private Bytes/GPU memory 尚未验收。
 - [ ] 本次仅完成源码静态回读，未运行构建、CTest 或 CI。
+
+
+### 2026-11-21 — 快照轮询不再占用命令 Strand
+
+- [x] UI 快照查询改为共享后台线程池执行，保留单个在途请求，并通过 Qt QueuedConnection 更新 UI。
+- [x] 同步更正性能审查中快照周期为当前 250ms（约 4Hz）。
+- [ ] Session 快照仍会等待完整帧读取持有的 mutex；Windows 控制延迟、A-B 循环与关闭场景待实机验证。
+- [ ] 未运行 Windows/MSVC 构建、CTest 或 CI。
