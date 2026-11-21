@@ -5,8 +5,8 @@ message(STATUS "[LNPlayer] Checking third-party dependencies...")
 
 set(LNPLAYER_ASIO_VERSION "1.38.2" CACHE STRING
     "Pinned standalone Asio version" FORCE)
-set(LNPLAYER_ASIO_ROOT "${PROJECT_SOURCE_DIR}/3rd_cache/asio/${LNPLAYER_ASIO_VERSION}-archive" CACHE PATH
-    "Version-specific root directory of the standalone Asio source archive" FORCE)
+set(LNPLAYER_ASIO_ROOT "${PROJECT_SOURCE_DIR}/3rd_cache/asio/${LNPLAYER_ASIO_VERSION}-git" CACHE PATH
+    "Version-specific root directory of the standalone Asio Git checkout" FORCE)
 option(LNPLAYER_DOWNLOAD_ASIO
     "Download the pinned standalone Asio headers when they are not available locally"
     ON
@@ -29,16 +29,17 @@ if(NOT ASIO_INCLUDE_DIR OR ASIO_INCLUDE_DIR MATCHES "-NOTFOUND$")
 
         FetchContent_Declare(
             Asio
-            URL "https://sourceforge.net/projects/asio/files/asio/1.38.2%20%28Stable%29/asio-1.38.2.tar.gz/download"
-            URL_HASH SHA256=4893ad026013d1f64bf111c606e6abd857bb953823a4744e449969f1063fd9ce
-            DOWNLOAD_NO_PROGRESS FALSE
-            DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+            GIT_REPOSITORY "https://github.com/chriskohlhoff/asio.git"
+            GIT_TAG "asio-1-38-2"
+            GIT_SHALLOW TRUE
+            GIT_PROGRESS TRUE
+            GIT_CONFIG http.version=HTTP/1.1
             SOURCE_DIR "${LNPLAYER_ASIO_ROOT}"
             SOURCE_SUBDIR _lnplayer_headers_only
         )
 
         message(STATUS
-            "[LNPlayer] Downloading standalone Asio ${LNPLAYER_ASIO_VERSION} archive into ${LNPLAYER_ASIO_ROOT}")
+            "[LNPlayer] Cloning standalone Asio ${LNPLAYER_ASIO_VERSION} (tag asio-1-38-2) into ${LNPLAYER_ASIO_ROOT}")
         FetchContent_MakeAvailable(Asio)
     endif()
 endif()
