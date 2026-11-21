@@ -1,12 +1,10 @@
 include(FetchContent)
 
-set(FETCHCONTENT_BASE_DIR "${PROJECT_SOURCE_DIR}/3rd_cache/fetchcontent" CACHE PATH
-    "Base directory for FetchContent downloads and build metadata")
 # Keep FetchContent progress visible even when the build directory has an older cache.
 message(STATUS "[LNPlayer] Checking third-party dependencies...")
 
-set(LNPLAYER_ASIO_VERSION "1.36.0" CACHE STRING
-    "Pinned standalone Asio version")
+set(LNPLAYER_ASIO_VERSION "1.38.2" CACHE STRING
+    "Pinned standalone Asio version" FORCE)
 string(REPLACE "." "-" LNPLAYER_ASIO_TAG_VERSION "${LNPLAYER_ASIO_VERSION}")
 set(LNPLAYER_ASIO_ROOT "${PROJECT_SOURCE_DIR}/3rd_cache/asio" CACHE PATH
     "Root directory of the standalone Asio source")
@@ -56,6 +54,10 @@ find_path(ASIO_INCLUDE_DIR
 )
 message(STATUS "[LNPlayer] Asio ready.")
 
+set(LNPLAYER_FFMPEG_VERSION "8.1.2" CACHE STRING
+    "Pinned FFmpeg version used by the automatic SDK download" FORCE)
+set(LNPLAYER_FFMPEG_LICENSE "lgpl" CACHE STRING
+    "FFmpeg prebuilt license variant (lgpl or gpl)" FORCE)
 set(LNPLAYER_FFMPEG_ROOT "${PROJECT_SOURCE_DIR}/3rd_cache/ffmpeg" CACHE PATH
     "Root directory of the FFmpeg development SDK")
 
@@ -77,11 +79,6 @@ if(NOT EXISTS "${LNPLAYER_FFMPEG_ROOT}/include/libavformat/avformat.h")
             "Automatic FFmpeg download currently supports Windows MSVC x64 only. "
             "Provide LNPLAYER_FFMPEG_ROOT for other platforms/toolchains.")
     endif()
-
-    set(LNPLAYER_FFMPEG_VERSION "8.1.2" CACHE STRING
-        "Pinned FFmpeg version used by the automatic SDK download")
-    set(LNPLAYER_FFMPEG_LICENSE "lgpl" CACHE STRING
-        "FFmpeg prebuilt license variant (lgpl or gpl)")
 
     if(NOT LNPLAYER_FFMPEG_LICENSE STREQUAL "lgpl"
        AND NOT LNPLAYER_FFMPEG_LICENSE STREQUAL "gpl")
