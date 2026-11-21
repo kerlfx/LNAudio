@@ -531,7 +531,7 @@ MainWindow::MainWindow(
             QStringLiteral("Video/Subtitle/OffsetMs"), 0).toLongLong();
     }
     setAcceptDrops(true);
-    resize(mode_ == PlayerMode::Video ? QSize(960, 600) : QSize(720, 480));
+    resize(mode_ == PlayerMode::Video ? QSize(1180, 720) : QSize(720, 480));
     setWindowTitle(mode_ == PlayerMode::Video
         ? QStringLiteral("LNPlayer - Video")
         : QStringLiteral("LNPlayer - Audio"));
@@ -569,6 +569,10 @@ MainWindow::MainWindow(
         "QSlider::sub-page:horizontal { background: #4d91cf; border-radius: 2px; }"
         "QSlider::handle:horizontal { width: 12px; margin: -5px 0; "
         "background: #e4edf7; border: 1px solid #6c9bc5; border-radius: 6px; }"
+        "QWidget#controlPanel { background: #1c2027; border-top: 1px solid #343a46; }"
+        "QWidget#controlPanel QPushButton { min-height: 30px; }"
+        "QPushButton#playButton { background: #315f8f; border-color: #477eaf; font-weight: 600; }"
+        "QPushButton#playButton:hover { background: #3d74aa; }"
         "QSplitter::handle { background: #303743; }"
         "QSplitter::handle:hover { background: #4d91cf; }"
         "QTabWidget::pane { border: 1px solid #3b4350; }"
@@ -1723,11 +1727,20 @@ MainWindow::MainWindow(
     seek_layout->addWidget(position_label_);
     seek_layout->addWidget(seek_slider_, 1);
     control_panel_ = new QWidget(content);
+    control_panel_->setObjectName(QStringLiteral("controlPanel"));
     auto* control_panel_layout = new QVBoxLayout(control_panel_);
-    control_panel_layout->setContentsMargins(0, 0, 0, 0);
+    control_panel_layout->setContentsMargins(8, 7, 8, 6);
+    control_panel_layout->setSpacing(5);
+    position_label_->setMinimumWidth(105);
+    position_label_->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     control_panel_layout->addLayout(seek_layout);
 
     auto* control_layout = new QHBoxLayout();
+    play_button_->setObjectName(QStringLiteral("playButton"));
+    play_button_->setMinimumWidth(58);
+    pause_button_->setMinimumWidth(58);
+    stop_button_->setMinimumWidth(58);
+    control_layout->setSpacing(6);
     control_layout->addWidget(play_button_);
     control_layout->addWidget(pause_button_);
     control_layout->addWidget(stop_button_);
@@ -1741,6 +1754,8 @@ MainWindow::MainWindow(
     control_layout->addWidget(new QLabel(QStringLiteral("音量"), content));
     control_layout->addWidget(volume_slider_);
     control_panel_layout->addLayout(control_layout);
+    status_label_->setMinimumHeight(20);
+    status_label_->setContentsMargins(2, 0, 2, 0);
     control_panel_layout->addWidget(status_label_);
     layout->addWidget(control_panel_);
     setCentralWidget(content);
