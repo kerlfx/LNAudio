@@ -79,6 +79,7 @@
 #include <QStringDecoder>
 #include <QSlider>
 #include <QStackedWidget>
+#include <QSplitter>
 #include <QStatusBar>
 #include <QStandardPaths>
 #include <QSettings>
@@ -564,6 +565,8 @@ MainWindow::MainWindow(
         "QSlider::sub-page:horizontal { background: #4d91cf; border-radius: 2px; }"
         "QSlider::handle:horizontal { width: 12px; margin: -5px 0; "
         "background: #e4edf7; border: 1px solid #6c9bc5; border-radius: 6px; }"
+        "QSplitter::handle { background: #303743; }"
+        "QSplitter::handle:hover { background: #4d91cf; }"
         "QTabWidget::pane { border: 1px solid #3b4350; }"
         "QTabBar::tab { background: #252a33; padding: 7px 14px; }"
         "QTabBar::tab:selected { background: #345b86; }"
@@ -1137,7 +1140,7 @@ MainWindow::MainWindow(
             video_hue_degrees_, video_sharpness_, video_denoise_, video_grayscale_);
         playlist_widget_ = new QListWidget(content);
         playlist_widget_->setItemDelegate(new PlaylistItemDelegate(playlist_widget_));
-        playlist_widget_->setMaximumWidth(360);
+        playlist_widget_->setMinimumWidth(240);
         playlist_widget_->setDragDropMode(QAbstractItemView::InternalMove);
         playlist_widget_->setDropIndicatorShown(true);
         playlist_widget_->setAcceptDrops(true);
@@ -1626,11 +1629,19 @@ MainWindow::MainWindow(
                 statusBar()->showMessage(QStringLiteral("视频滤镜已更新"));
             }
         });
-        auto* video_layout = new QHBoxLayout();
-        video_layout->addWidget(video_surface_, 1);
+        auto* video_splitter = new QSplitter(Qt::Horizontal, content);
+        video_splitter->setObjectName(QStringLiteral("videoSplitter"));
+        video_splitter->setChildrenCollapsible(false);
+        video_splitter->setHandleWidth(5);
+        video_splitter->addWidget(video_surface_);
+        video_splitter->addWidget(playlist_panel_);
+        video_splitter->setStretchFactor(0, 1);
+        video_splitter->setStretchFactor(1, 0);
+        video_splitter->setSizes({700, 280});
+        playlist_panel_->setMinimumWidth(250);
+        playlist_panel_->setMaximumWidth(440);
         playlist_panel_->setVisible(playlist_panel_visible_);
-        video_layout->addWidget(playlist_panel_);
-        layout->addLayout(video_layout, 1);
+        layout->addWidget(video_splitter, 1);
     }
     else
     {
