@@ -3420,7 +3420,8 @@ void MainWindow::openVideoSettings()
 
     // Keep settings as a real top-level window, independent of the custom
     // frameless player window and its native title-bar implementation.
-    QDialog dialog(nullptr, Qt::Window);
+    QDialog dialog(this, Qt::Window);
+    dialog.setWindowModality(Qt::WindowModal);
     dialog.setObjectName(QStringLiteral("settingsDialog"));
     dialog.setWindowTitle(QStringLiteral("LNPlayer 播放器设置"));
     dialog.setWindowIcon(PlayerIcons::make(PlayerIcons::Name::Settings));
