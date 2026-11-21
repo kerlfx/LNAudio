@@ -21,7 +21,7 @@ enum class Name
     Add, Remove, Clear, MoveUp, MoveDown,
     Shuffle, Repeat, RepeatOne, Search,
     Settings, General, Playback, Interface, Video, Filters, Keyboard, Screenshot, Performance,
-    Folder, External, Reset
+    Folder, External, Reset, Playlist
 };
 
 inline const char* resource_id(Name name)
@@ -62,6 +62,7 @@ inline const char* resource_id(Name name)
     case Name::Folder: return "folder";
     case Name::External: return "external";
     case Name::Reset: return "reset";
+    case Name::Playlist: return "playlist";
     }
     return "play";
 }
@@ -78,7 +79,7 @@ inline const QByteArray& svg_data()
     return data;
 }
 
-inline QIcon make(Name name, const QColor& color = QColor(QStringLiteral("#d7dde7")))
+inline QIcon make(Name name, const QColor& color = QColor(QStringLiteral("#f0f4fa")))
 {
     constexpr qreal logical_size = 24.0;
     constexpr qreal pixel_ratio = 2.0;
