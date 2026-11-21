@@ -285,7 +285,15 @@ public:
     void resize(uint32_t width, uint32_t height)
     {
         std::unique_lock<std::mutex> lock(mutex_);
-        if (!swap_chain_ || width == 0 || height == 0)
+        if (!swap_chain_ || !window_)
+            return;
+
+        RECT client{};
+        if (!GetClientRect(window_, &client))
+            return;
+        width = static_cast<uint32_t>(std::max<LONG>(0, client.right - client.left));
+        height = static_cast<uint32_t>(std::max<LONG>(0, client.bottom - client.top));
+        if (width == 0 || height == 0)
             return;
 
         context_->OMSetRenderTargets(0, nullptr, nullptr);
