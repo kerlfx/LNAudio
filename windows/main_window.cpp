@@ -3254,13 +3254,15 @@ void MainWindow::openVideoSettings()
     auto* always_on_top = new QCheckBox(QStringLiteral("窗口始终置顶"), interface_page);
     always_on_top->setChecked(always_on_top_);
     auto* middle_click = new QComboBox(interface_page);
+    middle_click->addItem(QStringLiteral("无动作"), 0);
+    middle_click->addItem(QStringLiteral("播放/暂停"), 1);
     middle_click->addItem(QStringLiteral("切换全屏"), 2);
-    middle_click->setCurrentIndex(0);
-    middle_click->setEnabled(false);
+    middle_click->setCurrentIndex(std::max(0, middle_click->findData(middle_click_action_)));
     auto* double_click = new QComboBox(interface_page);
     double_click->addItem(QStringLiteral("无动作"), 2);
-    double_click->setCurrentIndex(0);
-    double_click->setEnabled(false);
+    double_click->addItem(QStringLiteral("播放/暂停"), 1);
+    double_click->addItem(QStringLiteral("切换全屏"), 0);
+    double_click->setCurrentIndex(std::max(0, double_click->findData(double_click_action_)));
     auto* mouse_gestures = new QCheckBox(
         QStringLiteral("启用右键拖动手势（左/右：快退/快进，上/下：音量）"), interface_page);
     mouse_gestures->setChecked(mouse_gestures_enabled_);
@@ -3274,8 +3276,8 @@ void MainWindow::openVideoSettings()
     interface_form->addRow(QStringLiteral("OSD 位置"), osd_position);
     interface_form->addRow(show_playlist);
     interface_form->addRow(always_on_top);
-    interface_form->addRow(QStringLiteral("画面中键操作（固定为切换全屏）"), middle_click);
-    interface_form->addRow(QStringLiteral("画面双击操作（固定为无动作）"), double_click);
+    interface_form->addRow(QStringLiteral("画面中键操作"), middle_click);
+    interface_form->addRow(QStringLiteral("画面双击操作"), double_click);
     interface_form->addRow(QStringLiteral("鼠标滚轮操作"), wheel_action);
     interface_form->addRow(mouse_gestures);
     add_settings_page(QStringLiteral("界面"), interface_page);
@@ -3496,8 +3498,8 @@ void MainWindow::openVideoSettings()
         osd_position->setCurrentIndex(1);
         show_playlist->setChecked(true);
         always_on_top->setChecked(false);
-        middle_click->setCurrentIndex(1);
-        double_click->setCurrentIndex(0);
+        middle_click->setCurrentIndex(middle_click->findData(2));
+        double_click->setCurrentIndex(double_click->findData(1));
         wheel_action->setCurrentIndex(0);
         mouse_gestures->setChecked(false);
         aspect->setCurrentIndex(0);
@@ -3572,8 +3574,8 @@ void MainWindow::openVideoSettings()
     fullscreen_hide_timer_->setInterval(fullscreen_hide_delay_ms_);
     playlist_panel_visible_ = show_playlist->isChecked();
     always_on_top_ = always_on_top->isChecked();
-    middle_click_action_ = 2;
-    double_click_action_ = 2;
+    middle_click_action_ = middle_click->currentData().toInt();
+    double_click_action_ = double_click->currentData().toInt();
     mouse_gestures_enabled_ = mouse_gestures->isChecked();
     if (video_surface_)
         video_surface_->set_gesture_enabled(mouse_gestures_enabled_);
