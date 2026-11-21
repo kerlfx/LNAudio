@@ -9,6 +9,9 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# Show FetchContent download and population progress for all dependencies.
+set(FETCHCONTENT_QUIET OFF)
+
 if(NOT WIN32 AND NOT ANDROID)
     message(FATAL_ERROR "LNPlayer currently supports Windows and Android builds only.")
 endif()
