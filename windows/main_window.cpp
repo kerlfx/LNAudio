@@ -571,7 +571,7 @@ MainWindow::MainWindow(
         "QWidget#windowTitleBar QPushButton { background: transparent; border: 0; "
         "border-radius: 0; padding: 0; min-width: 34px; max-width: 34px; min-height: 26px; max-height: 26px; }"
         "QWidget#windowTitleBar QPushButton:hover { background: #2a303a; }"
-        "QWidget#windowTitleBar QPushButton#closeWindowButton:hover { background: #a83232; }
+        "QWidget#windowTitleBar QPushButton#closeWindowButton:hover { background: #a83232; }"
         "QWidget { color: #e8eaf0; }"
         "QMenuBar { background: #20242c; border-bottom: 1px solid #343a46; }"
         "QMenuBar::item { padding: 6px 10px; background: transparent; }"
