@@ -18,8 +18,8 @@ Version changes must update the CMake pins and this document together.
 | Dependency | Pinned version | Variant | Acquisition / verification |
 |---|---:|---|---|
 | Standalone Asio | 1.38.2 | Header-only, standalone | Official GitHub repository; shallow clone of pinned tag |
-| FFmpeg | 8.1.2 | Windows MSVC x64, shared, LGPL | System233 prebuilt release; SHA-256 checked by FetchContent |
-| SQLite | 3.54.1 | Generated amalgamation | Official GitHub mirror; shallow clone of pinned upstream tag; generated with upstream build rules |
+| FFmpeg | 8.1.2 | Windows MSVC x64, shared, LGPL | System233 prebuilt release; resumable curl download; SHA-256 verified |
+| SQLite | 3.54.1 | Generated amalgamation | Official SQLite source ZIP; resumable curl download; published SHA3-256 verified; generated with upstream build rules |
 
 ### Asio Git checkout
 
@@ -82,21 +82,29 @@ The currently pinned archive is:
 - SHA-256:
   `80dc78fd43aa32e7c3b75401d0aae8bcd260127e528999198ac9d0b033a854df`
 
+CMake downloads this archive through `cmake/DownloadFile.cmake`, using the
+system curl executable. Interrupted transfers retain a `.part` file and
+subsequent configure attempts request continuation with HTTP byte ranges.
+Transfers are retried up to five times. The completed archive is SHA-256
+verified before it is renamed into the cache and extracted. A verified archive
+is reused on later configure runs.
+
 ### SQLite source and amalgamation generation
 
-SQLite 3.54.1 is obtained from the official GitHub mirror
-(`sqlite/sqlite`) at the `version-3.54.1` tag using a shallow Git checkout.
-The checkout pins the release tag without downloading the repository's full
-history. Git is configured with `http.version=HTTP/1.1` for this dependency
-because CMake's URL downloader uses libcurl and the local Windows proxy has
-repeatedly interrupted HTTP/2 downloads with Schannel `missing close_notify`
-errors. The Git transport setting avoids that specific HTTP/2 path; it does
-not guarantee recovery from unrelated proxy or network interruptions.
+SQLite 3.54.1 is downloaded from the official SQLite release archive:
 
-The upstream Git repository contains the canonical source tree and SQLite's
-own code-generation scripts, but does not commit the generated amalgamation
-files. LNPlayer therefore generates `sqlite3.c` and `sqlite3.h` from that
-source using the upstream build rules:
+- URL: `https://sqlite.org/2026/sqlite-src-3540100.zip`
+- SHA3-256: `877c6f4996ce7adb368686bce21638de9e3d91534832ad3d9d119037d1bc22ad`
+
+The archive is the complete canonical source tree for SQLite 3.54.1. It is
+downloaded through `cmake/DownloadFile.cmake`, which retains interrupted
+transfers as `.part`, resumes using HTTP byte ranges, retries transient
+failures up to five times, and verifies the official SHA3-256 before accepting
+the archive. The verified ZIP is extracted under
+`3rd_cache/sqlite/source-3.54.1`.
+
+LNPlayer generates `sqlite3.c` and `sqlite3.h` from this source using SQLite's
+official build rules:
 
 - On Windows build hosts, CMake invokes
   `nmake /f Makefile.msc sqlite3.c`. The makefile builds its bundled
@@ -110,10 +118,24 @@ amalgamation. The small Jim Tcl bootstrap interpreter is built from the
 SQLite source tree. A full Tcl installation is needed for SQLite's test
 suite and optional Tcl extension targets, which LNPlayer does not build.
 
-The source checkout and generated files are stored under
-`3rd_cache/sqlite/source-3.54.1`. The generated `sqlite3.c` is compiled
-directly into LNPlayer Core; the generated `sqlite3.h` is used as its
-include directory.
+The generated `sqlite3.c` is compiled directly into LNPlayer Core; the
+generated `sqlite3.h` is used as its include directory.
+
+### Resumable dependency downloads
+
+The shared `cmake/DownloadFile.cmake` helper uses curl's resume support and
+keeps incomplete data in a sibling `.part` file. It retries up to five times
+with a short increasing delay. If the server rejects a range request, the
+helper discards the partial file and retries from byte zero. The finished
+archive is accepted only after its pinned SHA-256 or SHA3-256 checksum passes,
+then atomically renamed to its final cache filename. Existing verified
+archives are reused.
+
+HTTP range support is controlled by the origin server and any intervening
+proxy. When a server does not support ranges, the helper falls back to a
+complete download; true continuation cannot be guaranteed for such a server.
+Asio remains a shallow Git clone because Git clone does not provide a reliable
+generic HTTP range-resume mechanism.
 
 ### Repository-local proxy
 
@@ -140,6 +162,7 @@ The individual SDK/source roots are:
 
 - `3rd_cache/asio/1.38.2-git`
 - `3rd_cache/ffmpeg`
+- `3rd_cache/sqlite/sqlite-src-3540100.zip` (verified source archive)
 - `3rd_cache/sqlite/source-3.54.1`
 
 An explicitly configured `FETCHCONTENT_BASE_DIR` is preserved. The old CMake
