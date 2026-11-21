@@ -291,9 +291,13 @@ target_include_directories(lnplayer
     PUBLIC
         "${CMAKE_CURRENT_LIST_DIR}/include"
     PRIVATE
+        "${SQLITE_INCLUDE_DIR}"
+)
+
+target_include_directories(lnplayer SYSTEM
+    PRIVATE
         "${ASIO_INCLUDE_DIR}"
         "${FFMPEG_INCLUDE_DIR}"
-        "${SQLITE_INCLUDE_DIR}"
 )
 
 target_compile_definitions(lnplayer
