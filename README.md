@@ -21,7 +21,7 @@ The process owns at most one Player. Each independently launched application pro
 - Qt 6.12 or newer, Widgets component, built for the same MSVC toolchain.
 - Network access during the first configure for the pinned standalone Asio, FFmpeg SDK and SQLite amalgamation downloads, unless those dependencies are already present in 3rd_cache.
 
-Standalone Asio is fetched at the pinned 1.36.0 tag when no local headers are found; set `ASIO_INCLUDE_DIR` to use an existing installation or `LNPLAYER_DOWNLOAD_ASIO=OFF` to disable downloading. FFmpeg is pinned to the FFmpeg 8.1.2 LGPL MSVC x64 shared SDK. CMake verifies the archive SHA-256 before extraction. The FFmpeg DLLs are copied beside the executable after build and included in the install tree. SQLite is fetched as a single amalgamation source. No Boost dependency is used.
+Standalone Asio 1.38.2 is fetched from its pinned Git tag when no local headers are found; set `ASIO_INCLUDE_DIR` to use an existing installation or `LNPLAYER_DOWNLOAD_ASIO=OFF` to disable downloading. FFmpeg is pinned to the FFmpeg 8.1.2 LGPL MSVC x64 shared SDK because this is the latest 8.1.x package currently published by the selected prebuilt provider; CMake verifies its archive SHA-256 before extraction. The FFmpeg DLLs are copied beside the executable after build and included in the install tree. SQLite 3.54.1 is fetched as a single amalgamation source; its archive URL and SHA3-256 are read from SQLite's official download manifest at configure time. FetchContent sources and metadata are stored under `3rd_cache/fetchcontent` by default. No Boost dependency is used.
 
 ## Configure and build
 
