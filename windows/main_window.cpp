@@ -2773,13 +2773,13 @@ void MainWindow::updateFullscreenUi()
 
     if (control_panel_)
     {
-        control_panel_->show();
+        control_panel_->hide();
         positionFullscreenControls();
     }
-    fullscreen_controls_visible_ = true;
+    if (title_bar_)
+        title_bar_->hide();
+    fullscreen_controls_visible_ = false;
     unsetCursor();
-    if (fullscreen_hide_delay_ms_ > 0)
-        fullscreen_hide_timer_->start(fullscreen_hide_delay_ms_);
 }
 bool MainWindow::eventFilter(QObject* watched, QEvent* event)
 {
