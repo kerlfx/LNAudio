@@ -28,7 +28,7 @@ if(NOT ASIO_INCLUDE_DIR OR ASIO_INCLUDE_DIR MATCHES "-NOTFOUND$")
         endif()
 
         FetchContent_Declare(
-            Asio
+            AsioGit
             GIT_REPOSITORY "https://github.com/chriskohlhoff/asio.git"
             GIT_TAG "asio-1-38-2"
             GIT_SHALLOW TRUE
@@ -40,7 +40,7 @@ if(NOT ASIO_INCLUDE_DIR OR ASIO_INCLUDE_DIR MATCHES "-NOTFOUND$")
 
         message(STATUS
             "[LNPlayer] Cloning standalone Asio ${LNPLAYER_ASIO_VERSION} (tag asio-1-38-2) into ${LNPLAYER_ASIO_ROOT}")
-        FetchContent_MakeAvailable(Asio)
+        FetchContent_MakeAvailable(AsioGit)
     endif()
 endif()
 
