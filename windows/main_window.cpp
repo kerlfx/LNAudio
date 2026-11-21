@@ -1077,17 +1077,6 @@ MainWindow::MainWindow(
         connect(video_settings_action, &QAction::triggered, this, [this] { openVideoSettings(); });
     }
 
-    if (menuBar())
-    {
-        menuBar()->installEventFilter(this);
-        const auto menu_widgets = menuBar()->findChildren<QWidget*>();
-        for (QWidget* menu_widget : menu_widgets)
-        {
-            menu_widget->setMouseTracking(true);
-            menu_widget->installEventFilter(this);
-        }
-    }
-
     if (mode_ == PlayerMode::Video)
     {
         auto* menu_host = new QWidget(this);
@@ -1130,12 +1119,29 @@ MainWindow::MainWindow(
         });
         connect(close_button, &QPushButton::clicked, this, &QWidget::close);
         menu_host_layout->addWidget(title_bar_);
-        if (menuBar())
+        QMenuBar* original_menu_bar = menuBar();
+        menu_bar_ = new QMenuBar(menu_host);
+        for (QAction* action : original_menu_bar->actions())
         {
-            menuBar()->setParent(menu_host);
-            menu_host_layout->addWidget(menuBar());
+            if (QMenu* menu = action->menu())
+            {
+                menu->setParent(menu_bar_);
+                menu_bar_->addMenu(menu);
+            }
+            else
+            {
+                original_menu_bar->removeAction(action);
+                menu_bar_->addAction(action);
+            }
         }
+        menu_host_layout->addWidget(menu_bar_);
         setMenuWidget(menu_host);
+        menu_bar_->installEventFilter(this);
+        for (QWidget* child : menu_bar_->findChildren<QWidget*>())
+        {
+            child->setMouseTracking(true);
+            child->installEventFilter(this);
+        }
         title_bar_->setMouseTracking(true);
         title_bar_->installEventFilter(this);
         for (QWidget* child : title_bar_->findChildren<QWidget*>())
@@ -1850,8 +1856,8 @@ MainWindow::MainWindow(
             return;
         control_panel_->hide();
         fullscreen_controls_visible_ = false;
-        if (menuBar())
-            menuBar()->hide();
+        if (menu_bar_)
+            menu_bar_->hide();
         if (title_bar_)
             title_bar_->hide();
         if (statusBar())
@@ -2394,8 +2400,8 @@ void MainWindow::showFullscreenControls()
 
     unsetCursor();
     control_panel_->show();
-    if (menuBar())
-        menuBar()->show();
+    if (menu_bar_)
+        menu_bar_->show();
     if (title_bar_)
         title_bar_->show();
     if (statusBar())
@@ -2417,8 +2423,8 @@ void MainWindow::updateFullscreenUi()
         unsetCursor();
         if (control_panel_)
             control_panel_->show();
-        if (menuBar())
-            menuBar()->show();
+        if (menu_bar_)
+            menu_bar_->show();
         if (title_bar_)
             title_bar_->show();
         if (statusBar())
@@ -2431,8 +2437,8 @@ void MainWindow::updateFullscreenUi()
 
     if (control_panel_)
         control_panel_->show();
-    if (menuBar())
-        menuBar()->show();
+    if (menu_bar_)
+        menu_bar_->show();
     if (title_bar_)
         title_bar_->show();
     if (statusBar())
@@ -2495,7 +2501,7 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event)
             (control_panel_ && watched_widget && control_panel_->isAncestorOf(watched_widget)) ||
             watched == playlist_panel_ ||
             (playlist_panel_ && watched_widget && playlist_panel_->isAncestorOf(watched_widget)) ||
-            watched == menuBar() || (menuBar() && watched_widget && menuBar()->isAncestorOf(watched_widget)) ||
+            watched == menu_bar_ || (menu_bar_ && watched_widget && menu_bar_->isAncestorOf(watched_widget)) ||
             watched == title_bar_ || (title_bar_ && watched_widget && title_bar_->isAncestorOf(watched_widget)) ||
             watched == statusBar() || (statusBar() && watched_widget && statusBar()->isAncestorOf(watched_widget)) ||
             is_menu_widget;
@@ -2544,8 +2550,8 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event)
                     (cursor_widget == control_panel_ || control_panel_->isAncestorOf(cursor_widget))) ||
                  (playlist_panel_ &&
                     (cursor_widget == playlist_panel_ || playlist_panel_->isAncestorOf(cursor_widget))) ||
-                 (menuBar() &&
-                    (cursor_widget == menuBar() || menuBar()->isAncestorOf(cursor_widget))) ||
+                 (menu_bar_ &&
+                    (cursor_widget == menu_bar_ || menu_bar_->isAncestorOf(cursor_widget))) ||
                  (title_bar_ &&
                     (cursor_widget == title_bar_ || title_bar_->isAncestorOf(cursor_widget))) ||
                  (statusBar() &&
@@ -3655,7 +3661,7 @@ void MainWindow::openVideoSettings()
         if (fullscreen_hide_delay_ms_ == 0)
         {
             control_panel_->show();
-            menuBar()->show();
+            menu_bar_->show();
         }
     }
 }
