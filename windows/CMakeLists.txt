@@ -57,13 +57,27 @@ qt_generate_deploy_app_script(
     OUTPUT_SCRIPT LNPLAYER_QT_DEPLOY_SCRIPT
 )
 
-# The generated Qt deployment script is also used after linking so the build
-# directory is directly runnable from the IDE, not only after installation.
+# Deploy Qt into a staging directory first, then update the runnable output
+# directory with copy-if-different so unchanged runtime files are not recopied.
+set(LNPLAYER_QT_DEPLOY_STAGING_DIR
+    "${CMAKE_CURRENT_BINARY_DIR}/qt-deploy/$<CONFIG>"
+)
+
 add_custom_command(TARGET LNPlayerApp POST_BUILD
+    COMMAND "${CMAKE_COMMAND}" -E make_directory
+        "${LNPLAYER_QT_DEPLOY_STAGING_DIR}"
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+        "$<TARGET_FILE:LNPlayerApp>"
+        "${LNPLAYER_QT_DEPLOY_STAGING_DIR}"
     COMMAND "${CMAKE_COMMAND}"
-        "-DQT_DEPLOY_PREFIX=$<TARGET_FILE_DIR:LNPlayerApp>"
+        "-DQT_DEPLOY_PREFIX=${LNPLAYER_QT_DEPLOY_STAGING_DIR}"
         "-DQT_DEPLOY_BIN_DIR=."
         -P "${LNPLAYER_QT_DEPLOY_SCRIPT}"
+    COMMAND "${CMAKE_COMMAND}"
+        "-DLNPLAYER_DEPLOY_SOURCE=${LNPLAYER_QT_DEPLOY_STAGING_DIR}"
+        "-DLNPLAYER_DEPLOY_DESTINATION=$<TARGET_FILE_DIR:LNPlayerApp>"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/CopyIfDifferent.cmake"
+    COMMENT "Deploying Qt runtime (copying only changed files)"
     VERBATIM
 )
 
