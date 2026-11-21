@@ -74,6 +74,7 @@ private:
     std::function<void(int)> gesture_callback_;
     QPoint right_press_position_;
     QPoint left_press_position_;
+    QPoint left_press_window_offset_;
     bool window_move_started_ = false;
     bool gesture_enabled_ = false;
     bool gesture_triggered_ = false;
