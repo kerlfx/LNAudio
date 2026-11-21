@@ -38,14 +38,12 @@ if(NOT ASIO_INCLUDE_DIR OR ASIO_INCLUDE_DIR MATCHES "-NOTFOUND$")
             GIT_TAG "asio-${LNPLAYER_ASIO_TAG_VERSION}"
             GIT_SHALLOW TRUE
             SOURCE_DIR "${LNPLAYER_ASIO_ROOT}"
+            SOURCE_SUBDIR _lnplayer_headers_only
         )
 
-        FetchContent_GetProperties(Asio)
-        if(NOT asio_POPULATED)
-            message(STATUS
-                "Fetching standalone Asio ${LNPLAYER_ASIO_VERSION} into ${LNPLAYER_ASIO_ROOT}")
-            FetchContent_Populate(Asio)
-        endif()
+        message(STATUS
+            "[LNPlayer] Fetching standalone Asio ${LNPLAYER_ASIO_VERSION} into ${LNPLAYER_ASIO_ROOT}")
+        FetchContent_MakeAvailable(Asio)
     endif()
 endif()
 
@@ -108,13 +106,11 @@ if(NOT EXISTS "${LNPLAYER_FFMPEG_ROOT}/include/libavformat/avformat.h")
         URL_HASH SHA256=80dc78fd43aa32e7c3b75401d0aae8bcd260127e528999198ac9d0b033a854df
         DOWNLOAD_EXTRACT_TIMESTAMP TRUE
         SOURCE_DIR "${LNPLAYER_FFMPEG_ROOT}"
+        SOURCE_SUBDIR _lnplayer_prebuilt_sdk
     )
 
-    FetchContent_GetProperties(FFmpeg)
-    if(NOT ffmpeg_POPULATED)
-        message(STATUS "Fetching prebuilt FFmpeg SDK into ${LNPLAYER_FFMPEG_ROOT}")
-        FetchContent_Populate(FFmpeg)
-    endif()
+    message(STATUS "[LNPlayer] Fetching prebuilt FFmpeg SDK into ${LNPLAYER_FFMPEG_ROOT}")
+    FetchContent_MakeAvailable(FFmpeg)
 endif()
 message(STATUS "[LNPlayer] FFmpeg SDK ready.")
 
@@ -132,13 +128,11 @@ if(NOT EXISTS "${LNPLAYER_SQLITE_ROOT}/sqlite-amalgamation-3500400/sqlite3.c"
         URL_HASH SHA3_256=f131b68e6ba5fb891cc13ebb5ff955054c77294cb92d8d1268bad5dba4fa2a1
         DOWNLOAD_EXTRACT_TIMESTAMP TRUE
         SOURCE_DIR "${LNPLAYER_SQLITE_ROOT}"
+        SOURCE_SUBDIR _lnplayer_amalgamation_only
     )
 
-    FetchContent_GetProperties(SQLite)
-    if(NOT sqlite_POPULATED)
-        message(STATUS "Fetching SQLite ${LNPLAYER_SQLITE_VERSION} amalgamation")
-        FetchContent_Populate(SQLite)
-    endif()
+    message(STATUS "[LNPlayer] Fetching SQLite ${LNPLAYER_SQLITE_VERSION} amalgamation")
+    FetchContent_MakeAvailable(SQLite)
 endif()
 message(STATUS "[LNPlayer] SQLite ready.")
 
