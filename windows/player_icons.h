@@ -20,7 +20,8 @@ enum class Name
     Minimize, Maximize, Restore, Close,
     Add, Remove, Clear, MoveUp, MoveDown,
     Shuffle, Repeat, RepeatOne, Search,
-    Settings, General, Playback, Interface, Video, Filters, Keyboard, Screenshot, Performance
+    Settings, General, Playback, Interface, Video, Filters, Keyboard, Screenshot, Performance,
+    Folder, External, Reset
 };
 
 inline QIcon make(Name name, const QColor& color = QColor(QStringLiteral("#d7dde7")))
@@ -160,6 +161,18 @@ inline QIcon make(Name name, const QColor& color = QColor(QStringLiteral("#d7dde
         path.arcMoveTo(QRectF(4, 4, 16, 16), 180);
         path.arcTo(QRectF(4, 4, 16, 16), 180, -180); painter.drawPath(path);
         painter.drawLine(12, 12, 17, 8); painter.drawLine(5, 18, 19, 18); break;
+    case Name::Folder:
+        path.moveTo(3, 7); path.lineTo(10, 7); path.lineTo(12, 9);
+        path.lineTo(21, 9); path.lineTo(19, 19); path.lineTo(4, 19);
+        path.closeSubpath(); painter.drawPath(path); break;
+    case Name::External:
+        painter.drawRect(QRectF(4, 8, 12, 12));
+        path.moveTo(11, 5); path.lineTo(20, 5); path.lineTo(20, 14);
+        path.moveTo(20, 5); path.lineTo(10, 15); painter.drawPath(path); break;
+    case Name::Reset:
+        path.arcMoveTo(QRectF(5, 5, 14, 14), 35);
+        path.arcTo(QRectF(5, 5, 14, 14), 35, 285); painter.drawPath(path);
+        path.moveTo(5, 5); path.lineTo(5, 10); path.lineTo(10, 10); painter.drawPath(path); break;
     }
     return QIcon(pixmap);
 }
