@@ -142,7 +142,6 @@ private:
         const QString& message);
     void refreshSnapshot();
     void updatePlaybackState(lnplayer_state_t state, int64_t position_ms, int64_t duration_ms);
-    void showFullscreenControls();
     void updateFullscreenUi();
     void fitWindowToVideoAspect(float aspect_ratio, const QSize& source_size);
 
