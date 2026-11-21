@@ -1017,8 +1017,8 @@ Windows UI 的正式完成条件统一由 [`docs/WINDOWS_UI_ACCEPTANCE.md`](WIND
 - [x] 软件帧最终呈现从 command Strand 移至 frame Strand，避免 D3D11 Present 的垂直同步等待阻塞播放控制任务。
 - [x] 硬件解码路径仅在字幕实际存在且启用时分配/上传全尺寸透明字幕 overlay；无字幕帧跳过该开销。
 - [x] 软件帧历史已改为 256 MiB 图像预算 + 120 帧上限；硬件帧 owner 上限 8 条。预算之外的当前帧、GPU 在途引用仍需实测。
-- [ ] 25ms 快照轮询在 command Strand 执行，且 Core Session snapshot 与完整视频帧读取共用 mutex；需要拆分快照状态锁并重新设计 A-B 边界调度。
-- [ ] D3D11 每帧 Flush/对象创建、Renderer 资源释放忙轮询、播放列表 GUI 大队列重建、FFmpeg 自动 decoder 线程预算待实测。
+- [x] 快照轮询周期为 250ms，并已移出 command Strand；Core Session snapshot 与完整视频帧读取仍共用 mutex，后台快照可能等待帧读取。
+- [ ] D3D11 每帧 Flush/对象创建、播放列表 GUI 大队列重建、FFmpeg 自动 decoder 线程预算待实测；资源释放 query 轮询已改为 1ms 间隔，仍需设备移除/关闭验证。
 - [ ] 本轮只完成静态源码审查和两项代码修正，尚未进行 Windows 性能基准或运行验证。
 
 审查文档：`docs/PERFORMANCE_AUDIT.md`
