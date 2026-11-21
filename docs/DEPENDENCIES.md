@@ -39,8 +39,9 @@ The currently pinned archive is:
 
 ### SQLite source and amalgamation generation
 
-SQLite 3.54.1 is fetched from the official GitHub mirror
-(`sqlite/sqlite`) at the `version-3.54.1` release tag. The mirror contains
+SQLite 3.54.1 is downloaded as a source archive from the official GitHub mirror
+(`sqlite/sqlite`) at the `version-3.54.1` release tag. This avoids cloning the
+repository history. The archive contains
 the canonical source tree and SQLite's own code-generation scripts, but does
 not commit the generated amalgamation files.
 
