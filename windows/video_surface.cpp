@@ -171,6 +171,8 @@ bool VideoSurface::present_hardware_frame(
     return renderer_ && renderer_->present_hardware(
         texture, array_slice, format, width, height, std::move(frame_owner),
         overlay.isNull() ? nullptr : overlay.constBits(),
+        overlay.isNull() ? 0 : overlay.width(),
+        overlay.isNull() ? 0 : overlay.height(),
         overlay.isNull() ? 0 : overlay.bytesPerLine());
 }
 
