@@ -1,10 +1,96 @@
-include(FetchContent)
-
-set(FETCHCONTENT_BASE_DIR "${PROJECT_SOURCE_DIR}/3rd_cache/fetchcontent" CACHE PATH
-    "Base directory for FetchContent downloads and build metadata")
-# Keep FetchContent progress visible even when the build directory has an older cache.
-set(FETCHCONTENT_QUIET OFF)
 message(STATUS "[LNPlayer] Checking third-party dependencies...")
+
+# Download archives directly so CMake can show a single concise progress bar.
+function(lnplayer_download_dependency)
+    set(options STRIP_TOP_LEVEL)
+    set(one_value_args NAME URL DESTINATION HASH)
+    cmake_parse_arguments(DL "${options}" "${one_value_args}" "" ${ARGN})
+
+    if(NOT DL_NAME OR NOT DL_URL OR NOT DL_DESTINATION)
+        message(FATAL_ERROR "lnplayer_download_dependency requires NAME, URL and DESTINATION.")
+    endif()
+
+    set(_download_dir "${PROJECT_SOURCE_DIR}/3rd_cache/downloads")
+    set(_archive "${_download_dir}/${DL_NAME}.zip")
+    set(_partial "${_archive}.part")
+    set(_extract_dir "${_download_dir}/${DL_NAME}-extract")
+    file(MAKE_DIRECTORY "${_download_dir}")
+
+    set(_archive_valid FALSE)
+    if(EXISTS "${_archive}")
+        if(DL_HASH)
+            string(REGEX MATCH "^([A-Za-z0-9_]+)=(.+)$" _hash_match "${DL_HASH}")
+            if(NOT _hash_match)
+                message(FATAL_ERROR "Invalid archive hash for ${DL_NAME}: ${DL_HASH}")
+            endif()
+            set(_hash_algorithm "${CMAKE_MATCH_1}")
+            set(_expected_hash "${CMAKE_MATCH_2}")
+            file(${_hash_algorithm} "${_archive}" _actual_hash)
+            if(_actual_hash STREQUAL _expected_hash)
+                set(_archive_valid TRUE)
+            else()
+                message(STATUS "[LNPlayer] Cached ${DL_NAME} archive failed hash check; downloading again.")
+                file(REMOVE "${_archive}")
+            endif()
+        else()
+            set(_archive_valid TRUE)
+        endif()
+    endif()
+
+    if(NOT _archive_valid)
+        message(STATUS "[LNPlayer] Downloading ${DL_NAME}...")
+        file(REMOVE "${_partial}")
+        if(DL_HASH)
+            file(DOWNLOAD "${DL_URL}" "${_partial}"
+                EXPECTED_HASH "${DL_HASH}"
+                SHOW_PROGRESS
+                TLS_VERIFY ON
+                STATUS _download_status
+                LOG _download_log
+            )
+        else()
+            file(DOWNLOAD "${DL_URL}" "${_partial}"
+                SHOW_PROGRESS
+                TLS_VERIFY ON
+                STATUS _download_status
+                LOG _download_log
+            )
+        endif()
+
+        list(GET _download_status 0 _download_code)
+        if(NOT _download_code EQUAL 0)
+            file(REMOVE "${_partial}")
+            message(FATAL_ERROR
+                "Failed to download ${DL_NAME} (${_download_status}).\n${_download_log}")
+        endif()
+        file(RENAME "${_partial}" "${_archive}")
+    else()
+        message(STATUS "[LNPlayer] Using cached ${DL_NAME} archive.")
+    endif()
+
+    message(STATUS "[LNPlayer] Extracting ${DL_NAME}...")
+    file(REMOVE_RECURSE "${_extract_dir}")
+    file(MAKE_DIRECTORY "${_extract_dir}")
+    file(ARCHIVE_EXTRACT INPUT "${_archive}" DESTINATION "${_extract_dir}")
+
+    file(REMOVE_RECURSE "${DL_DESTINATION}")
+    file(MAKE_DIRECTORY "${DL_DESTINATION}")
+    if(DL_STRIP_TOP_LEVEL)
+        file(GLOB _archive_entries LIST_DIRECTORIES TRUE "${_extract_dir}/*")
+        list(LENGTH _archive_entries _entry_count)
+        if(_entry_count EQUAL 1 AND IS_DIRECTORY "${_archive_entries}")
+            list(GET _archive_entries 0 _archive_root)
+            file(COPY "${_archive_root}/" DESTINATION "${DL_DESTINATION}")
+        else()
+            file(COPY "${_extract_dir}/" DESTINATION "${DL_DESTINATION}")
+        endif()
+    else()
+        file(COPY "${_extract_dir}/" DESTINATION "${DL_DESTINATION}")
+    endif()
+
+    file(REMOVE_RECURSE "${_extract_dir}")
+    message(STATUS "[LNPlayer] ${DL_NAME} ready.")
+endfunction()
 
 set(LNPLAYER_ASIO_VERSION "1.36.0" CACHE STRING
     "Pinned standalone Asio version")
@@ -32,19 +118,12 @@ if(NOT ASIO_INCLUDE_DIR OR ASIO_INCLUDE_DIR MATCHES "-NOTFOUND$")
                 "Enable LNPLAYER_DOWNLOAD_ASIO or provide ASIO_INCLUDE_DIR.")
         endif()
 
-        FetchContent_Declare(
-            Asio
-            GIT_REPOSITORY https://github.com/chriskohlhoff/asio.git
-            GIT_TAG "asio-${LNPLAYER_ASIO_TAG_VERSION}"
-            GIT_SHALLOW TRUE
-            GIT_PROGRESS TRUE
-            SOURCE_DIR "${LNPLAYER_ASIO_ROOT}"
-            SOURCE_SUBDIR _lnplayer_headers_only
+        lnplayer_download_dependency(
+            NAME "asio-${LNPLAYER_ASIO_VERSION}"
+            URL "https://github.com/chriskohlhoff/asio/archive/refs/tags/asio-${LNPLAYER_ASIO_TAG_VERSION}.zip"
+            DESTINATION "${LNPLAYER_ASIO_ROOT}"
+            STRIP_TOP_LEVEL
         )
-
-        message(STATUS
-            "[LNPlayer] Fetching standalone Asio ${LNPLAYER_ASIO_VERSION} into ${LNPLAYER_ASIO_ROOT}")
-        FetchContent_MakeAvailable(Asio)
     endif()
 endif()
 
@@ -101,18 +180,12 @@ if(NOT EXISTS "${LNPLAYER_FFMPEG_ROOT}/include/libavformat/avformat.h")
     set(_ffmpeg_url
         "https://github.com/System233/ffmpeg-msvc-prebuilt/releases/download/ffmpeg-${LNPLAYER_FFMPEG_VERSION}/${_ffmpeg_archive_name}")
 
-    FetchContent_Declare(
-        FFmpeg
+    lnplayer_download_dependency(
+        NAME "ffmpeg-${LNPLAYER_FFMPEG_VERSION}-${LNPLAYER_FFMPEG_LICENSE}"
         URL "${_ffmpeg_url}"
-        URL_HASH SHA256=80dc78fd43aa32e7c3b75401d0aae8bcd260127e528999198ac9d0b033a854df
-        DOWNLOAD_NO_PROGRESS FALSE
-        DOWNLOAD_EXTRACT_TIMESTAMP TRUE
-        SOURCE_DIR "${LNPLAYER_FFMPEG_ROOT}"
-        SOURCE_SUBDIR _lnplayer_prebuilt_sdk
+        HASH "SHA256=80dc78fd43aa32e7c3b75401d0aae8bcd260127e528999198ac9d0b033a854df"
+        DESTINATION "${LNPLAYER_FFMPEG_ROOT}"
     )
-
-    message(STATUS "[LNPlayer] Fetching prebuilt FFmpeg SDK into ${LNPLAYER_FFMPEG_ROOT}")
-    FetchContent_MakeAvailable(FFmpeg)
 endif()
 message(STATUS "[LNPlayer] FFmpeg SDK ready.")
 
@@ -124,18 +197,12 @@ set(LNPLAYER_SQLITE_ROOT "${PROJECT_SOURCE_DIR}/3rd_cache/sqlite" CACHE PATH
 message(STATUS "[LNPlayer] Checking SQLite ${LNPLAYER_SQLITE_VERSION}...")
 if(NOT EXISTS "${LNPLAYER_SQLITE_ROOT}/sqlite-amalgamation-3500400/sqlite3.c"
    AND NOT EXISTS "${LNPLAYER_SQLITE_ROOT}/sqlite3.c")
-    FetchContent_Declare(
-        SQLite
+    lnplayer_download_dependency(
+        NAME "sqlite-amalgamation-${LNPLAYER_SQLITE_VERSION}"
         URL "https://www2.sqlite.org/2025/sqlite-amalgamation-3500400.zip"
-        URL_HASH SHA3_256=f131b68e6ba5fb891cc13ebb5ff955054c77294cb92d8d1268bad5dba4fa2a1
-        DOWNLOAD_NO_PROGRESS FALSE
-        DOWNLOAD_EXTRACT_TIMESTAMP TRUE
-        SOURCE_DIR "${LNPLAYER_SQLITE_ROOT}"
-        SOURCE_SUBDIR _lnplayer_amalgamation_only
+        HASH "SHA3_256=f131b68e6ba5fb891cc13ebb5ff955054c77294cb92d8d1268bad5dba4fa2a1"
+        DESTINATION "${LNPLAYER_SQLITE_ROOT}"
     )
-
-    message(STATUS "[LNPlayer] Fetching SQLite ${LNPLAYER_SQLITE_VERSION} amalgamation")
-    FetchContent_MakeAvailable(SQLite)
 endif()
 message(STATUS "[LNPlayer] SQLite ready.")
 
