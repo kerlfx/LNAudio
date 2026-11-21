@@ -91,17 +91,29 @@ inline QIcon make(Name name, const QColor& color = QColor(QStringLiteral("#f0f4f
     if (!renderer.isValid())
         return {};
 
-    QPixmap pixmap(48, 48);
-    pixmap.fill(Qt::transparent);
-    pixmap.setDevicePixelRatio(pixel_ratio);
+    const auto render_icon = [&](const QColor& tint)
+    {
+        QByteArray tinted_data = data;
+        tinted_data.replace("currentColor", tint.name(QColor::HexRgb).toUtf8());
+        QSvgRenderer tinted_renderer(tinted_data);
+        QPixmap pixmap(48, 48);
+        pixmap.fill(Qt::transparent);
+        pixmap.setDevicePixelRatio(pixel_ratio);
 
-    QPainter painter(&pixmap);
-    painter.setRenderHint(QPainter::Antialiasing, true);
-    renderer.render(&painter, QString::fromLatin1(resource_id(name)),
-                    QRectF(0, 0, logical_size, logical_size));
-    painter.end();
+        QPainter painter(&pixmap);
+        painter.setRenderHint(QPainter::Antialiasing, true);
+        tinted_renderer.render(&painter, QString::fromLatin1(resource_id(name)),
+                               QRectF(0, 0, logical_size, logical_size));
+        return pixmap;
+    };
 
-    return QIcon(pixmap);
+    QIcon icon;
+    icon.addPixmap(render_icon(color), QIcon::Normal, QIcon::Off);
+    icon.addPixmap(render_icon(QColor(QStringLiteral("#8fc7ff"))),
+                   QIcon::Active, QIcon::Off);
+    icon.addPixmap(render_icon(QColor(QStringLiteral("#8fc7ff"))),
+                   QIcon::Active, QIcon::On);
+    return icon;
 }
 
 } // namespace PlayerIcons
