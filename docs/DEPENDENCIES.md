@@ -17,9 +17,9 @@ Version changes must update the CMake pins and this document together.
 
 | Dependency | Pinned version | Variant | Acquisition / verification |
 |---|---:|---|---|
-| Standalone Asio | 1.38.2 | Header-only, standalone | Git tag `asio-1-38-2` via FetchContent |
+| Standalone Asio | 1.38.2 | Header-only, standalone | Shallow Git tag `asio-1-38-2` via FetchContent |
 | FFmpeg | 8.1.2 | Windows MSVC x64, shared, LGPL | System233 prebuilt release; SHA-256 checked by FetchContent |
-| SQLite | 3.54.1 | Generated amalgamation | Official `sqlite/sqlite` GitHub tag; generated with upstream build rules |
+| SQLite | 3.54.1 | Generated amalgamation | Shallow Git checkout of official `sqlite/sqlite` tag; generated with upstream build rules |
 
 ### FFmpeg version policy
 
@@ -39,14 +39,15 @@ The currently pinned archive is:
 
 ### SQLite source and amalgamation generation
 
-SQLite 3.54.1 is downloaded as a source archive from the official GitHub mirror
-(`sqlite/sqlite`) at the `version-3.54.1` release tag. This avoids cloning the
-repository history. The archive contains
-the canonical source tree and SQLite's own code-generation scripts, but does
-not commit the generated amalgamation files.
+SQLite 3.54.1 is fetched from the official GitHub repository
+(`sqlite/sqlite`) at the `version-3.54.1` tag using a shallow Git clone
+(`GIT_SHALLOW TRUE`). This pins the source to the release tag without
+downloading the full repository history.
 
-LNPlayer therefore generates `sqlite3.c` and `sqlite3.h` from that source
-using the upstream build rules:
+The upstream Git repository contains the canonical source tree and SQLite's
+own code-generation scripts, but does not commit the generated amalgamation
+files. LNPlayer therefore generates `sqlite3.c` and `sqlite3.h` from that
+source using the upstream build rules:
 
 - On Windows build hosts, CMake invokes
   `nmake /f Makefile.msc sqlite3.c`. The makefile builds its bundled
@@ -63,8 +64,7 @@ suite and optional Tcl extension targets, which LNPlayer does not build.
 The source checkout and generated files are stored under
 `3rd_cache/sqlite/source-3.54.1`. The generated `sqlite3.c` is compiled
 directly into LNPlayer Core; the generated `sqlite3.h` is used as its
-include directory. This removes the dependency on parsing the SQLite website
-download manifest and on downloading a pre-generated amalgamation archive.
+include directory.
 
 ### Repository-local proxy
 
