@@ -95,18 +95,21 @@ if(NOT EXISTS "${LNPLAYER_FFMPEG_ROOT}/include/libavformat/avformat.h")
     set(_ffmpeg_url
         "https://github.com/System233/ffmpeg-msvc-prebuilt/releases/download/ffmpeg-${LNPLAYER_FFMPEG_VERSION}/${_ffmpeg_archive_name}")
 
-    FetchContent_Declare(
-        FFmpeg
-        URL "${_ffmpeg_url}"
-        URL_HASH SHA256=80dc78fd43aa32e7c3b75401d0aae8bcd260127e528999198ac9d0b033a854df
-        DOWNLOAD_NO_PROGRESS FALSE
-        DOWNLOAD_EXTRACT_TIMESTAMP TRUE
-        SOURCE_DIR "${LNPLAYER_FFMPEG_ROOT}"
-        SOURCE_SUBDIR _lnplayer_prebuilt_sdk
+    find_program(LNPLAYER_CURL_EXECUTABLE NAMES curl curl.exe REQUIRED)
+    set(_ffmpeg_archive "${LNPLAYER_FFMPEG_ROOT}/${_ffmpeg_archive_name}")
+    execute_process(
+        COMMAND "${CMAKE_COMMAND}"
+            "-DURL=${_ffmpeg_url}"
+            "-DOUTPUT_FILE=${_ffmpeg_archive}"
+            "-DCURL_EXECUTABLE=${LNPLAYER_CURL_EXECUTABLE}"
+            "-DEXPECTED_SHA256=80dc78fd43aa32e7c3b75401d0aae8bcd260127e528999198ac9d0b033a854df"
+            -P "${PROJECT_SOURCE_DIR}/cmake/DownloadFile.cmake"
+        RESULT_VARIABLE _ffmpeg_download_result
     )
-
-    message(STATUS "[LNPlayer] Fetching prebuilt FFmpeg SDK into ${LNPLAYER_FFMPEG_ROOT}")
-    FetchContent_MakeAvailable(FFmpeg)
+    if(NOT _ffmpeg_download_result EQUAL 0)
+        message(FATAL_ERROR "FFmpeg archive download failed.")
+    endif()
+    file(ARCHIVE_EXTRACT INPUT "${_ffmpeg_archive}" DESTINATION "${LNPLAYER_FFMPEG_ROOT}")
 endif()
 message(STATUS "[LNPlayer] FFmpeg SDK ready.")
 
@@ -115,27 +118,26 @@ set(LNPLAYER_SQLITE_VERSION "3.54.1" CACHE STRING
 set(LNPLAYER_SQLITE_ROOT "${PROJECT_SOURCE_DIR}/3rd_cache/sqlite" CACHE PATH
     "Root directory of the SQLite source and generated amalgamation")
 
-# Use a shallow checkout of the pinned upstream tag. CMake's URL downloader
-# uses libcurl and may negotiate HTTP/2 through local proxies; Git is explicitly
-# configured for HTTP/1.1 here to avoid the Schannel/HTTP2 receive failures seen
-# on some Windows proxy paths, without fetching SQLite's full repository history.
+# Download the official SQLite source archive with HTTP range resume.
+# The archive checksum is the SHA3-256 published by sqlite.org.
 set(_sqlite_source_dir "${LNPLAYER_SQLITE_ROOT}/source-${LNPLAYER_SQLITE_VERSION}")
-FetchContent_Declare(
-    sqlite_source
-    GIT_REPOSITORY "https://github.com/sqlite/sqlite.git"
-    GIT_TAG "version-${LNPLAYER_SQLITE_VERSION}"
-    GIT_SHALLOW TRUE
-    GIT_PROGRESS TRUE
-    GIT_CONFIG http.version=HTTP/1.1
-    SOURCE_DIR "${_sqlite_source_dir}"
-    SOURCE_SUBDIR _lnplayer_sqlite_source_only
-)
-
-FetchContent_GetProperties(sqlite_source)
-if(NOT sqlite_source_POPULATED)
-    message(STATUS
-        "[LNPlayer] Cloning official SQLite ${LNPLAYER_SQLITE_VERSION} tag into ${_sqlite_source_dir}...")
-    FetchContent_Populate(sqlite_source)
+set(_sqlite_archive "${LNPLAYER_SQLITE_ROOT}/sqlite-src-3540100.zip")
+if(NOT EXISTS "${_sqlite_source_dir}/Makefile.msc")
+    find_program(LNPLAYER_CURL_EXECUTABLE NAMES curl curl.exe REQUIRED)
+    execute_process(
+        COMMAND "${CMAKE_COMMAND}"
+            "-DURL=https://sqlite.org/2026/sqlite-src-3540100.zip"
+            "-DOUTPUT_FILE=${_sqlite_archive}"
+            "-DCURL_EXECUTABLE=${LNPLAYER_CURL_EXECUTABLE}"
+            "-DEXPECTED_SHA3_256=877c6f4996ce7adb368686bce21638de9e3d91534832ad3d9d119037d1bc22ad"
+            -P "${PROJECT_SOURCE_DIR}/cmake/DownloadFile.cmake"
+        RESULT_VARIABLE _sqlite_download_result
+    )
+    if(NOT _sqlite_download_result EQUAL 0)
+        message(FATAL_ERROR "SQLite source archive download failed.")
+    endif()
+    file(MAKE_DIRECTORY "${_sqlite_source_dir}")
+    file(ARCHIVE_EXTRACT INPUT "${_sqlite_archive}" DESTINATION "${_sqlite_source_dir}")
 endif()
 
 set(SQLITE3_C_SOURCE "${_sqlite_source_dir}/sqlite3.c")
