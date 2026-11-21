@@ -91,6 +91,9 @@
 #include <QVariant>
 #include <QVBoxLayout>
 #include <QWidget>
+#ifdef Q_OS_WIN
+#include <windows.h>
+#endif
 
 namespace
 {
@@ -535,6 +538,8 @@ MainWindow::MainWindow(
         ? QStringLiteral("LNPlayer - Video")
         : QStringLiteral("LNPlayer - Audio"));
     if (mode_ == PlayerMode::Video)
+        setWindowFlag(Qt::FramelessWindowHint);
+    if (mode_ == PlayerMode::Video)
     {
         QSettings settings(settings_file_path(), QSettings::IniFormat);
         const QByteArray geometry = settings.value(QStringLiteral("Video/Window/Geometry")).toByteArray();
@@ -546,6 +551,12 @@ MainWindow::MainWindow(
 
     setStyleSheet(QStringLiteral(
         "QMainWindow, QDialog { background: #171a20; color: #e8eaf0; }"
+        "QMainWindow { border: 1px solid #343a46; }"
+        "QWidget#windowTitleBar { background: #20242c; border-bottom: 1px solid #343a46; }"
+        "QWidget#windowTitleBar QPushButton { background: transparent; border: 0; "
+        "border-radius: 0; padding: 0; min-width: 42px; max-width: 42px; min-height: 28px; max-height: 28px; }"
+        "QWidget#windowTitleBar QPushButton:hover { background: #343b48; }"
+        "QWidget#windowTitleBar QPushButton#closeWindowButton:hover { background: #c42b1c; }"
         "QWidget { color: #e8eaf0; }"
         "QMenuBar { background: #20242c; border-bottom: 1px solid #343a46; }"
         "QMenuBar::item { padding: 6px 10px; background: transparent; }"
@@ -1075,6 +1086,56 @@ MainWindow::MainWindow(
             menu_widget->setMouseTracking(true);
             menu_widget->installEventFilter(this);
         }
+    }
+
+    if (mode_ == PlayerMode::Video)
+    {
+        auto* menu_host = new QWidget(this);
+        auto* menu_host_layout = new QVBoxLayout(menu_host);
+        menu_host_layout->setContentsMargins(0, 0, 0, 0);
+        menu_host_layout->setSpacing(0);
+        title_bar_ = new QWidget(menu_host);
+        title_bar_->setObjectName(QStringLiteral("windowTitleBar"));
+        title_bar_->setFixedHeight(30);
+        auto* title_layout = new QHBoxLayout(title_bar_);
+        title_layout->setContentsMargins(10, 0, 0, 0);
+        title_layout->setSpacing(0);
+        auto* title_label = new QLabel(windowTitle(), title_bar_);
+        title_label->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+        title_layout->addWidget(title_label, 1);
+        auto* minimize_button = new QPushButton(title_bar_);
+        minimize_button->setIcon(style()->standardIcon(QStyle::SP_TitleBarMinButton));
+        minimize_button->setToolTip(QStringLiteral("最小化"));
+        minimize_button->setAccessibleName(QStringLiteral("最小化"));
+        title_layout->addWidget(minimize_button);
+        auto* maximize_button = new QPushButton(title_bar_);
+        maximize_button->setObjectName(QStringLiteral("maximizeWindowButton"));
+        maximize_button->setIcon(style()->standardIcon(QStyle::SP_TitleBarMaxButton));
+        maximize_button->setToolTip(QStringLiteral("最大化"));
+        maximize_button->setAccessibleName(QStringLiteral("最大化"));
+        title_layout->addWidget(maximize_button);
+        auto* close_button = new QPushButton(title_bar_);
+        close_button->setObjectName(QStringLiteral("closeWindowButton"));
+        close_button->setIcon(style()->standardIcon(QStyle::SP_TitleBarCloseButton));
+        close_button->setToolTip(QStringLiteral("关闭"));
+        close_button->setAccessibleName(QStringLiteral("关闭"));
+        title_layout->addWidget(close_button);
+        connect(minimize_button, &QPushButton::clicked, this, &QWidget::showMinimized);
+        connect(maximize_button, &QPushButton::clicked, this, [this]
+        {
+            if (isMaximized())
+                showNormal();
+            else
+                showMaximized();
+        });
+        connect(close_button, &QPushButton::clicked, this, &QWidget::close);
+        menu_host_layout->addWidget(title_bar_);
+        if (menuBar())
+        {
+            menuBar()->setParent(menu_host);
+            menu_host_layout->addWidget(menuBar());
+        }
+        setMenuWidget(menu_host);
     }
 
     auto* content = new QWidget(this);
@@ -1784,6 +1845,8 @@ MainWindow::MainWindow(
         fullscreen_controls_visible_ = false;
         if (menuBar())
             menuBar()->hide();
+        if (title_bar_)
+            title_bar_->hide();
         if (statusBar())
             statusBar()->hide();
         if (playlist_panel_)
@@ -2326,6 +2389,8 @@ void MainWindow::showFullscreenControls()
     control_panel_->show();
     if (menuBar())
         menuBar()->show();
+    if (title_bar_)
+        title_bar_->show();
     if (statusBar())
         statusBar()->show();
     if (playlist_panel_)
@@ -2347,6 +2412,8 @@ void MainWindow::updateFullscreenUi()
             control_panel_->show();
         if (menuBar())
             menuBar()->show();
+        if (title_bar_)
+            title_bar_->show();
         if (statusBar())
             statusBar()->show();
         if (playlist_panel_)
@@ -2359,6 +2426,8 @@ void MainWindow::updateFullscreenUi()
         control_panel_->show();
     if (menuBar())
         menuBar()->show();
+    if (title_bar_)
+        title_bar_->show();
     if (statusBar())
         statusBar()->show();
     if (playlist_panel_)
