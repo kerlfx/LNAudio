@@ -3342,8 +3342,12 @@ void MainWindow::openVideoSettings()
     // Keep settings as a real top-level window, independent of the custom
     // frameless player window and its native title-bar implementation.
     QDialog dialog(nullptr, Qt::Window);
+    dialog.setObjectName(QStringLiteral("settingsDialog"));
     dialog.setWindowTitle(QStringLiteral("LNPlayer 播放器设置"));
-    dialog.setMinimumSize(820, 600);
+    dialog.setWindowIcon(PlayerIcons::make(PlayerIcons::Name::Settings));
+    dialog.setMinimumSize(900, 620);
+    dialog.resize(980, 700);
+    dialog.setSizeGripEnabled(true);
     auto* root = new QVBoxLayout(&dialog);
     root->setContentsMargins(16, 16, 16, 12);
     root->setSpacing(12);
@@ -3355,7 +3359,8 @@ void MainWindow::openVideoSettings()
     navigation->setSelectionMode(QAbstractItemView::SingleSelection);
     navigation->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     navigation->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-    navigation->setFixedWidth(156);
+    navigation->setFixedWidth(176);
+    navigation->setIconSize(QSize(18, 18));
     navigation->setSpacing(3);
     auto* pages = new QStackedWidget(&dialog);
     pages->setObjectName(QStringLiteral("settingsPages"));
@@ -3366,8 +3371,32 @@ void MainWindow::openVideoSettings()
     auto add_settings_page = [navigation, pages](const QString& title, QWidget* page)
     {
         auto* item = new QListWidgetItem(title, navigation);
-        item->setSizeHint(QSize(136, 38));
+        item->setSizeHint(QSize(156, 42));
+        const PlayerIcons::Name icon =
+            title == QStringLiteral("常规") ? PlayerIcons::Name::General :
+            title == QStringLiteral("播放") ? PlayerIcons::Name::Playback :
+            title == QStringLiteral("界面") ? PlayerIcons::Name::Interface :
+            title == QStringLiteral("视频显示") ? PlayerIcons::Name::Video :
+            title == QStringLiteral("画面滤镜") ? PlayerIcons::Name::Filters :
+            title == QStringLiteral("字幕加载") || title == QStringLiteral("字幕样式")
+                ? PlayerIcons::Name::Subtitles :
+            title == QStringLiteral("快捷键") ? PlayerIcons::Name::Keyboard :
+            title == QStringLiteral("截图") ? PlayerIcons::Name::Screenshot :
+            PlayerIcons::Name::Performance;
+        item->setIcon(PlayerIcons::make(icon));
+        page->setObjectName(QStringLiteral("settingsPage"));
+        if (page->layout())
+            page->layout()->setContentsMargins(12, 12, 12, 12);
+        if (auto* form = page->findChild<QFormLayout*>())
+        {
+            form->setLabelAlignment(Qt::AlignRight | Qt::AlignVCenter);
+            form->setFormAlignment(Qt::AlignTop);
+            form->setHorizontalSpacing(18);
+            form->setVerticalSpacing(13);
+            form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+        }
         auto* scroll = new QScrollArea(pages);
+        scroll->setObjectName(QStringLiteral("settingsPageScroll"));
         scroll->setWidgetResizable(true);
         scroll->setFrameShape(QFrame::NoFrame);
         scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
@@ -3376,12 +3405,42 @@ void MainWindow::openVideoSettings()
     };
     connect(navigation, &QListWidget::currentRowChanged,
         pages, &QStackedWidget::setCurrentIndex);
-    navigation->setStyleSheet(QStringLiteral(
-        "QListWidget { background: #20252d; border: 1px solid #343c49; "
-        "border-radius: 7px; padding: 5px; outline: 0; }"
-        "QListWidget::item { padding: 8px 12px; border-radius: 5px; }"
-        "QListWidget::item:hover { background: #303846; }"
-        "QListWidget::item:selected { background: #345b86; color: #ffffff; }"));
+    dialog.setStyleSheet(QStringLiteral(
+        "QDialog#settingsDialog { background: #171a20; color: #e8eaf0; }"
+        "QWidget { color: #e8eaf0; font-size: 9pt; }"
+        "QLabel { background: transparent; }"
+        "QListWidget#settingsNavigation { background: #20252d; border: 1px solid #343c49; "
+        "border-radius: 8px; padding: 6px; outline: 0; }"
+        "QListWidget#settingsNavigation::item { min-height: 28px; padding: 7px 10px; border-radius: 5px; }"
+        "QListWidget#settingsNavigation::item:hover { background: #303846; }"
+        "QListWidget#settingsNavigation::item:selected { background: #345b86; color: #ffffff; }"
+        "QStackedWidget#settingsPages { background: #1d222a; border: 1px solid #343c49; border-radius: 8px; }"
+        "QScrollArea#settingsPageScroll, QWidget#settingsPage { background: #1d222a; border: 0; }"
+        "QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox, QKeySequenceEdit { "
+        "background: #252b35; color: #e8eaf0; border: 1px solid #414b5a; "
+        "border-radius: 5px; min-height: 28px; padding: 2px 8px; selection-background-color: #345b86; }"
+        "QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus { border-color: #5796d0; }"
+        "QLineEdit:read-only { color: #aab3c0; background: #20252d; }"
+        "QComboBox QAbstractItemView { background: #252b35; color: #e8eaf0; "
+        "selection-background-color: #345b86; border: 1px solid #414b5a; }"
+        "QPushButton { background: #2a303a; border: 1px solid #414957; "
+        "border-radius: 5px; padding: 6px 12px; min-height: 28px; }"
+        "QPushButton:hover { background: #384252; border-color: #566579; }"
+        "QPushButton:pressed { background: #202630; }"
+        "QPushButton:disabled { color: #777f8c; background: #22262d; }"
+        "QCheckBox { spacing: 9px; padding: 4px 0; }"
+        "QCheckBox::indicator { width: 16px; height: 16px; border: 1px solid #596474; "
+        "border-radius: 4px; background: #252b35; }"
+        "QCheckBox::indicator:checked { background: #3979b7; border-color: #65a4df; }"
+        "QSlider::groove:horizontal { height: 4px; background: #424a56; border-radius: 2px; }"
+        "QSlider::handle:horizontal { width: 12px; margin: -5px 0; background: #e4edf7; "
+        "border: 1px solid #6c9bc5; border-radius: 6px; }"
+        "QDialogButtonBox { border-top: 1px solid #343c49; padding-top: 10px; }"
+        "QScrollBar:vertical { width: 10px; background: #1d222a; margin: 2px; }"
+        "QScrollBar::handle:vertical { background: #485363; border-radius: 4px; min-height: 24px; }"
+        "QScrollBar::handle:vertical:hover { background: #607087; }"
+        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }"
+        "QToolTip { background: #252b35; color: #e8eaf0; border: 1px solid #596474; }"));
 
     auto* general_page = new QWidget(pages);
     auto* general_form = new QFormLayout(general_page);
