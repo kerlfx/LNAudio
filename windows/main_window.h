@@ -126,6 +126,7 @@ private:
     void seekToPosition(int64_t position_ms, const QString& message);
     void takeScreenshot();
     void stepVideoFrame(bool backwards = false);
+    void trimVideoFrameHistory();
     void presentHistoricalVideoFrame();
     void setPlaybackRate(float rate);
     void handleCoreEvent(
