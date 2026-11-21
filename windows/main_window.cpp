@@ -2450,31 +2450,69 @@ void MainWindow::showOsd(const QString& message)
     osd_timer_->start(osd_duration_ms_);
 }
 
-void MainWindow::fitWindowToVideoAspect(float aspect_ratio)
+void MainWindow::fitWindowToVideoAspect(
+    float aspect_ratio,
+    const QSize& source_size)
 {
     if (!video_surface_ || aspect_ratio <= 0.0f ||
-        isMaximized() || isFullScreen() || video_surface_->width() <= 0)
+        source_size.width() <= 0 || source_size.height() <= 0 ||
+        isMaximized() || isFullScreen() || video_surface_->width() <= 0 ||
+        video_surface_->height() <= 0)
         return;
 
     QScreen* target_screen = screen();
     if (!target_screen)
         return;
 
-    const int target_surface_height = qRound(
-        static_cast<float>(video_surface_->width()) / aspect_ratio);
-    const int window_height = height() +
-        target_surface_height - video_surface_->height();
-    const QRect available = target_screen->availableGeometry();
-    const int maximum_height = std::max(minimumHeight(), available.height() - 32);
-    const int adjusted_height = std::clamp(
-        window_height, minimumHeight(), maximum_height);
-    if (std::abs(adjusted_height - height()) >= 8)
-        resize(width(), adjusted_height);
+    // Start at the decoded frame's native pixel dimensions. Account for
+    // rotation metadata when the display aspect is portrait/landscape while
+    // the coded frame has the opposite orientation.
+    int target_surface_width = source_size.width();
+    int target_surface_height = source_size.height();
+    const bool source_is_landscape = target_surface_width > target_surface_height;
+    const bool display_is_landscape = aspect_ratio >= 1.0f;
+    if (source_is_landscape != display_is_landscape)
+        std::swap(target_surface_width, target_surface_height);
 
+    // Preserve the display aspect ratio (including sample aspect ratio) while
+    // keeping one dimension at native resolution whenever possible.
+    if (target_surface_width / static_cast<float>(target_surface_height) > aspect_ratio)
+        target_surface_width = qRound(target_surface_height * aspect_ratio);
+    else
+        target_surface_height = qRound(target_surface_width / aspect_ratio);
+
+    const int window_chrome_width = width() - video_surface_->width();
+    const int window_chrome_height = height() - video_surface_->height();
+    const QRect available = target_screen->availableGeometry();
+    const int maximum_window_width = std::max(1, available.width() - 24);
+    const int maximum_window_height = std::max(1, available.height() - 48);
+
+    int target_window_width = target_surface_width + window_chrome_width;
+    int target_window_height = target_surface_height + window_chrome_height;
+
+    // If native size does not fit, scale the video uniformly to the largest
+    // available client area. Never enlarge a smaller source frame.
+    const float scale = std::min({
+        1.0f,
+        maximum_window_width / static_cast<float>(target_window_width),
+        maximum_window_height / static_cast<float>(target_window_height)
+    });
+    target_surface_width = std::max(1, qRound(target_surface_width * scale));
+    target_surface_height = std::max(1, qRound(target_surface_height * scale));
+    target_window_width = target_surface_width + window_chrome_width;
+    target_window_height = target_surface_height + window_chrome_height;
+
+    if (std::abs(target_window_width - width()) >= 8 ||
+        std::abs(target_window_height - height()) >= 8)
+        resize(target_window_width, target_window_height);
+
+    const int maximum_x = available.right() + 1 - target_window_width;
+    const int maximum_y = available.bottom() + 1 - target_window_height;
     QPoint adjusted_position = pos();
-    if (adjusted_position.y() + adjusted_height > available.bottom() + 1)
-        adjusted_position.setY(std::max(
-            available.top(), available.bottom() + 1 - adjusted_height));
+    adjusted_position.setX(std::clamp(
+        adjusted_position.x(), available.left(), std::max(available.left(), maximum_x)));
+    adjusted_position.setY(std::clamp(
+        adjusted_position.y(), available.top(), std::max(available.top(), maximum_y)));
     if (adjusted_position != pos())
         move(adjusted_position);
 }
@@ -4500,7 +4538,7 @@ void MainWindow::requestVideoFrame()
                 video_height_ = hardware_owner ? hardware_height : image.height();
                 if (first_video_frame && display_aspect_ratio > 0.0f)
                 {
-                    fitWindowToVideoAspect(display_aspect_ratio);
+                    fitWindowToVideoAspect(display_aspect_ratio, QSize(video_width_, video_height_));
                     showFullscreenControls();
                 }
                 pending_hardware_frame_owner_ = hardware_owner;
