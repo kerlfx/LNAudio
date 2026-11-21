@@ -3350,7 +3350,7 @@ void MainWindow::openVideoSettings()
     wheel_action->addItem(QStringLiteral("快退/快进 5 秒"), 1);
     wheel_action->addItem(QStringLiteral("缩放画面"), 2);
     wheel_action->setCurrentIndex(wheel_action_);
-    interface_form->addRow(QStringLiteral("全屏控制栏自动隐藏"), hide_delay);
+    interface_form->addRow(QStringLiteral("播放控制栏自动隐藏"), hide_delay);
     interface_form->addRow(QStringLiteral("OSD 显示时长"), osd_duration);
     interface_form->addRow(QStringLiteral("OSD 位置"), osd_position);
     interface_form->addRow(show_playlist);
