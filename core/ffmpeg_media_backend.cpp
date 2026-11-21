@@ -3,6 +3,7 @@
 
 #ifdef _WIN32
 #include "wasapi_audio_output.h"
+#include <d3d11.h>
 #endif
 
 extern "C"
@@ -35,10 +36,6 @@ extern "C"
 #include <thread>
 #include <utility>
 
-#ifdef _WIN32
-#include <d3d11.h>
-#endif
-
 namespace lnplayer
 {
 namespace
@@ -54,15 +51,50 @@ std::string ffmpeg_error(int error)
     return buffer;
 }
 
+const AVPacketSideData* get_stream_side_data(
+    const AVStream* stream, AVPacketSideDataType type)
+{
+    return av_packet_side_data_get(
+        stream->codecpar->coded_side_data,
+        stream->codecpar->nb_coded_side_data,
+        type);
+}
+
+int normalize_rotation(double angle)
+{
+    if (!std::isfinite(angle))
+        return 0;
+    const int nearest = static_cast<int>(std::lround(angle / 90.0)) * 90;
+    if (std::abs(angle - nearest) > 2.0)
+        return 0;
+    int degrees = nearest % 360;
+    if (degrees < 0)
+        degrees += 360;
+    return degrees;
+}
+
+int get_stream_rotation_degrees(const AVStream* stream)
+{
+    const AVPacketSideData* side_data =
+        get_stream_side_data(stream, AV_PKT_DATA_DISPLAYMATRIX);
+    if (side_data && side_data->size >= sizeof(int32_t) * 9)
+        return normalize_rotation(-av_display_rotation_get(
+            reinterpret_cast<const int32_t*>(side_data->data)));
+
+    AVDictionaryEntry* rotate = av_dict_get(stream->metadata, "rotate", nullptr, 0);
+    if (rotate)
+        return normalize_rotation(std::strtod(rotate->value, nullptr));
+    return 0;
+}
+
 void populate_video_hdr_metadata(AVStream* stream, MediaVideoInfo& info)
 {
-    size_t side_data_size = 0;
-    uint8_t* mastering_data = av_stream_get_side_data(
-        stream, AV_PKT_DATA_MASTERING_DISPLAY_METADATA, &side_data_size);
-    if (mastering_data && side_data_size >= sizeof(AVMasteringDisplayMetadata))
+    const AVPacketSideData* mastering_data =
+        get_stream_side_data(stream, AV_PKT_DATA_MASTERING_DISPLAY_METADATA);
+    if (mastering_data && mastering_data->size >= sizeof(AVMasteringDisplayMetadata))
     {
         const auto* mastering =
-            reinterpret_cast<const AVMasteringDisplayMetadata*>(mastering_data);
+            reinterpret_cast<const AVMasteringDisplayMetadata*>(mastering_data->data);
         if (mastering->has_luminance)
         {
             info.mastering_max_luminance =
@@ -72,13 +104,12 @@ void populate_video_hdr_metadata(AVStream* stream, MediaVideoInfo& info)
         }
     }
 
-    side_data_size = 0;
-    uint8_t* content_light_data = av_stream_get_side_data(
-        stream, AV_PKT_DATA_CONTENT_LIGHT_LEVEL, &side_data_size);
-    if (content_light_data && side_data_size >= sizeof(AVContentLightMetadata))
+    const AVPacketSideData* content_light_data =
+        get_stream_side_data(stream, AV_PKT_DATA_CONTENT_LIGHT_LEVEL);
+    if (content_light_data && content_light_data->size >= sizeof(AVContentLightMetadata))
     {
         const auto* content_light =
-            reinterpret_cast<const AVContentLightMetadata*>(content_light_data);
+            reinterpret_cast<const AVContentLightMetadata*>(content_light_data->data);
         info.max_content_light_level = content_light->MaxCLL;
         info.max_frame_average_light_level = content_light->MaxFALL;
     }
@@ -1219,34 +1250,6 @@ private:
         std::vector<BitmapRect> bitmaps;
     };
 
-    static int normalize_rotation(double angle)
-    {
-        if (!std::isfinite(angle))
-            return 0;
-        const int nearest = static_cast<int>(std::lround(angle / 90.0)) * 90;
-        if (std::abs(angle - nearest) > 2.0)
-            return 0;
-        int degrees = nearest % 360;
-        if (degrees < 0)
-            degrees += 360;
-        return degrees;
-    }
-
-    static int get_stream_rotation_degrees(const AVStream* stream)
-    {
-        size_t side_data_size = 0;
-        uint8_t* matrix = av_stream_get_side_data(
-            stream, AV_PKT_DATA_DISPLAYMATRIX, &side_data_size);
-        if (matrix && side_data_size >= sizeof(int32_t) * 9)
-            return normalize_rotation(-av_display_rotation_get(
-                reinterpret_cast<const int32_t*>(matrix)));
-
-        AVDictionaryEntry* rotate = av_dict_get(stream->metadata, "rotate", nullptr, 0);
-        if (rotate)
-            return normalize_rotation(std::strtod(rotate->value, nullptr));
-        return 0;
-    }
-
     int get_frame_rotation_degrees(const AVFrame* frame) const
     {
         const AVFrameSideData* side_data = av_frame_get_side_data(
@@ -1902,11 +1905,14 @@ private:
         }
         else
         {
-            size_t side_data_size = 0;
-            uint8_t* stream_side_data = av_stream_get_side_data(
-                video_stream, AV_PKT_DATA_MASTERING_DISPLAY_METADATA, &side_data_size);
-            if (stream_side_data && side_data_size >= sizeof(AVMasteringDisplayMetadata))
-                mastering = reinterpret_cast<const AVMasteringDisplayMetadata*>(stream_side_data);
+            const AVPacketSideData* stream_side_data =
+                get_stream_side_data(video_stream, AV_PKT_DATA_MASTERING_DISPLAY_METADATA);
+            if (stream_side_data &&
+                stream_side_data->size >= sizeof(AVMasteringDisplayMetadata))
+            {
+                mastering = reinterpret_cast<const AVMasteringDisplayMetadata*>(
+                    stream_side_data->data);
+            }
         }
         if (mastering && mastering->has_luminance)
         {
@@ -1927,11 +1933,14 @@ private:
         }
         else
         {
-            size_t side_data_size = 0;
-            uint8_t* stream_side_data = av_stream_get_side_data(
-                video_stream, AV_PKT_DATA_CONTENT_LIGHT_LEVEL, &side_data_size);
-            if (stream_side_data && side_data_size >= sizeof(AVContentLightMetadata))
-                content_light = reinterpret_cast<const AVContentLightMetadata*>(stream_side_data);
+            const AVPacketSideData* stream_side_data =
+                get_stream_side_data(video_stream, AV_PKT_DATA_CONTENT_LIGHT_LEVEL);
+            if (stream_side_data &&
+                stream_side_data->size >= sizeof(AVContentLightMetadata))
+            {
+                content_light = reinterpret_cast<const AVContentLightMetadata*>(
+                    stream_side_data->data);
+            }
         }
         if (content_light)
         {
