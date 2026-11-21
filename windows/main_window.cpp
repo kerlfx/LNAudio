@@ -466,7 +466,6 @@ MainWindow::MainWindow(
     , seek_slider_(new SeekSlider(this))
     , volume_slider_(new QSlider(Qt::Horizontal, this))
     , play_button_(new QPushButton(QStringLiteral("播放"), this))
-    , pause_button_(new QPushButton(QStringLiteral("暂停"), this))
     , stop_button_(new QPushButton(QStringLiteral("停止"), this))
     , task_tracker_(std::make_shared<UiTaskTracker>())
     , dispatch_executor_(asio::make_strand(UiTaskRuntime::instance().io_context()))
@@ -1910,8 +1909,6 @@ MainWindow::MainWindow(
     };
     set_transport_icon(play_button_, QStyle::SP_MediaPlay,
         QStringLiteral("播放"), QStringLiteral("播放"));
-    set_transport_icon(pause_button_, QStyle::SP_MediaPause,
-        QStringLiteral("暂停"), QStringLiteral("暂停"));
     set_transport_icon(stop_button_, QStyle::SP_MediaStop,
         QStringLiteral("停止"), QStringLiteral("停止"));
     auto* previous_button = new QPushButton(content);
@@ -1922,7 +1919,6 @@ MainWindow::MainWindow(
         QStringLiteral("下一项"), QStringLiteral("下一项"));
 
     control_layout->addWidget(play_button_);
-    pause_button_->hide();
     control_layout->addWidget(previous_button);
     control_layout->addWidget(next_button);
     control_layout->addWidget(stop_button_);
