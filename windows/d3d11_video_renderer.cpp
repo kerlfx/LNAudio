@@ -638,6 +638,13 @@ public:
             video_processor_.Get(), FALSE, &background);
         video_context_->VideoProcessorSetOutputTargetRect(
             video_processor_.Get(), TRUE, &target_rect);
+        // Decoder surfaces may be larger than the visible AVFrame dimensions
+        // because hardware decoders align NV12/P010 allocations. Restrict the
+        // video processor source to the decoded frame, otherwise padding can
+        // be sampled and appear as green bars along an edge.
+        RECT source_rect{0, 0, width, height};
+        video_context_->VideoProcessorSetStreamSourceRect(
+            video_processor_.Get(), 0, TRUE, &source_rect);
         // D3D11's default stream destination rectangle is empty; without
         // setting it explicitly, the video processor writes no stream pixels.
         video_context_->VideoProcessorSetStreamDestRect(
