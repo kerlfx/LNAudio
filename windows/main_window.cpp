@@ -592,10 +592,11 @@ MainWindow::MainWindow(
         "QSlider::sub-page:horizontal { background: #4d91cf; border-radius: 2px; }"
         "QSlider::handle:horizontal { width: 12px; margin: -5px 0; "
         "background: #e4edf7; border: 1px solid #6c9bc5; border-radius: 6px; }"
-        "QWidget#controlPanel { background: rgba(12, 15, 20, 218); border: 1px solid rgba(255,255,255,28); border-radius: 9px; }"
-        "QWidget#controlPanel QPushButton { min-height: 30px; padding: 2px; color: #edf2f8; background: transparent; border: 1px solid transparent; border-radius: 6px; }"
-        "QWidget#controlPanel QPushButton:hover { background: rgba(255,255,255,24); border-color: rgba(255,255,255,35); }"
-        "QWidget#controlPanel QPushButton:pressed { background: rgba(255,255,255,42); }"
+        "QWidget#controlPanel { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgba(54,66,84,205), stop:0.18 rgba(31,40,54,190), stop:1 rgba(18,24,34,205)); border: 1px solid rgba(235,244,255,82); border-top-color: rgba(255,255,255,145); border-radius: 17px; }"
+        "QWidget#controlPanel QPushButton { min-height: 30px; padding: 2px; color: #f0f4fa; background: rgba(255,255,255,5); border: 1px solid transparent; border-radius: 10px; }"
+        "QWidget#controlPanel QPushButton:hover { color: #ffffff; background: rgba(225,239,255,24); border-color: rgba(225,239,255,68); }"
+        "QWidget#controlPanel QPushButton:pressed { background: rgba(160,202,248,42); border-color: rgba(185,218,255,90); }"
+        "QWidget#controlPanel QPushButton:checked { color: #a9d5ff; background: rgba(103,169,231,32); border-color: rgba(151,203,255,72); }"
         "QWidget#controlPanel QPushButton:disabled { color: rgba(220,228,238,90); }"
         "QWidget#controlPanel QPushButton::menu-indicator { image: none; width: 0px; }"
         "QWidget#controlPanel QSlider::groove:horizontal { height: 3px; background: rgba(230,238,248,85); border-radius: 1px; }"
@@ -1159,7 +1160,7 @@ MainWindow::MainWindow(
                 menu_bar_->addAction(action);
             }
         }
-        menu_host_layout->addWidget(menu_bar_);
+        menu_bar_->hide();
         setMenuWidget(menu_host);
         menu_bar_->installEventFilter(this);
         for (QWidget* child : menu_bar_->findChildren<QWidget*>())
@@ -1294,7 +1295,7 @@ MainWindow::MainWindow(
         repeat_button_ = repeat_button;
         shuffle_button->setCheckable(true);
         shuffle_button->setIcon(PlayerIcons::make(PlayerIcons::Name::Shuffle,
-            QColor(QStringLiteral("#8f99a8"))));
+            QColor(QStringLiteral("#b7c4d5"))));
         shuffle_button->setIconSize(QSize(16, 16));
         shuffle_button->setText(QString());
         shuffle_button->setToolTip(QStringLiteral("随机播放：关"));
@@ -1340,7 +1341,7 @@ MainWindow::MainWindow(
             shuffle_enabled_ = enabled;
             resetShuffleOrder();
             shuffle_button->setIcon(PlayerIcons::make(PlayerIcons::Name::Shuffle,
-                enabled ? QColor(QStringLiteral("#d7dde7"))
+                enabled ? QColor(QStringLiteral("#f0f4fa"))
                     : QColor(QStringLiteral("#8f99a8"))));
             shuffle_button->setToolTip(enabled ? QStringLiteral("随机播放：开") : QStringLiteral("随机播放：关"));
             shuffle_button->setAccessibleName(shuffle_button->toolTip());
@@ -1989,6 +1990,38 @@ MainWindow::MainWindow(
                 return action->menu();
         return nullptr;
     };
+    if (mode_ == PlayerMode::Video)
+    {
+        playlist_toggle_button_ = new QPushButton(control_panel_);
+        playlist_toggle_button_->setCheckable(true);
+        playlist_toggle_button_->setChecked(playlist_panel_visible_);
+        playlist_toggle_button_->setIcon(PlayerIcons::make(PlayerIcons::Name::Playlist,
+            playlist_panel_visible_ ? QColor(QStringLiteral("#a9d5ff"))
+                : QColor(QStringLiteral("#dce5f0"))));
+        playlist_toggle_button_->setIconSize(QSize(20, 20));
+        playlist_toggle_button_->setFixedSize(36, 32);
+        playlist_toggle_button_->setToolTip(playlist_panel_visible_
+            ? QStringLiteral("隐藏播放列表") : QStringLiteral("显示播放列表"));
+        playlist_toggle_button_->setAccessibleName(playlist_toggle_button_->toolTip());
+        playlist_toggle_button_->setStyleSheet(QString());
+        connect(playlist_toggle_button_, &QPushButton::clicked, this, [this](bool visible)
+        {
+            if (playlist_visibility_action_)
+                playlist_visibility_action_->setChecked(visible);
+        });
+        connect(playlist_visibility_action_, &QAction::toggled, this, [this](bool visible)
+        {
+            if (!playlist_toggle_button_)
+                return;
+            playlist_toggle_button_->setChecked(visible);
+            playlist_toggle_button_->setIcon(PlayerIcons::make(PlayerIcons::Name::Playlist,
+                visible ? QColor(QStringLiteral("#a9d5ff"))
+                    : QColor(QStringLiteral("#dce5f0"))));
+            playlist_toggle_button_->setToolTip(visible
+                ? QStringLiteral("隐藏播放列表") : QStringLiteral("显示播放列表"));
+            playlist_toggle_button_->setAccessibleName(playlist_toggle_button_->toolTip());
+        });
+    }
     auto* audio_tracks_button = new QPushButton(control_panel_);
     audio_tracks_button->setIcon(PlayerIcons::make(PlayerIcons::Name::AudioTrack));
     audio_tracks_button->setIconSize(QSize(20, 20));
@@ -2008,6 +2041,8 @@ MainWindow::MainWindow(
     if (QMenu* subtitles_menu = find_menu(QStringLiteral("字幕")))
         subtitles_button->setMenu(subtitles_menu);
     control_layout->addStretch(1);
+    if (playlist_toggle_button_)
+        control_layout->addWidget(playlist_toggle_button_);
     control_layout->addWidget(audio_tracks_button);
     control_layout->addWidget(subtitles_button);
     connect(previous_button, &QPushButton::clicked, this, [this] { playPrevious(); });
@@ -2871,7 +2906,7 @@ bool MainWindow::nativeEvent(
         const QPoint position = mapFromGlobal(QCursor::pos());
         if (!isMaximized())
         {
-            constexpr int border = 6;
+            constexpr int border = 9;
             const bool left = position.x() < border;
             const bool right = position.x() >= width() - border;
             const bool top = position.y() < border;
