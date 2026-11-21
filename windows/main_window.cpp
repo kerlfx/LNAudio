@@ -513,8 +513,10 @@ MainWindow::MainWindow(
             settings.value(QStringLiteral("Video/Subtitle/FontSize"), 0).toInt(), 0, 96);
         subtitle_vertical_position_ = std::clamp(
             settings.value(QStringLiteral("Video/Subtitle/VerticalPosition"), 80).toInt(), 60, 80);
-        middle_click_action_ = 2;
-        double_click_action_ = 2;
+        middle_click_action_ = settings.value(
+            QStringLiteral("Video/Mouse/MiddleClickAction"), 2).toInt();
+        double_click_action_ = settings.value(
+            QStringLiteral("Video/Mouse/DoubleClickAction"), 1).toInt();
         wheel_action_ = std::clamp(
             settings.value(QStringLiteral("Video/Mouse/WheelAction"), 0).toInt(), 0, 2);
         mouse_gestures_enabled_ = settings.value(
@@ -1350,8 +1352,20 @@ MainWindow::MainWindow(
         video_surface_->set_interaction_callbacks(
             [this]
             {
-                if (double_click_action_ == 1)
-                    togglePlayback();
+                if (double_click_action_ == 0)
+                {
+                    if (isFullScreen())
+                        showNormal();
+                    else
+                        showFullScreen();
+                }
+                else if (double_click_action_ == 1)
+                {
+                    if (current_media_path_.isEmpty() || !has_video_)
+                        openFile();
+                    else
+                        togglePlayback();
+                }
             },
             [this](int direction, bool control)
             {
@@ -1853,19 +1867,12 @@ MainWindow::MainWindow(
     fullscreen_hide_timer_->setInterval(fullscreen_hide_delay_ms_);
     connect(fullscreen_hide_timer_, &QTimer::timeout, this, [this]
     {
-        if (!isFullScreen() || !control_panel_)
+        if (mode_ != PlayerMode::Video || !control_panel_)
             return;
         control_panel_->hide();
         fullscreen_controls_visible_ = false;
-        if (menu_bar_)
-            menu_bar_->hide();
-        if (title_bar_)
-            title_bar_->hide();
-        if (statusBar())
-            statusBar()->hide();
-        if (playlist_panel_)
-            playlist_panel_->hide();
-        setCursor(Qt::BlankCursor);
+        if (isFullScreen())
+            setCursor(Qt::BlankCursor);
     });
     if (video_surface_)
     {
@@ -2396,20 +2403,23 @@ void MainWindow::showOsd(const QString& message)
 
 void MainWindow::showFullscreenControls()
 {
-    if (!isFullScreen() || !control_panel_)
+    if (mode_ != PlayerMode::Video || !control_panel_)
         return;
 
     unsetCursor();
     control_panel_->show();
-    if (menu_bar_)
-        menu_bar_->show();
-    if (title_bar_)
-        title_bar_->show();
-    if (statusBar())
-        statusBar()->show();
-    if (playlist_panel_)
-        playlist_panel_->setVisible(playlist_panel_visible_);
     fullscreen_controls_visible_ = true;
+    if (isFullScreen())
+    {
+        if (menu_bar_)
+            menu_bar_->hide();
+        if (title_bar_)
+            title_bar_->hide();
+        if (statusBar())
+            statusBar()->hide();
+        if (playlist_panel_)
+            playlist_panel_->hide();
+    }
     if (fullscreen_hide_delay_ms_ > 0)
         fullscreen_hide_timer_->start(fullscreen_hide_delay_ms_);
     else
@@ -2418,9 +2428,9 @@ void MainWindow::showFullscreenControls()
 
 void MainWindow::updateFullscreenUi()
 {
+    fullscreen_hide_timer_->stop();
     if (!isFullScreen())
     {
-        fullscreen_hide_timer_->stop();
         unsetCursor();
         if (control_panel_)
             control_panel_->show();
@@ -2436,17 +2446,18 @@ void MainWindow::updateFullscreenUi()
         return;
     }
 
+    if (menu_bar_)
+        menu_bar_->hide();
+    if (title_bar_)
+        title_bar_->hide();
+    if (statusBar())
+        statusBar()->hide();
+    if (playlist_panel_)
+        playlist_panel_->hide();
     if (control_panel_)
         control_panel_->show();
-    if (menu_bar_)
-        menu_bar_->show();
-    if (title_bar_)
-        title_bar_->show();
-    if (statusBar())
-        statusBar()->show();
-    if (playlist_panel_)
-        playlist_panel_->setVisible(playlist_panel_visible_);
     fullscreen_controls_visible_ = true;
+    unsetCursor();
     if (fullscreen_hide_delay_ms_ > 0)
         fullscreen_hide_timer_->start(fullscreen_hide_delay_ms_);
     else
@@ -2491,7 +2502,7 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event)
         seek_slider_->setToolTip(format_position(duration_ms_ * value / 1000));
     }
 
-    if (isFullScreen())
+    if (mode_ == PlayerMode::Video)
     {
         QWidget* watched_widget = qobject_cast<QWidget*>(watched);
         bool is_menu_widget = qobject_cast<QMenu*>(watched) != nullptr;
@@ -2533,7 +2544,7 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event)
                 unsetCursor();
                 fullscreen_hide_timer_->stop();
             }
-            else
+            else if (watched == video_surface_ || isFullScreen())
             {
                 showFullscreenControls();
             }
