@@ -140,25 +140,30 @@ message(STATUS "[LNPlayer] Checking SQLite ${LNPLAYER_SQLITE_VERSION}...")
 if(NOT EXISTS "${_sqlite_amalgamation_dir}/sqlite3.c"
    AND NOT EXISTS "${_sqlite_source_dir}/sqlite3.c"
    AND NOT EXISTS "${LNPLAYER_SQLITE_ROOT}/sqlite3.c")
-    # SQLite publishes a machine-readable CSV manifest inside download.html.
-    # Resolve both the archive URL and SHA3-256 from that official manifest.
+    # Fetch the official manifest through FetchContent without extracting it.
+    # DOWNLOAD_NO_EXTRACT keeps the HTML file intact; DOWNLOAD_NAME gives it a
+    # deterministic path that can be parsed below.
     set(_sqlite_metadata_dir "${FETCHCONTENT_BASE_DIR}/sqlite-metadata")
-    file(MAKE_DIRECTORY "${_sqlite_metadata_dir}")
-    set(_sqlite_metadata_file "${_sqlite_metadata_dir}/sqlite-download-products.html")
-    message(STATUS "[LNPlayer] Fetching SQLite download metadata from sqlite.org...")
-    file(DOWNLOAD
-        "https://www.sqlite.org/download.html"
-        "${_sqlite_metadata_file}"
-        STATUS _sqlite_metadata_status
-        SHOW_PROGRESS
-        TLS_VERIFY ON
+    set(_sqlite_metadata_download_dir "${_sqlite_metadata_dir}/download")
+    set(_sqlite_metadata_file "${_sqlite_metadata_download_dir}/sqlite-download-products.html")
+    FetchContent_Declare(
+        SQLiteMetadata
+        URL "https://www.sqlite.org/download.html"
+        DOWNLOAD_NO_EXTRACT TRUE
+        DOWNLOAD_DIR "${_sqlite_metadata_download_dir}"
+        DOWNLOAD_NAME sqlite-download-products.html
+        DOWNLOAD_NO_PROGRESS FALSE
+        SOURCE_DIR "${_sqlite_metadata_dir}/source"
+        SOURCE_SUBDIR _lnplayer_metadata_only
     )
-    list(GET _sqlite_metadata_status 0 _sqlite_metadata_result)
-    list(GET _sqlite_metadata_status 1 _sqlite_metadata_message)
-    if(NOT _sqlite_metadata_result EQUAL 0)
+
+    message(STATUS "[LNPlayer] Fetching SQLite download metadata from sqlite.org...")
+    FetchContent_MakeAvailable(SQLiteMetadata)
+    if(NOT EXISTS "${_sqlite_metadata_file}")
         message(FATAL_ERROR
-            "Failed to retrieve SQLite download metadata: ${_sqlite_metadata_message}")
+            "FetchContent did not produce the SQLite metadata file at '${_sqlite_metadata_file}'.")
     endif()
+
 
     file(STRINGS "${_sqlite_metadata_file}" _sqlite_product_rows
         REGEX "^PRODUCT,${_sqlite_version_number},sqlite-amalgamation-${_sqlite_version_number}\\.zip,")
