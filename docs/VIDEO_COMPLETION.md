@@ -1210,3 +1210,11 @@ Windows UI 的正式完成条件统一由 [`docs/WINDOWS_UI_ACCEPTANCE.md`](WIND
 - 全屏和窗口化共用相同的右侧热区交互；视频画布尺寸不因播放列表展开而变化。
 - [ ] Windows 实机验收：确认右侧面板覆盖在 D3D11 视频画面上方、不会改变窗口尺寸/视频布局、列表拖放和按钮可正常操作。
 - [ ] 尚未执行 Windows/MSVC 构建、CTest 或 CI。
+
+
+### 2026-11-22 — MainWindow 实现拆分
+
+- [x] 将窗口事件、播放列表、设置、字幕、视频帧和播放状态实现迁移至独立 `.cpp` 文件；保留 `MainWindow` 类及成员状态，未主动改变播放逻辑。
+- [x] 新增源文件由现有 `aux_source_directory()` 自动收集。
+- [ ] Windows/MSVC 构建与运行回归尚未执行。
+- [ ] `0xC00000FD` 尚无异常现场调用堆栈，根因未确认。Matroska 未知 Attachment、字幕字体回退、Opus 时间戳提示暂不能认定为崩溃原因。
