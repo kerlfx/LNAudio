@@ -592,7 +592,7 @@ MainWindow::MainWindow(
         "QSlider::sub-page:horizontal { background: #4d91cf; border-radius: 2px; }"
         "QSlider::handle:horizontal { width: 12px; margin: -5px 0; "
         "background: #e4edf7; border: 1px solid #6c9bc5; border-radius: 6px; }"
-        "QWidget#controlPanel { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgba(54,66,84,205), stop:0.18 rgba(31,40,54,190), stop:1 rgba(18,24,34,205)); border: 1px solid rgba(235,244,255,82); border-top-color: rgba(255,255,255,145); border-radius: 17px; }"
+        "QWidget#controlPanel { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #364254, stop:0.18 #1f2836, stop:1 #121822); border: 1px solid #536174; border-top-color: #8999ad; border-radius: 17px; }"
         "QWidget#controlPanel QPushButton { min-height: 30px; padding: 2px; color: #f0f4fa; background: rgba(255,255,255,5); border: 1px solid transparent; border-radius: 10px; }"
         "QWidget#controlPanel QPushButton:hover { color: #ffffff; background: rgba(225,239,255,24); border-color: rgba(225,239,255,68); }"
         "QWidget#controlPanel QPushButton:pressed { background: rgba(160,202,248,42); border-color: rgba(185,218,255,90); }"
@@ -1921,9 +1921,11 @@ MainWindow::MainWindow(
     volume_slider_->setMaximumWidth(160);
 
     control_panel_ = new QWidget(content);
+    // Keep the controls as a native child so they remain above the D3D11
+    // video HWND. Avoid per-pixel transparency on this native overlay: it
+    // introduces an extra composition path and can flicker during playback.
     control_panel_->setAttribute(Qt::WA_NativeWindow);
-    control_panel_->setAttribute(Qt::WA_TranslucentBackground);
-    control_panel_->setAutoFillBackground(false);
+    control_panel_->setAutoFillBackground(true);
     control_panel_->setObjectName(QStringLiteral("controlPanel"));
     control_panel_->setMouseTracking(true);
     auto* control_panel_layout = new QVBoxLayout(control_panel_);
