@@ -17,9 +17,23 @@ Version changes must update the CMake pins and this document together.
 
 | Dependency | Pinned version | Variant | Acquisition / verification |
 |---|---:|---|---|
-| Standalone Asio | 1.38.2 | Header-only, standalone | Shallow Git tag `asio-1-38-2` via FetchContent |
+| Standalone Asio | 1.38.2 | Header-only, standalone | SourceForge release archive; SHA-256 verified by FetchContent |
 | FFmpeg | 8.1.2 | Windows MSVC x64, shared, LGPL | System233 prebuilt release; SHA-256 checked by FetchContent |
 | SQLite | 3.54.1 | Generated amalgamation | Shallow Git checkout of official `sqlite/sqlite` tag; generated with upstream build rules |
+
+### Asio source archive
+
+Standalone Asio 1.38.2 is downloaded from the Asio project files hosted on
+SourceForge, maintained by the upstream project author. The source archive is
+4.7 MB and avoids transferring Git objects and repository metadata. FetchContent
+verifies the archive with this SHA-256 before extraction:
+
+`4893ad026013d1f64bf111c606e6abd857bb953823a4744e449969f1063fd9ce`
+
+The extracted header tree is stored under
+`3rd_cache/asio/1.38.2-archive`; the include directory is its `include`
+subdirectory. The previous Git checkout location is deliberately not reused,
+so an interrupted clone cannot be mistaken for a populated archive.
 
 ### FFmpeg version policy
 
@@ -89,7 +103,7 @@ By default, FetchContent source trees and download metadata live under:
 
 The individual SDK/source roots are:
 
-- `3rd_cache/asio/1.38.2`
+- `3rd_cache/asio/1.38.2-archive`
 - `3rd_cache/ffmpeg`
 - `3rd_cache/sqlite/source-3.54.1`
 
