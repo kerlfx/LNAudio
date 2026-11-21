@@ -1148,6 +1148,7 @@ MainWindow::MainWindow(
         playlist_widget_ = new QListWidget(content);
         playlist_widget_->setItemDelegate(new PlaylistItemDelegate(playlist_widget_));
         playlist_widget_->setMinimumWidth(210);
+        playlist_widget_->setStyleSheet(QStringLiteral("QListWidget::item { padding: 1px 3px; }"));
         playlist_widget_->setDragDropMode(QAbstractItemView::InternalMove);
         playlist_widget_->setDropIndicatorShown(true);
         playlist_widget_->setAcceptDrops(true);
@@ -1172,7 +1173,6 @@ MainWindow::MainWindow(
             button->setMinimumHeight(24);
             button->setMaximumHeight(26);
             button->setMinimumWidth(0);
-            button->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
             button->setStyleSheet(QStringLiteral("QPushButton { padding: 2px 3px; border-radius: 3px; }"));
             playlist_actions->addWidget(button, 1);
             button->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
@@ -1182,7 +1182,6 @@ MainWindow::MainWindow(
         shuffle_button_ = shuffle_button;
         repeat_button_ = repeat_button;
         shuffle_button->setCheckable(true);
-        playlist_actions->addStretch(0);
         playlist_panel_layout->addLayout(playlist_actions);
         auto* playback_modes = new QHBoxLayout();
         playback_modes->setSpacing(3);
@@ -3090,8 +3089,8 @@ void MainWindow::openVideoSettings()
     interface_form->addRow(QStringLiteral("OSD 位置"), osd_position);
     interface_form->addRow(show_playlist);
     interface_form->addRow(always_on_top);
-    interface_form->addRow(QStringLiteral("画面中键操作"), middle_click);
-    interface_form->addRow(QStringLiteral("画面双击操作"), double_click);
+    interface_form->addRow(QStringLiteral("画面中键操作（固定为切换全屏）"), middle_click);
+    interface_form->addRow(QStringLiteral("画面双击操作（固定为无动作）"), double_click);
     interface_form->addRow(QStringLiteral("鼠标滚轮操作"), wheel_action);
     interface_form->addRow(mouse_gestures);
     add_settings_page(QStringLiteral("界面"), interface_page);
