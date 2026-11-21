@@ -62,6 +62,7 @@ protected:
     void changeEvent(QEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
     void moveEvent(QMoveEvent* event) override;
+    bool nativeEvent(const QByteArray& event_type, void* message, qintptr* result) override;
 
 private:
     struct VideoFrameHistoryEntry
@@ -212,6 +213,7 @@ private:
     QDialog* playlist_dialog_ = nullptr;
     VideoSurface* video_surface_ = nullptr;
     QWidget* control_panel_ = nullptr;
+    QWidget* title_bar_ = nullptr;
     QLabel* osd_label_ = nullptr;
     QLabel* empty_state_label_ = nullptr;
     QWidget* playlist_panel_ = nullptr;
