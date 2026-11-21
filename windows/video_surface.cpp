@@ -149,6 +149,35 @@ float VideoSurface::zoom() const
     return zoom_;
 }
 
+QRect VideoSurface::display_rect() const
+{
+    if (width() <= 0 || height() <= 0)
+        return {};
+
+    float display_aspect = aspect_ratio_ > 0.0f
+        ? aspect_ratio_ : source_aspect_ratio_;
+    if (display_aspect <= 0.0f)
+    {
+        std::lock_guard<std::mutex> lock(frame_mutex_);
+        if (!frame_.isNull())
+            display_aspect = frame_.width() / static_cast<float>(frame_.height());
+    }
+    if (display_aspect <= 0.0f || stretch_)
+        return rect();
+
+    const QSize fitted = QSize(
+        qRound(height() * display_aspect), height()).scaled(
+            size(), Qt::KeepAspectRatio);
+    const QSize zoomed(
+        qRound(fitted.width() * zoom_),
+        qRound(fitted.height() * zoom_));
+    return QRect(
+        (width() - zoomed.width()) / 2,
+        (height() - zoomed.height()) / 2,
+        zoomed.width(),
+        zoomed.height()).intersected(rect());
+}
+
 void VideoSurface::set_source_aspect_ratio(float ratio)
 {
     source_aspect_ratio_ = ratio;
