@@ -23,7 +23,7 @@ public:
 
     asio::io_context& io_context();
     asio::thread_pool& thread_pool();
-    bool running_in_io_thread() const;
+    bool running_in_io_thread();
     bool open_music_library(std::string& error);
     MusicLibrary& music_library();
     void shutdown();
