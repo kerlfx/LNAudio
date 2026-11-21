@@ -101,7 +101,36 @@
 
 namespace
 {
- format_position(int64_t position_ms)
+QString application_data_directory()
+{
+    static const QString directory = []
+    {
+        const QString application_directory = QCoreApplication::applicationDirPath();
+        const QString portable_directory = QDir(application_directory).filePath(
+            QStringLiteral("Data"));
+        if (QDir().mkpath(portable_directory))
+        {
+            QFile write_probe(QDir(portable_directory).filePath(
+                QStringLiteral(".write_test")));
+            if (write_probe.open(QIODevice::WriteOnly | QIODevice::Truncate))
+            {
+                write_probe.close();
+                QFile::remove(write_probe.fileName());
+                return portable_directory;
+            }
+        }
+
+        const QString local_directory = QStandardPaths::writableLocation(
+            QStandardPaths::AppLocalDataLocation);
+        const QString fallback_directory = QDir(local_directory).filePath(
+            QStringLiteral("Data"));
+        QDir().mkpath(fallback_directory);
+        return fallback_directory;
+    }();
+    return directory;
+}
+
+QString format_position(int64_t position_ms)
 {
     const int64_t total_seconds = position_ms < 0 ? 0 : position_ms / 1000;
     const int64_t hours = total_seconds / 3600;
@@ -119,7 +148,7 @@ namespace
         .arg(seconds, 2, 10, QLatin1Char('0'));
 }
 
- settings_file_path()
+QString settings_file_path()
 {
     return QDir(application_data_directory()).filePath(
         QStringLiteral("settings.ini"));
@@ -182,7 +211,7 @@ public:
     }
 };
 
- create_playlist_header(QWidget* parent)
+QWidget* create_playlist_header(QWidget* parent)
 {
     auto* header = new QWidget(parent);
     auto* layout = new QHBoxLayout(header);
@@ -196,7 +225,7 @@ public:
     return header;
 }
 
- expand_media_urls(
+QStringList expand_media_urls(
     const QList<QUrl>& urls,
     const std::shared_ptr<UiTaskTracker>& tracker)
 {

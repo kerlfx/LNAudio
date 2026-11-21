@@ -101,7 +101,7 @@
 
 namespace
 {
- application_data_directory()
+QString application_data_directory()
 {
     static const QString directory = []
     {
@@ -130,7 +130,7 @@ namespace
     return directory;
 }
 
- settings_file_path()
+QString settings_file_path()
 {
     return QDir(application_data_directory()).filePath(
         QStringLiteral("settings.ini"));

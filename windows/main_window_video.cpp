@@ -101,7 +101,7 @@
 
 namespace
 {
- format_position(int64_t position_ms)
+QString format_position(int64_t position_ms)
 {
     const int64_t total_seconds = position_ms < 0 ? 0 : position_ms / 1000;
     const int64_t hours = total_seconds / 3600;
@@ -119,7 +119,7 @@ namespace
         .arg(seconds, 2, 10, QLatin1Char('0'));
 }
 
- application_data_directory()
+QString application_data_directory()
 {
     static const QString directory = []
     {
@@ -148,13 +148,13 @@ namespace
     return directory;
 }
 
- settings_file_path()
+QString settings_file_path()
 {
     return QDir(application_data_directory()).filePath(
         QStringLiteral("settings.ini"));
 }
 
- draw_subtitle_text(
+void draw_subtitle_text(
     QImage& image,
     const QString& subtitle,
     const QString& font_family,
@@ -194,7 +194,7 @@ namespace
         subtitle);
 }
 
- draw_subtitle_bitmap(QImage& image, const QImage& bitmap, bool fit_aspect, float aspect)
+void draw_subtitle_bitmap(QImage& image, const QImage& bitmap, bool fit_aspect, float aspect)
 {
     if (image.isNull() || bitmap.isNull())
         return;

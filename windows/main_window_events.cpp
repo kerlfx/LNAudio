@@ -101,7 +101,7 @@
 
 namespace
 {
- format_position(int64_t position_ms)
+QString format_position(int64_t position_ms)
 {
     const int64_t total_seconds = position_ms < 0 ? 0 : position_ms / 1000;
     const int64_t hours = total_seconds / 3600;

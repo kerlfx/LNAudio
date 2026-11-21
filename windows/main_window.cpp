@@ -2589,16 +2589,3 @@ void MainWindow::refreshLibrary()
     });
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
