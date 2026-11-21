@@ -1655,6 +1655,9 @@ MainWindow::MainWindow(
             grayscale->setChecked(video_grayscale_);
             QAction* filter_reset = filter_menu->addAction(QStringLiteral("重置滤镜"));
 
+            menu.addSeparator();
+            QAction* settings_action = menu.addAction(QStringLiteral("播放器设置..."));
+
             QAction* selected = menu.exec(video_surface_->mapToGlobal(point));
             if (selected == play_pause)
                 togglePlayback();
@@ -1815,6 +1818,8 @@ MainWindow::MainWindow(
                 requestVideoFrame();
                 statusBar()->showMessage(QStringLiteral("视频滤镜已更新"));
             }
+            else if (selected == settings_action)
+                openVideoSettings();
         });
         auto* video_splitter = new QSplitter(Qt::Horizontal, content);
         video_splitter->setObjectName(QStringLiteral("videoSplitter"));
