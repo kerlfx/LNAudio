@@ -1932,7 +1932,9 @@ MainWindow::MainWindow(
     control_layout->addSpacing(6);
     const auto find_menu = [this](const QString& title) -> QMenu*
     {
-        for (QAction* action : menuBar()->actions())
+        if (!menu_bar_)
+            return nullptr;
+        for (QAction* action : menu_bar_->actions())
             if (action->text() == title)
                 return action->menu();
         return nullptr;
