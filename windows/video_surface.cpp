@@ -16,6 +16,7 @@
 #include <QResizeEvent>
 #include <QWheelEvent>
 #include <QApplication>
+#include <QCursor>
 
 #include <algorithm>
 #include <utility>
