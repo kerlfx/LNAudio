@@ -56,4 +56,15 @@ qt_generate_deploy_app_script(
     TARGET LNPlayerApp
     OUTPUT_SCRIPT LNPLAYER_QT_DEPLOY_SCRIPT
 )
+
+# The generated Qt deployment script is also used after linking so the build
+# directory is directly runnable from the IDE, not only after installation.
+add_custom_command(TARGET LNPlayerApp POST_BUILD
+    COMMAND "${CMAKE_COMMAND}"
+        "-DQT_DEPLOY_PREFIX=$<TARGET_FILE_DIR:LNPlayerApp>"
+        "-DQT_DEPLOY_BIN_DIR=."
+        -P "${LNPLAYER_QT_DEPLOY_SCRIPT}"
+    VERBATIM
+)
+
 install(SCRIPT "${LNPLAYER_QT_DEPLOY_SCRIPT}")
