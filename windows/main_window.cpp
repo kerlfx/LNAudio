@@ -1075,12 +1075,11 @@ MainWindow::MainWindow(
         connect(playlist_visibility_action_, &QAction::toggled, this, [this](bool visible)
         {
             playlist_panel_visible_ = visible;
-            if (playlist_panel_)
-                playlist_panel_->setVisible(visible);
+            if (playlist_panel_ && !visible)
+                playlist_panel_->hide();
             QSettings settings(settings_file_path(), QSettings::IniFormat);
             settings.setValue(QStringLiteral("Video/UI/PlaylistVisible"), visible);
             settings.sync();
-            if (visible && isFullScreen())
         });
         auto* clear_playlist_action = playlist_menu->addAction(QStringLiteral("清空播放列表"));
         connect(clear_playlist_action, &QAction::triggered, this, [this]
@@ -1267,7 +1266,13 @@ MainWindow::MainWindow(
         playlist_widget_->setSelectionMode(QAbstractItemView::ExtendedSelection);
         playlist_widget_->setContextMenuPolicy(Qt::CustomContextMenu);
         playlist_widget_->setDefaultDropAction(Qt::MoveAction);
-        playlist_panel_ = new QWidget(content);
+        playlist_panel_ = new QWidget(video_surface_);
+        playlist_panel_->setAttribute(Qt::WA_NativeWindow);
+        playlist_panel_->setAutoFillBackground(true);
+        playlist_panel_->setFixedWidth(320);
+        playlist_panel_->setStyleSheet(QStringLiteral(
+            "QWidget { background: #171d27; border-left: 1px solid #354253; }"));
+        playlist_panel_->hide();
         auto* playlist_panel_layout = new QVBoxLayout(playlist_panel_);
         playlist_panel_layout->setContentsMargins(0, 0, 0, 0);
         playlist_panel_layout->setSpacing(3);
@@ -1855,33 +1860,10 @@ MainWindow::MainWindow(
             else if (selected == settings_action)
                 openVideoSettings();
         });
-        auto* video_splitter = new QSplitter(Qt::Horizontal, content);
-        video_splitter->setObjectName(QStringLiteral("videoSplitter"));
-        video_splitter->setChildrenCollapsible(false);
-        video_splitter->setHandleWidth(5);
-        video_splitter->addWidget(video_surface_);
-        video_splitter->addWidget(playlist_panel_);
-        video_splitter->setStretchFactor(0, 1);
-        video_splitter->setStretchFactor(1, 0);
-        {
-            QSettings settings(settings_file_path(), QSettings::IniFormat);
-            const QByteArray saved_splitter_state = settings.value(
-                QStringLiteral("Video/UI/PlaylistSplitterState")).toByteArray();
-            if (saved_splitter_state.isEmpty() || !video_splitter->restoreState(saved_splitter_state))
-                video_splitter->setSizes({700, 280});
-            connect(video_splitter, &QSplitter::splitterMoved, this,
-                [video_splitter]
-                {
-                    QSettings settings(settings_file_path(), QSettings::IniFormat);
-                    settings.setValue(
-                        QStringLiteral("Video/UI/PlaylistSplitterState"),
-                        video_splitter->saveState());
-                });
-        }
-        playlist_panel_->setMinimumWidth(220);
-        playlist_panel_->setMaximumWidth(380);
-        playlist_panel_->setVisible(playlist_panel_visible_);
-        layout->addWidget(video_splitter, 1);
+        layout->addWidget(video_surface_, 1);
+        playlist_panel_->setGeometry(
+            std::max(0, video_surface_->width() - playlist_panel_->width()),
+            0, playlist_panel_->width(), video_surface_->height());
     }
     else
     {
@@ -2114,6 +2096,8 @@ MainWindow::MainWindow(
             return;
         if (title_bar_)
             title_bar_->hide();
+        if (playlist_panel_)
+            playlist_panel_->hide();
         if (isFullScreen())
             setCursor(Qt::BlankCursor);
     });
@@ -2707,8 +2691,6 @@ void MainWindow::updateFullscreenUi()
             title_bar_->hide();
         if (statusBar())
             statusBar()->hide();
-        if (playlist_panel_)
-            playlist_panel_->hide();
     }
     else
     {
@@ -2717,8 +2699,6 @@ void MainWindow::updateFullscreenUi()
             title_bar_->hide();
         if (statusBar())
             statusBar()->setVisible(mode_ == PlayerMode::Audio);
-        if (playlist_panel_)
-            playlist_panel_->setVisible(playlist_panel_visible_);
     }
 
     if (title_bar_)
@@ -2816,10 +2796,18 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event)
                         title_bar_->sizeHint().height());
                     title_bar_->show();
                     title_bar_->raise();
-                    if (fullscreen_hide_delay_ms_ > 0)
-                        fullscreen_hide_timer_->start(fullscreen_hide_delay_ms_);
-                    else
-                        fullscreen_hide_timer_->stop();
+                    fullscreen_hide_timer_->start(fullscreen_hide_delay_ms_);
+                }
+                else if (playlist_panel_visible_ && playlist_panel_ &&
+                    position.x() >= video_surface_->width() - edge_height)
+                {
+                    unsetCursor();
+                    playlist_panel_->setGeometry(
+                        std::max(0, video_surface_->width() - playlist_panel_->width()),
+                        0, playlist_panel_->width(), video_surface_->height());
+                    playlist_panel_->show();
+                    playlist_panel_->raise();
+                    fullscreen_hide_timer_->start(fullscreen_hide_delay_ms_);
                 }
             }
         }
@@ -2880,6 +2868,13 @@ void MainWindow::resizeEvent(QResizeEvent* event)
     QMainWindow::resizeEvent(event);
     if (mode_ == PlayerMode::Video)
     {
+        if (playlist_panel_ && playlist_panel_->isVisible())
+        {
+            playlist_panel_->setGeometry(
+                std::max(0, video_surface_->width() - playlist_panel_->width()),
+                0, playlist_panel_->width(), video_surface_->height());
+            playlist_panel_->raise();
+        }
         if (title_bar_)
         {
             title_bar_->setGeometry(0, 0, centralWidget()->width(),
