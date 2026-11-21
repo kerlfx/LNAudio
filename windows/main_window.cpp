@@ -1856,6 +1856,7 @@ MainWindow::MainWindow(
     seek_layout->addWidget(position_label_);
     seek_layout->addWidget(seek_slider_, 1);
     control_panel_ = new QWidget(content);
+    control_panel_->setAttribute(Qt::WA_NativeWindow);
     control_panel_->setObjectName(QStringLiteral("controlPanel"));
     auto* control_panel_layout = new QVBoxLayout(control_panel_);
     control_panel_layout->setContentsMargins(6, 4, 6, 3);
