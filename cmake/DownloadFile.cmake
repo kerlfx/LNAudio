@@ -38,6 +38,33 @@ if(EXISTS "${OUTPUT_FILE}")
     file(REMOVE "${OUTPUT_FILE}")
 endif()
 set(_partial_file "${OUTPUT_FILE}.part")
+
+# Recover the case where the transfer completed but CMake was interrupted
+# before the verified temporary file could be promoted to its final name.
+if(EXISTS "${_partial_file}")
+    set(_partial_valid FALSE)
+    if(DEFINED EXPECTED_SHA256 AND NOT "${EXPECTED_SHA256}" STREQUAL "")
+        file(SHA256 "${_partial_file}" _partial_hash)
+        string(TOLOWER "${EXPECTED_SHA256}" _expected_partial_hash)
+        string(TOLOWER "${_partial_hash}" _partial_hash)
+        if(_partial_hash STREQUAL _expected_partial_hash)
+            set(_partial_valid TRUE)
+        endif()
+    elseif(DEFINED EXPECTED_SHA3_256 AND NOT "${EXPECTED_SHA3_256}" STREQUAL "")
+        file(SHA3_256 "${_partial_file}" _partial_hash)
+        string(TOLOWER "${EXPECTED_SHA3_256}" _expected_partial_hash)
+        string(TOLOWER "${_partial_hash}" _partial_hash)
+        if(_partial_hash STREQUAL _expected_partial_hash)
+            set(_partial_valid TRUE)
+        endif()
+    endif()
+    if(_partial_valid)
+        file(RENAME "${_partial_file}" "${OUTPUT_FILE}")
+        message(STATUS "[LNPlayer] Recovered completed archive: ${OUTPUT_FILE}")
+        return()
+    endif()
+endif()
+
 set(_download_complete FALSE)
 set(_resume TRUE)
 
@@ -51,12 +78,11 @@ foreach(_attempt RANGE 1 5)
     message(STATUS "[LNPlayer] Download attempt ${_attempt}/5: ${URL}")
     execute_process(
         COMMAND "${CURL_EXECUTABLE}"
-            --location --fail --silent --show-error
+            --location --fail --show-error --progress-bar
             --connect-timeout 30
             ${_resume_args}
             --output "${_partial_file}" "${URL}"
         RESULT_VARIABLE _curl_result
-        ERROR_VARIABLE _curl_error
     )
 
     if(_curl_result EQUAL 0)
@@ -70,7 +96,7 @@ foreach(_attempt RANGE 1 5)
         set(_resume FALSE)
     else()
         message(WARNING
-            "[LNPlayer] Download attempt ${_attempt} failed (curl ${_curl_result}): ${_curl_error}")
+            "[LNPlayer] Download attempt ${_attempt} failed (curl ${_curl_result}).")
     endif()
 
     if(_attempt LESS 5)
