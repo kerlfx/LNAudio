@@ -2644,8 +2644,7 @@ void MainWindow::showFullscreenControls()
 
     unsetCursor();
     control_panel_->show();
-    if (isFullScreen())
-        positionFullscreenControls();
+    positionFullscreenControls();
     fullscreen_controls_visible_ = true;
     if (isFullScreen())
     {
@@ -2766,8 +2765,7 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event)
         if (watched == video_surface_ && event->type() == QEvent::Resize &&
             osd_label_ && osd_label_->isVisible())
             positionOsd();
-        if (watched == video_surface_ && event->type() == QEvent::Resize &&
-            control_panel_overlay_)
+        if (watched == video_surface_ && event->type() == QEvent::Resize)
             positionFullscreenControls();
         if (event->type() == QEvent::Show && is_menu_widget)
         {
@@ -2844,6 +2842,8 @@ void MainWindow::changeEvent(QEvent* event)
 void MainWindow::resizeEvent(QResizeEvent* event)
 {
     QMainWindow::resizeEvent(event);
+    if (mode_ == PlayerMode::Video)
+        positionFullscreenControls();
     if (!isFullScreen() && !isMinimized())
         normal_geometry_ = saveGeometry();
 }
