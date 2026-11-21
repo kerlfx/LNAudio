@@ -1164,3 +1164,14 @@ Windows UI 的正式完成条件统一由 [`docs/WINDOWS_UI_ACCEPTANCE.md`](WIND
 - 尚未执行 Windows/MSVC 构建、CTest 或 CI；D3D11 子窗口层级、透明混合、菜单入口完整性和高 DPI 行为均待实机验收。
 - 隐藏菜单栏后，将打开文件和打开文件夹入口迁移到视频画面右键菜单，并更新空白画布提示。
 - 视频内容四周增加 12px 缩放留白，减少 D3D11 原生子窗口对窗口边缘命中区域的遮挡；四边与四角仍需 Windows 实机验证。
+
+
+### 2026-11-22 — D3D11 视频原生窗口边缘缩放转发
+
+- VideoSurface 原生 HWND 使用 `SetWindowSubclass` 接收 `WM_NCHITTEST`。
+- 鼠标位于顶层窗口客户区四边/四角 12px 范围时返回 `HTTRANSPARENT`，让同线程顶层窗口继续执行现有的 `WM_NCHITTEST`，由 MainWindow 返回对应的 Windows resize hit-test code。
+- 最大化和全屏状态不触发边缘转发；非边缘区域保持原有视频交互。
+- 析构和 `WM_NCDESTROY` 路径均移除子类化回调；Windows Common Controls 依赖通过 `comctl32` 链接。
+- 视频布局保持零边距，不再使用 12px 外部 padding 规避原生 HWND 命中区域。
+- [ ] Windows 实机逐边/逐角验证，覆盖 100%/150%/200% DPI、最大化、全屏、播放列表显隐和视频交互。
+- [ ] Windows/MSVC 构建尚未执行；本次未运行 CTest 或 CI。
