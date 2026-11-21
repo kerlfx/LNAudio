@@ -341,26 +341,27 @@ public:
         painter->save();
         painter->setPen(text_color);
         const QFontMetrics metrics(item_option.font);
-        const int metadata_height = std::max(14, metrics.height());
-        const QRect title_rect(
-            text_rect.left(), text_rect.top(),
-            text_rect.width(), text_rect.height() - metadata_height);
-        painter->drawText(title_rect, Qt::AlignVCenter | Qt::AlignLeft,
-            metrics.elidedText(title, Qt::ElideRight, title_rect.width()));
-
-        QFont metadata_font = item_option.font;
-        metadata_font.setPointSize(std::max(8, metadata_font.pointSize() - 1));
-        painter->setFont(metadata_font);
-        painter->setPen(item_option.palette.color(QPalette::Mid));
-        const QFontMetrics metadata_metrics(metadata_font);
         const QString duration = index.data(Qt::UserRole + 1).toString();
         const QString resolution = index.data(Qt::UserRole + 2).toString();
-        const QString metadata = QStringLiteral("%1    %2").arg(duration, resolution);
+        const QString metadata = QStringLiteral("%1  %2").arg(duration, resolution);
+        QFont metadata_font = item_option.font;
+        metadata_font.setPointSize(std::max(8, metadata_font.pointSize() - 1));
+        const QFontMetrics metadata_metrics(metadata_font);
+        const int metadata_width = std::min(
+            text_rect.width() / 2,
+            metadata_metrics.horizontalAdvance(metadata) + 8);
+        const QRect title_rect(
+            text_rect.left(), text_rect.top(),
+            text_rect.width() - metadata_width, text_rect.height());
         const QRect metadata_rect(
-            text_rect.left(), title_rect.bottom(),
-            text_rect.width(), metadata_height);
-        painter->drawText(metadata_rect, Qt::AlignVCenter | Qt::AlignLeft,
-            metadata_metrics.elidedText(metadata, Qt::ElideRight, metadata_rect.width()));
+            title_rect.right() + 4, text_rect.top(),
+            metadata_width, text_rect.height());
+        painter->drawText(title_rect, Qt::AlignVCenter | Qt::AlignLeft,
+            metrics.elidedText(title, Qt::ElideRight, title_rect.width()));
+        painter->setFont(metadata_font);
+        painter->setPen(item_option.palette.color(QPalette::Mid));
+        painter->drawText(metadata_rect, Qt::AlignVCenter | Qt::AlignRight,
+            metadata_metrics.elidedText(metadata, Qt::ElideLeft, metadata_rect.width()));
         painter->restore();
     }
 
@@ -368,7 +369,7 @@ public:
         const QModelIndex& index) const override
     {
         QSize size = QStyledItemDelegate::sizeHint(option, index);
-        size.setHeight(std::max(size.height(), 46));
+        size.setHeight(std::max(size.height(), 32));
         return size;
     }
 };
@@ -377,7 +378,7 @@ QWidget* create_playlist_header(QWidget* parent)
 {
     auto* header = new QWidget(parent);
     auto* layout = new QHBoxLayout(header);
-    layout->setContentsMargins(8, 5, 8, 5);
+    layout->setContentsMargins(6, 2, 6, 2);
     auto* title = new QLabel(QStringLiteral("文件名"), header);
     auto* metadata = new QLabel(QStringLiteral("时长  ·  分辨率"), header);
     metadata->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
@@ -510,9 +511,9 @@ MainWindow::MainWindow(
         subtitle_vertical_position_ = std::clamp(
             settings.value(QStringLiteral("Video/Subtitle/VerticalPosition"), 80).toInt(), 60, 80);
         middle_click_action_ = std::clamp(
-            settings.value(QStringLiteral("Video/Mouse/MiddleClickAction"), 1).toInt(), 0, 2);
+            settings.value(QStringLiteral("Video/Mouse/MiddleClickAction"), 2).toInt(), 0, 2);
         double_click_action_ = std::clamp(
-            settings.value(QStringLiteral("Video/Mouse/DoubleClickAction"), 0).toInt(), 0, 2);
+            settings.value(QStringLiteral("Video/Mouse/DoubleClickAction"), 2).toInt(), 0, 2);
         wheel_action_ = std::clamp(
             settings.value(QStringLiteral("Video/Mouse/WheelAction"), 0).toInt(), 0, 2);
         mouse_gestures_enabled_ = settings.value(
@@ -1148,7 +1149,7 @@ MainWindow::MainWindow(
             video_hue_degrees_, video_sharpness_, video_denoise_, video_grayscale_);
         playlist_widget_ = new QListWidget(content);
         playlist_widget_->setItemDelegate(new PlaylistItemDelegate(playlist_widget_));
-        playlist_widget_->setMinimumWidth(240);
+        playlist_widget_->setMinimumWidth(210);
         playlist_widget_->setDragDropMode(QAbstractItemView::InternalMove);
         playlist_widget_->setDropIndicatorShown(true);
         playlist_widget_->setAcceptDrops(true);
@@ -1159,9 +1160,11 @@ MainWindow::MainWindow(
         playlist_panel_ = new QWidget(content);
         auto* playlist_panel_layout = new QVBoxLayout(playlist_panel_);
         playlist_panel_layout->setContentsMargins(0, 0, 0, 0);
+        playlist_panel_layout->setSpacing(3);
         auto* playlist_actions = new QGridLayout();
-        playlist_actions->setHorizontalSpacing(5);
-        playlist_actions->setVerticalSpacing(5);
+        playlist_actions->setContentsMargins(0, 0, 0, 0);
+        playlist_actions->setHorizontalSpacing(3);
+        playlist_actions->setVerticalSpacing(3);
         auto* add_to_queue = new QPushButton(QStringLiteral("添加"), playlist_panel_);
         auto* remove_from_queue = new QPushButton(QStringLiteral("移除"), playlist_panel_);
         auto* clear_queue = new QPushButton(QStringLiteral("清空"), playlist_panel_);
@@ -1169,7 +1172,9 @@ MainWindow::MainWindow(
         auto* move_down = new QPushButton(QStringLiteral("下移"), playlist_panel_);
         for (QPushButton* button : {add_to_queue, remove_from_queue, clear_queue, move_up, move_down})
         {
-            button->setMinimumHeight(30);
+            button->setMinimumHeight(24);
+            button->setMaximumHeight(26);
+            button->setStyleSheet(QStringLiteral("QPushButton { padding: 2px 5px; border-radius: 3px; }"));
             button->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
         }
         auto* shuffle_button = new QPushButton(QStringLiteral("随机：关"), playlist_panel_);
@@ -1182,8 +1187,16 @@ MainWindow::MainWindow(
         playlist_actions->addWidget(clear_queue, 0, 2);
         playlist_actions->addWidget(move_up, 1, 0);
         playlist_actions->addWidget(move_down, 1, 1);
+        playlist_actions->setColumnStretch(0, 1);
+        playlist_actions->setColumnStretch(1, 1);
+        playlist_actions->setColumnStretch(2, 1);
         playlist_panel_layout->addLayout(playlist_actions);
         auto* playback_modes = new QHBoxLayout();
+        playback_modes->setSpacing(3);
+        shuffle_button->setMinimumHeight(24);
+        repeat_button->setMinimumHeight(24);
+        shuffle_button->setMaximumHeight(26);
+        repeat_button->setMaximumHeight(26);
         playback_modes->addWidget(shuffle_button);
         playback_modes->addWidget(repeat_button);
         playlist_panel_layout->addLayout(playback_modes);
@@ -1667,8 +1680,8 @@ MainWindow::MainWindow(
                         video_splitter->saveState());
                 });
         }
-        playlist_panel_->setMinimumWidth(250);
-        playlist_panel_->setMaximumWidth(440);
+        playlist_panel_->setMinimumWidth(220);
+        playlist_panel_->setMaximumWidth(380);
         playlist_panel_->setVisible(playlist_panel_visible_);
         layout->addWidget(video_splitter, 1);
     }
@@ -1729,23 +1742,41 @@ MainWindow::MainWindow(
     control_panel_ = new QWidget(content);
     control_panel_->setObjectName(QStringLiteral("controlPanel"));
     auto* control_panel_layout = new QVBoxLayout(control_panel_);
-    control_panel_layout->setContentsMargins(8, 7, 8, 6);
-    control_panel_layout->setSpacing(5);
-    position_label_->setMinimumWidth(105);
+    control_panel_layout->setContentsMargins(6, 4, 6, 3);
+    control_panel_layout->setSpacing(2);
+    position_label_->setMinimumWidth(92);
     position_label_->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     control_panel_layout->addLayout(seek_layout);
 
     auto* control_layout = new QHBoxLayout();
     play_button_->setObjectName(QStringLiteral("playButton"));
-    play_button_->setMinimumWidth(58);
-    pause_button_->setMinimumWidth(58);
-    stop_button_->setMinimumWidth(58);
-    control_layout->setSpacing(6);
+    const auto set_transport_icon = [this](QPushButton* button, QStyle::StandardPixmap icon,
+        const QString& tooltip, const QString& accessible_name)
+    {
+        button->setText(QString());
+        button->setIcon(style()->standardIcon(icon));
+        button->setIconSize(QSize(18, 18));
+        button->setFixedSize(32, 28);
+        button->setToolTip(tooltip);
+        button->setAccessibleName(accessible_name);
+        button->setStyleSheet(QStringLiteral("QPushButton { padding: 2px; border-radius: 4px; }"));
+    };
+    set_transport_icon(play_button_, QStyle::SP_MediaPlay,
+        QStringLiteral("播放"), QStringLiteral("播放"));
+    set_transport_icon(pause_button_, QStyle::SP_MediaPause,
+        QStringLiteral("暂停"), QStringLiteral("暂停"));
+    set_transport_icon(stop_button_, QStyle::SP_MediaStop,
+        QStringLiteral("停止"), QStringLiteral("停止"));
+    control_layout->setSpacing(3);
     control_layout->addWidget(play_button_);
     control_layout->addWidget(pause_button_);
     control_layout->addWidget(stop_button_);
-    auto* previous_button = new QPushButton(QStringLiteral("上一项"), content);
-    auto* next_button = new QPushButton(QStringLiteral("下一项"), content);
+    auto* previous_button = new QPushButton(content);
+    auto* next_button = new QPushButton(content);
+    set_transport_icon(previous_button, QStyle::SP_MediaSkipBackward,
+        QStringLiteral("上一项"), QStringLiteral("上一项"));
+    set_transport_icon(next_button, QStyle::SP_MediaSkipForward,
+        QStringLiteral("下一项"), QStringLiteral("下一项"));
     control_layout->addWidget(previous_button);
     control_layout->addWidget(next_button);
     connect(previous_button, &QPushButton::clicked, this, [this] { playPrevious(); });
@@ -1754,7 +1785,7 @@ MainWindow::MainWindow(
     control_layout->addWidget(new QLabel(QStringLiteral("音量"), content));
     control_layout->addWidget(volume_slider_);
     control_panel_layout->addLayout(control_layout);
-    status_label_->setMinimumHeight(20);
+    status_label_->setMinimumHeight(16);
     status_label_->setContentsMargins(2, 0, 2, 0);
     control_panel_layout->addWidget(status_label_);
     layout->addWidget(control_panel_);
@@ -3060,9 +3091,9 @@ void MainWindow::openVideoSettings()
     middle_click->addItem(QStringLiteral("切换全屏"), 2);
     middle_click->setCurrentIndex(middle_click_action_);
     auto* double_click = new QComboBox(interface_page);
-    double_click->addItem(QStringLiteral("切换全屏"), 0);
-    double_click->addItem(QStringLiteral("播放/暂停"), 1);
     double_click->addItem(QStringLiteral("无动作"), 2);
+    double_click->addItem(QStringLiteral("播放/暂停"), 1);
+    double_click->addItem(QStringLiteral("切换全屏"), 0);
     double_click->setCurrentIndex(double_click_action_);
     auto* mouse_gestures = new QCheckBox(
         QStringLiteral("启用右键拖动手势（左/右：快退/快进，上/下：音量）"), interface_page);
