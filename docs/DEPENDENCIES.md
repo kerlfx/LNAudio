@@ -118,8 +118,13 @@ amalgamation. The small Jim Tcl bootstrap interpreter is built from the
 SQLite source tree. A full Tcl installation is needed for SQLite's test
 suite and optional Tcl extension targets, which LNPlayer does not build.
 
-The generated `sqlite3.c` is compiled directly into LNPlayer Core; the
-generated `sqlite3.h` is used as its include directory.
+The generated `sqlite3.c` is compiled directly into LNPlayer Core. The
+generated `sqlite3.h` is staged into
+`3rd_cache/sqlite/include-3.54.1`, which is the only SQLite include directory
+added to the Core target. The SQLite source root is deliberately excluded from
+the compiler include search path: its top-level file named `version` would
+otherwise shadow MSVC's standard C++ `<version>` header. The amalgamation
+source still finds its adjacent generated header through quoted-include lookup.
 
 ### Resumable dependency downloads
 
