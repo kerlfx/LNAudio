@@ -1856,20 +1856,45 @@ MainWindow::MainWindow(
     }
     volume_slider_->setMaximumWidth(160);
 
-    auto* seek_layout = new QHBoxLayout();
-    seek_layout->addWidget(position_label_);
-    seek_layout->addWidget(seek_slider_, 1);
     control_panel_ = new QWidget(content);
     control_panel_->setAttribute(Qt::WA_NativeWindow);
     control_panel_->setObjectName(QStringLiteral("controlPanel"));
     auto* control_panel_layout = new QVBoxLayout(control_panel_);
-    control_panel_layout->setContentsMargins(6, 4, 6, 3);
-    control_panel_layout->setSpacing(2);
+    control_panel_layout->setContentsMargins(8, 5, 8, 4);
+    control_panel_layout->setSpacing(3);
     position_label_->setMinimumWidth(92);
     position_label_->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+
+    auto* seek_layout = new QHBoxLayout();
+    seek_layout->setContentsMargins(0, 0, 0, 0);
+    seek_layout->setSpacing(8);
+    seek_layout->addWidget(position_label_);
+    seek_layout->addWidget(seek_slider_, 1);
+    auto* volume_button = new QPushButton(control_panel_);
+    volume_button->setIcon(style()->standardIcon(QStyle::SP_MediaVolume));
+    volume_button->setIconSize(QSize(17, 17));
+    volume_button->setFixedSize(28, 24);
+    volume_button->setToolTip(QStringLiteral("静音切换"));
+    volume_button->setAccessibleName(QStringLiteral("静音切换"));
+    volume_button->setStyleSheet(QStringLiteral("QPushButton { padding: 2px; border: 0; background: transparent; }"));
+    seek_layout->addWidget(volume_button);
+    volume_slider_->setMaximumWidth(112);
+    seek_layout->addWidget(volume_slider_);
+    connect(volume_button, &QPushButton::clicked, this, [this]
+    {
+        if (volume_slider_->value() == 0)
+            volume_slider_->setValue(muted_volume_);
+        else
+        {
+            muted_volume_ = volume_slider_->value();
+            volume_slider_->setValue(0);
+        }
+    });
     control_panel_layout->addLayout(seek_layout);
 
     auto* control_layout = new QHBoxLayout();
+    control_layout->setContentsMargins(0, 0, 0, 0);
+    control_layout->setSpacing(2);
     play_button_->setObjectName(QStringLiteral("playButton"));
     const auto set_transport_icon = [this](QPushButton* button, QStyle::StandardPixmap icon,
         const QString& tooltip, const QString& accessible_name)
@@ -1888,23 +1913,22 @@ MainWindow::MainWindow(
         QStringLiteral("暂停"), QStringLiteral("暂停"));
     set_transport_icon(stop_button_, QStyle::SP_MediaStop,
         QStringLiteral("停止"), QStringLiteral("停止"));
-    control_layout->setSpacing(3);
-    control_layout->addWidget(play_button_);
-    control_layout->addWidget(pause_button_);
-    control_layout->addWidget(stop_button_);
     auto* previous_button = new QPushButton(content);
     auto* next_button = new QPushButton(content);
     set_transport_icon(previous_button, QStyle::SP_MediaSkipBackward,
         QStringLiteral("上一项"), QStringLiteral("上一项"));
     set_transport_icon(next_button, QStyle::SP_MediaSkipForward,
         QStringLiteral("下一项"), QStringLiteral("下一项"));
+    control_layout->addWidget(play_button_);
+    control_layout->addWidget(pause_button_);
     control_layout->addWidget(previous_button);
     control_layout->addWidget(next_button);
+    control_layout->addWidget(stop_button_);
+    control_layout->addSpacing(8);
+    control_layout->addWidget(status_label_);
+    control_layout->addStretch(1);
     connect(previous_button, &QPushButton::clicked, this, [this] { playPrevious(); });
     connect(next_button, &QPushButton::clicked, this, [this] { playNext(); });
-    control_layout->addStretch(1);
-    control_layout->addWidget(new QLabel(QStringLiteral("音量"), content));
-    control_layout->addWidget(volume_slider_);
     control_panel_layout->addLayout(control_layout);
     status_label_->setMinimumHeight(16);
     status_label_->setContentsMargins(2, 0, 2, 0);
