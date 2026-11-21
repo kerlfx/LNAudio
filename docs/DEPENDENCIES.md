@@ -56,16 +56,16 @@ not an extracted source dependency; it is stored under
 
 CMake optionally includes `proxy.cmake` from the repository root before adding
 the Core subdirectory, so proxy environment variables are set before any
-FetchContent dependency download begins. The file is intentionally ignored by
-Git because proxy addresses and credentials are machine-specific.
+FetchContent dependency download begins.
 
-The repository-local `proxy.cmake` is a ready-to-edit configuration file.
+The repository includes a ready-to-edit `proxy.cmake` configuration file.
 Its settings are commented out by default; uncomment the required
 `set(ENV{HTTP_PROXY} ...)`, `set(ENV{HTTPS_PROXY} ...)`, or optional
-`ALL_PROXY` / `NO_PROXY` entries when needed. If the file is absent, the
-configure process keeps its inherited environment unchanged. The settings
-apply to the CMake configure process and its child download processes, without
-changing system-wide proxy settings.
+`ALL_PROXY` / `NO_PROXY` entries when needed. Keep machine-specific proxy
+addresses and credentials local; do not commit personal changes to this file.
+If the file is absent, the configure process keeps its inherited environment
+unchanged. The settings apply to the CMake configure process and its child
+download processes, without changing system-wide proxy settings.
 
 ### FetchContent storage
 
