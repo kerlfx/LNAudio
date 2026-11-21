@@ -1081,7 +1081,6 @@ MainWindow::MainWindow(
             settings.setValue(QStringLiteral("Video/UI/PlaylistVisible"), visible);
             settings.sync();
             if (visible && isFullScreen())
-                showFullscreenControls();
         });
         auto* clear_playlist_action = playlist_menu->addAction(QStringLiteral("清空播放列表"));
         connect(clear_playlist_action, &QAction::triggered, this, [this]
@@ -2604,7 +2603,6 @@ void MainWindow::showPlaybackInfo()
         fullscreen_hide_timer_->stop();
     QMessageBox::information(this, QStringLiteral("播放信息"), details);
     if (fullscreen_before_dialog && isFullScreen())
-        showFullscreenControls();
 }
 
 void MainWindow::positionOsd()
@@ -3952,7 +3950,6 @@ void MainWindow::openVideoSettings()
         fullscreen_hide_timer_->stop();
     const int dialog_result = dialog.exec();
     if (fullscreen_before_dialog && isFullScreen())
-        showFullscreenControls();
     if (dialog_result != QDialog::Accepted)
         return;
 
@@ -4098,11 +4095,6 @@ void MainWindow::openVideoSettings()
     requestVideoFrame();
     if (isFullScreen())
     {
-        showFullscreenControls();
-        if (fullscreen_hide_delay_ms_ == 0)
-        {
-            control_panel_->show();
-        }
     }
 }
 
@@ -4820,7 +4812,6 @@ void MainWindow::requestVideoFrame()
                 if (first_video_frame && display_aspect_ratio > 0.0f)
                 {
                     fitWindowToVideoAspect(display_aspect_ratio, QSize(video_width_, video_height_));
-                    showFullscreenControls();
                 }
                 pending_hardware_frame_owner_ = hardware_owner;
                 pending_hardware_texture_ = const_cast<void*>(hardware_texture);
