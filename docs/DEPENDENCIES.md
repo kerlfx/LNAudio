@@ -19,7 +19,7 @@ Version changes must update the CMake pins and this document together.
 |---|---:|---|---|
 | Standalone Asio | 1.38.2 | Header-only, standalone | SourceForge release archive; SHA-256 verified by FetchContent |
 | FFmpeg | 8.1.2 | Windows MSVC x64, shared, LGPL | System233 prebuilt release; SHA-256 checked by FetchContent |
-| SQLite | 3.54.1 | Generated amalgamation | Shallow Git checkout of official `sqlite/sqlite` tag; generated with upstream build rules |
+| SQLite | 3.54.1 | Generated amalgamation | Official GitHub source archive; generated with upstream build rules |
 
 ### Asio source archive
 
@@ -53,10 +53,9 @@ The currently pinned archive is:
 
 ### SQLite source and amalgamation generation
 
-SQLite 3.54.1 is fetched from the official GitHub repository
-(`sqlite/sqlite`) at the `version-3.54.1` tag using a shallow Git clone
-(`GIT_SHALLOW TRUE`). This pins the source to the release tag without
-downloading the full repository history.
+SQLite 3.54.1 is downloaded as a source archive from the official GitHub
+repository (`sqlite/sqlite`) at the `version-3.54.1` tag. This obtains the
+canonical release source without cloning the repository history.
 
 The upstream Git repository contains the canonical source tree and SQLite's
 own code-generation scripts, but does not commit the generated amalgamation
