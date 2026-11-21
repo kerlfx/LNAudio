@@ -1086,7 +1086,7 @@ Windows UI 的正式完成条件统一由 [`docs/WINDOWS_UI_ACCEPTANCE.md`](WIND
 
 ### 2026-11-21 — D3D11 硬件视频输出背景与高 DPI 尺寸修正
 
-- [x] 硬件视频处理器每帧显式设置黑色输出背景，并将输入流目标矩形与输出目标矩形统一为按显示比例计算的区域，避免目标矩形以外区域依赖驱动默认状态。
+- [x] 硬件视频处理器每帧显式设置黑色输出背景，并将输入流目标矩形与输出目标矩形统一为按显示比例计算的区域。D3D11 文档明确指出，输入流目标矩形默认为空且未设置时不会写入流像素，因此该矩形必须显式设置。
 - [x] D3D11 SwapChain ResizeBuffers 改为从原生 HWND GetClientRect 读取客户区像素尺寸，不再直接把 Qt 逻辑像素尺寸作为 DXGI 缓冲区尺寸；降低高 DPI 下缓冲区与实际客户区不一致的风险。
 - [ ] 仍需在用户出现绿色条带的 HEVC 10-bit 样本上验证硬件解码输出；如果绿色条带仍存在，需要分别对比硬件帧和软解 BGRA 帧截图，区分源帧内容、DXVA 视频处理器输出和 swap-chain 呈现问题。
 - [ ] 仍需在 100%/150%/200% Windows 缩放下验证 ResizeBuffers 尺寸、全屏比例和窗口拖动。
@@ -1095,3 +1095,5 @@ Windows UI 的正式完成条件统一由 [`docs/WINDOWS_UI_ACCEPTANCE.md`](WIND
 实现提交：
 - 01986f08aa243ba3a359a811a435b18916112d81 — 显式设置 D3D11 Video Processor 黑色背景及 StreamDestRect。
 - 6945aeb5dddff4e1b94f9f57698d1d2b4e308944 — 使用 HWND 客户区实际像素尺寸调整 D3D11 SwapChain。
+
+- 008229426de43ea12590be08dbabb13ed2925006 — 在 D3D11 StreamDestRect 处补充默认值语义注释，避免后续重构移除必要调用。
