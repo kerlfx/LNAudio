@@ -14,7 +14,6 @@
 #include <QPaintEvent>
 #include <QResizeEvent>
 #include <QWheelEvent>
-#include <QWindow>
 #include <QApplication>
 
 #include <algorithm>
@@ -221,6 +220,10 @@ void VideoSurface::mousePressEvent(QMouseEvent* event)
     if (event->button() == Qt::LeftButton)
     {
         left_press_position_ = event->globalPosition().toPoint();
+        QWidget* top_level = window();
+        left_press_window_offset_ = top_level
+            ? left_press_position_ - top_level->frameGeometry().topLeft()
+            : QPoint();
         window_move_started_ = false;
     }
     if (event->button() == Qt::RightButton)
@@ -239,20 +242,19 @@ void VideoSurface::mousePressEvent(QMouseEvent* event)
 
 void VideoSurface::mouseMoveEvent(QMouseEvent* event)
 {
-    if (!window_move_started_ && (event->buttons() & Qt::LeftButton) &&
-        (event->globalPosition().toPoint() - left_press_position_).manhattanLength() >=
-            QApplication::startDragDistance())
+    QWidget* top_level = window();
+    if (top_level && !top_level->isMaximized() && !top_level->isFullScreen() &&
+        (event->buttons() & Qt::LeftButton))
     {
-        QWidget* top_level = window();
-        if (top_level && !top_level->isMaximized() && !top_level->isFullScreen() &&
-            top_level->windowHandle())
+        const QPoint global_position = event->globalPosition().toPoint();
+        if (window_move_started_ ||
+            (global_position - left_press_position_).manhattanLength() >=
+                QApplication::startDragDistance())
         {
-            window_move_started_ = top_level->windowHandle()->startSystemMove();
-            if (window_move_started_)
-            {
-                event->accept();
-                return;
-            }
+            window_move_started_ = true;
+            top_level->move(global_position - left_press_window_offset_);
+            event->accept();
+            return;
         }
     }
     if (gesture_enabled_ && !gesture_triggered_ &&
