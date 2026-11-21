@@ -150,6 +150,7 @@ if(NOT EXISTS "${_sqlite_amalgamation_dir}/sqlite3.c"
         "https://www.sqlite.org/download.html"
         "${_sqlite_metadata_file}"
         STATUS _sqlite_metadata_status
+        SHOW_PROGRESS
         TLS_VERIFY ON
     )
     list(GET _sqlite_metadata_status 0 _sqlite_metadata_result)
