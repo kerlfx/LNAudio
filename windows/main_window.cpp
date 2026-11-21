@@ -3399,15 +3399,46 @@ void MainWindow::openVideoSettings()
             PlayerIcons::Name::Performance;
         item->setIcon(PlayerIcons::make(icon));
         page->setObjectName(QStringLiteral("settingsPage"));
+        const QString description =
+            title == QStringLiteral("常规") ? QStringLiteral("配置文件位置与 Windows 视频文件关联") :
+            title == QStringLiteral("播放") ? QStringLiteral("播放行为、默认速度与队列策略") :
+            title == QStringLiteral("界面") ? QStringLiteral("窗口行为、鼠标操作与全屏控制") :
+            title == QStringLiteral("视频显示") ? QStringLiteral("画面比例与显示适配方式") :
+            title == QStringLiteral("画面滤镜") ? QStringLiteral("调整画面色彩与图像处理效果") :
+            title == QStringLiteral("字幕加载") ? QStringLiteral("字幕启用、自动匹配与时间同步") :
+            title == QStringLiteral("字幕样式") ? QStringLiteral("设置字幕字体、字号、颜色与位置") :
+            title == QStringLiteral("快捷键") ? QStringLiteral("查看、搜索并修改播放器快捷键") :
+            title == QStringLiteral("截图") ? QStringLiteral("设置截图保存位置与图像格式") :
+            QStringLiteral("查看当前视频渲染与解码状态");
+        auto* heading = new QLabel(title, page);
+        heading->setObjectName(QStringLiteral("settingsPageTitle"));
+        auto* summary = new QLabel(description, page);
+        summary->setObjectName(QStringLiteral("settingsPageDescription"));
+        summary->setWordWrap(true);
+        if (auto* page_form = qobject_cast<QFormLayout*>(page->layout()))
+        {
+            page_form->insertRow(0, heading);
+            page_form->insertRow(1, summary);
+            page_form->setLabelAlignment(Qt::AlignRight | Qt::AlignVCenter);
+            page_form->setFormAlignment(Qt::AlignTop);
+            page_form->setHorizontalSpacing(18);
+            page_form->setVerticalSpacing(13);
+            page_form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+        }
+        else if (auto* page_box = qobject_cast<QBoxLayout*>(page->layout()))
+        {
+            page_box->insertWidget(0, heading);
+            page_box->insertWidget(1, summary);
+        }
         if (page->layout())
             page->layout()->setContentsMargins(12, 12, 12, 12);
-        if (auto* form = page->findChild<QFormLayout*>())
+        if (auto* nested_form = page->findChild<QFormLayout*>())
         {
-            form->setLabelAlignment(Qt::AlignRight | Qt::AlignVCenter);
-            form->setFormAlignment(Qt::AlignTop);
-            form->setHorizontalSpacing(18);
-            form->setVerticalSpacing(13);
-            form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+            nested_form->setLabelAlignment(Qt::AlignRight | Qt::AlignVCenter);
+            nested_form->setFormAlignment(Qt::AlignTop);
+            nested_form->setHorizontalSpacing(18);
+            nested_form->setVerticalSpacing(13);
+            nested_form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
         }
         auto* scroll = new QScrollArea(pages);
         scroll->setObjectName(QStringLiteral("settingsPageScroll"));
@@ -3423,6 +3454,8 @@ void MainWindow::openVideoSettings()
         "QDialog#settingsDialog { background: #171a20; color: #e8eaf0; }"
         "QWidget { color: #e8eaf0; font-size: 9pt; }"
         "QLabel { background: transparent; }"
+        "QLabel#settingsPageTitle { color: #f0f3f8; font-size: 15pt; font-weight: 600; padding-bottom: 2px; }"
+        "QLabel#settingsPageDescription { color: #9ba6b5; padding-bottom: 8px; }"
         "QListWidget#settingsNavigation { background: #20252d; border: 1px solid #343c49; "
         "border-radius: 8px; padding: 6px; outline: 0; }"
         "QListWidget#settingsNavigation::item { min-height: 28px; padding: 7px 10px; border-radius: 5px; }"
