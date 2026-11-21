@@ -2096,6 +2096,7 @@ MainWindow::MainWindow(
     if (title_bar_)
     {
         title_bar_->setParent(content);
+        title_bar_->setAttribute(Qt::WA_NativeWindow);
         title_bar_->setGeometry(0, 0, content->width(), title_bar_->sizeHint().height());
         title_bar_->hide();
         title_bar_->raise();
