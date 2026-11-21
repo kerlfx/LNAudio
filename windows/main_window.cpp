@@ -1283,12 +1283,13 @@ MainWindow::MainWindow(
             playlist_actions->addWidget(button, 1);
             button->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
         }
-        auto* shuffle_button = new QPushButton(QStringLiteral("随机：关"), playlist_panel_);
-        auto* repeat_button = new QPushButton(QStringLiteral("循环：关"), playlist_panel_);
+        auto* shuffle_button = new QPushButton(playlist_panel_);
+        auto* repeat_button = new QPushButton(playlist_panel_);
         shuffle_button_ = shuffle_button;
         repeat_button_ = repeat_button;
         shuffle_button->setCheckable(true);
-        shuffle_button->setIcon(PlayerIcons::make(PlayerIcons::Name::Shuffle));
+        shuffle_button->setIcon(PlayerIcons::make(PlayerIcons::Name::Shuffle,
+            QColor(QStringLiteral("#8f99a8"))));
         shuffle_button->setIconSize(QSize(16, 16));
         shuffle_button->setText(QString());
         shuffle_button->setToolTip(QStringLiteral("随机播放：关"));
@@ -3461,6 +3462,8 @@ void MainWindow::openVideoSettings()
     settings_path->setReadOnly(true);
     auto* open_settings_directory = new QPushButton(
         QStringLiteral("打开配置目录"), general_page);
+    open_settings_directory->setIcon(PlayerIcons::make(PlayerIcons::Name::Folder));
+    open_settings_directory->setIconSize(QSize(16, 16));
     connect(open_settings_directory, &QPushButton::clicked, &dialog, []
     {
         QDesktopServices::openUrl(QUrl::fromLocalFile(
@@ -3477,6 +3480,8 @@ void MainWindow::openVideoSettings()
     association_info->setWordWrap(true);
     auto* open_default_apps = new QPushButton(
         QStringLiteral("打开 Windows 默认应用设置"), general_page);
+    open_default_apps->setIcon(PlayerIcons::make(PlayerIcons::Name::External));
+    open_default_apps->setIconSize(QSize(16, 16));
     connect(open_default_apps, &QPushButton::clicked, &dialog, []
     {
         QDesktopServices::openUrl(QUrl(QStringLiteral("ms-settings:defaultapps?registeredAppUser=LNPlayer")));
@@ -3712,6 +3717,8 @@ void MainWindow::openVideoSettings()
     auto* screenshot_directory = new QLineEdit(screenshot_directory_, screenshot_page);
     auto* browse_screenshot_directory = new QPushButton(
         QStringLiteral("浏览..."), screenshot_page);
+    browse_screenshot_directory->setIcon(PlayerIcons::make(PlayerIcons::Name::Folder));
+    browse_screenshot_directory->setIconSize(QSize(16, 16));
     auto* screenshot_directory_row = new QWidget(screenshot_page);
     auto* screenshot_directory_layout = new QHBoxLayout(screenshot_directory_row);
     screenshot_directory_layout->setContentsMargins(0, 0, 0, 0);
@@ -3765,6 +3772,8 @@ void MainWindow::openVideoSettings()
     auto* buttons = new QDialogButtonBox(
         QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
     auto* defaults = buttons->addButton(QStringLiteral("恢复默认"), QDialogButtonBox::ResetRole);
+    defaults->setIcon(PlayerIcons::make(PlayerIcons::Name::Reset));
+    defaults->setIconSize(QSize(16, 16));
     root->addWidget(buttons);
 
     connect(defaults, &QPushButton::clicked, &dialog, [=]
