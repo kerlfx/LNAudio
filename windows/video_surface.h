@@ -7,6 +7,7 @@
 #include <QResizeEvent>
 #include <QWheelEvent>
 #include <QWidget>
+#include <QTimer>
 #include <QPoint>
 
 #include <cstdint>
@@ -79,6 +80,8 @@ private:
     bool gesture_enabled_ = false;
     bool gesture_triggered_ = false;
     float zoom_ = 1.0f;
+    QTimer resize_timer_;
+    QSize pending_renderer_size_;
 };
 
 #endif
