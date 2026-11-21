@@ -14,6 +14,8 @@
 #include <QPaintEvent>
 #include <QResizeEvent>
 #include <QWheelEvent>
+#include <QWindow>
+#include <QApplication>
 
 #include <algorithm>
 #include <utility>
@@ -216,6 +218,11 @@ void VideoSurface::mouseDoubleClickEvent(QMouseEvent* event)
 
 void VideoSurface::mousePressEvent(QMouseEvent* event)
 {
+    if (event->button() == Qt::LeftButton)
+    {
+        left_press_position_ = event->globalPosition().toPoint();
+        window_move_started_ = false;
+    }
     if (event->button() == Qt::RightButton)
     {
         right_press_position_ = event->pos();
@@ -232,6 +239,22 @@ void VideoSurface::mousePressEvent(QMouseEvent* event)
 
 void VideoSurface::mouseMoveEvent(QMouseEvent* event)
 {
+    if (!window_move_started_ && (event->buttons() & Qt::LeftButton) &&
+        (event->globalPosition().toPoint() - left_press_position_).manhattanLength() >=
+            QApplication::startDragDistance())
+    {
+        QWidget* top_level = window();
+        if (top_level && !top_level->isMaximized() && !top_level->isFullScreen() &&
+            top_level->windowHandle())
+        {
+            window_move_started_ = top_level->windowHandle()->startSystemMove();
+            if (window_move_started_)
+            {
+                event->accept();
+                return;
+            }
+        }
+    }
     if (gesture_enabled_ && !gesture_triggered_ &&
         (event->buttons() & Qt::RightButton))
     {
