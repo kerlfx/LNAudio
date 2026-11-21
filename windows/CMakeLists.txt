@@ -1,4 +1,4 @@
-find_package(Qt6 6.12 REQUIRED COMPONENTS Widgets)
+find_package(Qt6 6.12 REQUIRED COMPONENTS Widgets Svg)
 
 aux_source_directory("${CMAKE_CURRENT_SOURCE_DIR}" LNPLAYER_WINDOWS_SOURCES)
 # Includes the shared Asio UI task runtime and its per-window bridges.
@@ -7,12 +7,19 @@ qt_add_executable(LNPlayerApp WIN32
     ${LNPLAYER_WINDOWS_SOURCES}
 )
 
+qt_add_resources(LNPlayerApp player_icons
+    PREFIX "/icons"
+    BASE "${CMAKE_CURRENT_SOURCE_DIR}/resources"
+    FILES "${CMAKE_CURRENT_SOURCE_DIR}/resources/player_icons.svg"
+)
+
 target_include_directories(LNPlayerApp PRIVATE "${ASIO_INCLUDE_DIR}")
 target_compile_definitions(LNPlayerApp PRIVATE ASIO_STANDALONE)
 
 target_link_libraries(LNPlayerApp
     PRIVATE
         Qt6::Widgets
+        Qt6::Svg
         lnplayer
         d3d11
         dxgi
