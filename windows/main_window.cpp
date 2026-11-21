@@ -140,7 +140,7 @@ private:
     QRect sliderHandleRect() const
     {
         QStyleOptionSlider option;
-        const_cast<SeekSlider*>(this)->initStyleOption(&option);
+        initStyleOption(&option);
         return style()->subControlRect(
             QStyle::CC_Slider, &option, QStyle::SC_SliderHandle, this);
     }
