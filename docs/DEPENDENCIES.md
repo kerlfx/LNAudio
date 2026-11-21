@@ -85,8 +85,8 @@ The currently pinned archive is:
 CMake downloads this archive through `cmake/DownloadFile.cmake`, using the
 system curl executable. Interrupted transfers retain a `.part` file and
 subsequent configure attempts request continuation with HTTP byte ranges.
-Transfers are retried up to five times. The completed archive is SHA-256
-verified before it is renamed into the cache and extracted. A verified archive
+Curl's progress bar is shown during transfer. Transfers are retried up to
+five times. The completed archive is SHA-256 verified before it is renamed into the cache and extracted. A verified archive
 is reused on later configure runs.
 
 ### SQLite source and amalgamation generation
@@ -128,8 +128,8 @@ keeps incomplete data in a sibling `.part` file. It retries up to five times
 with a short increasing delay. If the server rejects a range request, the
 helper discards the partial file and retries from byte zero. The finished
 archive is accepted only after its pinned SHA-256 or SHA3-256 checksum passes,
-then atomically renamed to its final cache filename. Existing verified
-archives are reused.
+then promoted to its final cache filename. Existing verified archives are
+reused.
 
 HTTP range support is controlled by the origin server and any intervening
 proxy. When a server does not support ranges, the helper falls back to a
