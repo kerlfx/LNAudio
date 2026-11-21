@@ -2719,8 +2719,6 @@ void MainWindow::updateFullscreenUi()
     else
     {
         unsetCursor();
-        if (menu_bar_)
-            menu_bar_->show();
         if (title_bar_)
             title_bar_->show();
         if (statusBar())
@@ -4088,7 +4086,6 @@ void MainWindow::openVideoSettings()
         if (fullscreen_hide_delay_ms_ == 0)
         {
             control_panel_->show();
-            menu_bar_->show();
         }
     }
 }
