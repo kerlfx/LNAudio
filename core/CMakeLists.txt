@@ -114,31 +114,31 @@ message(STATUS "[LNPlayer] FFmpeg SDK ready.")
 
 set(LNPLAYER_SQLITE_VERSION "3.54.1" CACHE STRING
     "Pinned SQLite source version" FORCE)
-set(LNPLAYER_SQLITE_ROOT "\${PROJECT_SOURCE_DIR}/3rd_cache/sqlite" CACHE PATH
+set(LNPLAYER_SQLITE_ROOT "${PROJECT_SOURCE_DIR}/3rd_cache/sqlite" CACHE PATH
     "Root directory of the SQLite source and generated amalgamation")
 
 # Fetch the exact upstream release tag. The source repository does not ship the
 # generated amalgamation, so build it with SQLite's own makefile and scripts.
-set(_sqlite_source_dir "\${LNPLAYER_SQLITE_ROOT}/source-\${LNPLAYER_SQLITE_VERSION}")
+set(_sqlite_source_dir "${LNPLAYER_SQLITE_ROOT}/source-${LNPLAYER_SQLITE_VERSION}")
 FetchContent_Declare(
     sqlite_source
     GIT_REPOSITORY https://github.com/sqlite/sqlite.git
-    GIT_TAG "version-\${LNPLAYER_SQLITE_VERSION}"
+    GIT_TAG "version-${LNPLAYER_SQLITE_VERSION}"
     GIT_SHALLOW TRUE
     GIT_PROGRESS TRUE
-    SOURCE_DIR "\${_sqlite_source_dir}"
+    SOURCE_DIR "${_sqlite_source_dir}"
     SOURCE_SUBDIR _lnplayer_sqlite_source_only
 )
 
 FetchContent_GetProperties(sqlite_source)
 if(NOT sqlite_source_POPULATED)
     message(STATUS
-        "[LNPlayer] Fetching official SQLite \${LNPLAYER_SQLITE_VERSION} source into \${_sqlite_source_dir}")
+        "[LNPlayer] Fetching official SQLite ${LNPLAYER_SQLITE_VERSION} source into ${_sqlite_source_dir}")
     FetchContent_Populate(sqlite_source)
 endif()
 
-set(SQLITE3_C_SOURCE "\${_sqlite_source_dir}/sqlite3.c")
-set(_sqlite_generated_header "\${_sqlite_source_dir}/sqlite3.h")
+set(SQLITE3_C_SOURCE "${_sqlite_source_dir}/sqlite3.c")
+set(_sqlite_generated_header "${_sqlite_source_dir}/sqlite3.h")
 
 if(CMAKE_HOST_WIN32)
     # SQLite's Makefile.msc builds its small Jim Tcl interpreter (jimsh0.exe)
@@ -147,17 +147,17 @@ if(CMAKE_HOST_WIN32)
     find_program(LNPLAYER_NMAKE_EXECUTABLE NAMES nmake REQUIRED)
     add_custom_command(
         OUTPUT
-            "\${SQLITE3_C_SOURCE}"
-            "\${_sqlite_generated_header}"
+            "${SQLITE3_C_SOURCE}"
+            "${_sqlite_generated_header}"
         COMMAND
-            "\${LNPLAYER_NMAKE_EXECUTABLE}" /nologo /f Makefile.msc sqlite3.c
-        WORKING_DIRECTORY "\${_sqlite_source_dir}"
+            "${LNPLAYER_NMAKE_EXECUTABLE}" /nologo /f Makefile.msc sqlite3.c
+        WORKING_DIRECTORY "${_sqlite_source_dir}"
         DEPENDS
-            "\${_sqlite_source_dir}/Makefile.msc"
-            "\${_sqlite_source_dir}/main.mk"
-            "\${_sqlite_source_dir}/tool/mksqlite3c.tcl"
-            "\${_sqlite_source_dir}/autosetup/jimsh0.c"
-        COMMENT "Generating SQLite \${LNPLAYER_SQLITE_VERSION} amalgamation with the official MSVC makefile"
+            "${_sqlite_source_dir}/Makefile.msc"
+            "${_sqlite_source_dir}/main.mk"
+            "${_sqlite_source_dir}/tool/mksqlite3c.tcl"
+            "${_sqlite_source_dir}/autosetup/jimsh0.c"
+        COMMENT "Generating SQLite ${LNPLAYER_SQLITE_VERSION} amalgamation with the official MSVC makefile"
         VERBATIM
     )
 else()
@@ -168,35 +168,35 @@ else()
     find_program(LNPLAYER_MAKE_EXECUTABLE NAMES gmake make REQUIRED)
 
     execute_process(
-        COMMAND "\${LNPLAYER_SH_EXECUTABLE}" configure
-        WORKING_DIRECTORY "\${_sqlite_source_dir}"
+        COMMAND "${LNPLAYER_SH_EXECUTABLE}" configure
+        WORKING_DIRECTORY "${_sqlite_source_dir}"
         RESULT_VARIABLE _sqlite_configure_result
         OUTPUT_VARIABLE _sqlite_configure_output
         ERROR_VARIABLE _sqlite_configure_error
     )
     if(NOT _sqlite_configure_result EQUAL 0)
         message(FATAL_ERROR
-            "SQLite \${LNPLAYER_SQLITE_VERSION} configure failed:\n"
-            "\${_sqlite_configure_output}\n\${_sqlite_configure_error}")
+            "SQLite ${LNPLAYER_SQLITE_VERSION} configure failed:\n"
+            "${_sqlite_configure_output}\n${_sqlite_configure_error}")
     endif()
 
     add_custom_command(
         OUTPUT
-            "\${SQLITE3_C_SOURCE}"
-            "\${_sqlite_generated_header}"
-        COMMAND "\${LNPLAYER_MAKE_EXECUTABLE}" sqlite3.c
-        WORKING_DIRECTORY "\${_sqlite_source_dir}"
+            "${SQLITE3_C_SOURCE}"
+            "${_sqlite_generated_header}"
+        COMMAND "${LNPLAYER_MAKE_EXECUTABLE}" sqlite3.c
+        WORKING_DIRECTORY "${_sqlite_source_dir}"
         DEPENDS
-            "\${_sqlite_source_dir}/Makefile"
-            "\${_sqlite_source_dir}/main.mk"
-            "\${_sqlite_source_dir}/tool/mksqlite3c.tcl"
-        COMMENT "Generating SQLite \${LNPLAYER_SQLITE_VERSION} amalgamation with the official makefile"
+            "${_sqlite_source_dir}/Makefile"
+            "${_sqlite_source_dir}/main.mk"
+            "${_sqlite_source_dir}/tool/mksqlite3c.tcl"
+        COMMENT "Generating SQLite ${LNPLAYER_SQLITE_VERSION} amalgamation with the official makefile"
         VERBATIM
     )
 endif()
 
-set_source_files_properties("\${SQLITE3_C_SOURCE}" PROPERTIES GENERATED TRUE)
-set(SQLITE_INCLUDE_DIR "\${_sqlite_source_dir}")
+set_source_files_properties("${SQLITE3_C_SOURCE}" PROPERTIES GENERATED TRUE)
+set(SQLITE_INCLUDE_DIR "${_sqlite_source_dir}")
 message(STATUS "[LNPlayer] SQLite source ready; official amalgamation will be generated during the build.")
 message(STATUS "[LNPlayer] Third-party dependencies ready.")
 
