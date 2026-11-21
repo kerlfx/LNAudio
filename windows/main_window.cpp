@@ -2613,15 +2613,26 @@ void MainWindow::fitWindowToVideoAspect(
 
 void MainWindow::positionFullscreenControls()
 {
-    if (!control_panel_overlay_ || !video_surface_ || !control_panel_ || !centralWidget())
+    if (!video_surface_ || !control_panel_ || !centralWidget())
         return;
 
-    const QPoint video_origin = video_surface_->mapTo(centralWidget(), QPoint(0, 0));
-    const int panel_height = control_panel_->sizeHint().height();
+    const QRect image_rect = video_surface_->display_rect();
+    if (image_rect.isEmpty())
+        return;
+
+    const QPoint image_origin = video_surface_->mapTo(
+        centralWidget(), image_rect.topLeft());
+    const int horizontal_inset = std::min(16, image_rect.width() / 30);
+    const int bottom_inset = std::min(14, image_rect.height() / 30);
+    const int panel_width = std::max(
+        1, image_rect.width() - horizontal_inset * 2);
+    const int panel_height = std::min(
+        control_panel_->sizeHint().height(),
+        std::max(1, image_rect.height() - bottom_inset));
     control_panel_->setGeometry(
-        video_origin.x(),
-        video_origin.y() + video_surface_->height() - panel_height,
-        video_surface_->width(),
+        image_origin.x() + horizontal_inset,
+        image_origin.y() + image_rect.height() - panel_height - bottom_inset,
+        panel_width,
         panel_height);
     control_panel_->raise();
 }
@@ -2656,20 +2667,21 @@ void MainWindow::showFullscreenControls()
 void MainWindow::updateFullscreenUi()
 {
     fullscreen_hide_timer_->stop();
-    auto* central_layout = centralWidget()
-        ? qobject_cast<QVBoxLayout*>(centralWidget()->layout()) : nullptr;
-    if (!isFullScreen())
+
+    if (isFullScreen())
     {
-        fullscreen_hide_timer_->stop();
-        if (control_panel_overlay_ && central_layout && control_panel_)
-        {
-            control_panel_->hide();
-            central_layout->addWidget(control_panel_);
-            control_panel_overlay_ = false;
-        }
+        if (menu_bar_)
+            menu_bar_->hide();
+        if (title_bar_)
+            title_bar_->hide();
+        if (statusBar())
+            statusBar()->hide();
+        if (playlist_panel_)
+            playlist_panel_->hide();
+    }
+    else
+    {
         unsetCursor();
-        if (control_panel_)
-            control_panel_->show();
         if (menu_bar_)
             menu_bar_->show();
         if (title_bar_)
@@ -2678,34 +2690,18 @@ void MainWindow::updateFullscreenUi()
             statusBar()->show();
         if (playlist_panel_)
             playlist_panel_->setVisible(playlist_panel_visible_);
-        fullscreen_controls_visible_ = true;
-        return;
     }
 
-    if (menu_bar_)
-        menu_bar_->hide();
-    if (title_bar_)
-        title_bar_->hide();
-    if (statusBar())
-        statusBar()->hide();
-    if (playlist_panel_)
-        playlist_panel_->hide();
-    if (!control_panel_overlay_ && central_layout && control_panel_)
-    {
-        central_layout->removeWidget(control_panel_);
-        control_panel_overlay_ = true;
-    }
     if (control_panel_)
+    {
         control_panel_->show();
-    positionFullscreenControls();
+        positionFullscreenControls();
+    }
     fullscreen_controls_visible_ = true;
     unsetCursor();
     if (fullscreen_hide_delay_ms_ > 0)
         fullscreen_hide_timer_->start(fullscreen_hide_delay_ms_);
-    else
-        fullscreen_hide_timer_->stop();
 }
-
 bool MainWindow::eventFilter(QObject* watched, QEvent* event)
 {
     if (watched == playlist_widget_ && event->type() == QEvent::DragEnter)
