@@ -593,7 +593,7 @@ MainWindow::MainWindow(
         "QSlider::handle:horizontal { width: 12px; margin: -5px 0; "
         "background: #e4edf7; border: 1px solid #6c9bc5; border-radius: 6px; }"
         "QWidget#controlPanel { background: #1c2027; border-top: 1px solid #343a46; }"
-        "QWidget#controlPanel QPushButton { min-height: 30px; }"
+        "QWidget#controlPanel QPushButton { min-height: 26px; padding: 2px 5px; }"
         "QPushButton#playButton { background: #315f8f; border-color: #477eaf; font-weight: 600; }"
         "QPushButton#playButton:hover { background: #3d74aa; }"
         "QSplitter::handle { background: #303743; }"
@@ -1862,9 +1862,6 @@ MainWindow::MainWindow(
     auto* control_panel_layout = new QVBoxLayout(control_panel_);
     control_panel_layout->setContentsMargins(8, 5, 8, 4);
     control_panel_layout->setSpacing(3);
-    position_label_->setMinimumWidth(92);
-    position_label_->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
-
     auto* seek_layout = new QHBoxLayout();
     seek_layout->setContentsMargins(0, 0, 0, 0);
     seek_layout->setSpacing(6);
@@ -1925,7 +1922,7 @@ MainWindow::MainWindow(
         QStringLiteral("下一项"), QStringLiteral("下一项"));
 
     control_layout->addWidget(play_button_);
-    control_layout->addWidget(pause_button_);
+    pause_button_->hide();
     control_layout->addWidget(previous_button);
     control_layout->addWidget(next_button);
     control_layout->addWidget(stop_button_);
@@ -2208,22 +2205,7 @@ MainWindow::MainWindow(
 
     connect(play_button_, &QPushButton::clicked, this, [this]
     {
-        if (video_seek_pending_)
-            return;
-        postCommand([this]
-        {
-            if (player_)
-                lnplayer_play(player_);
-        });
-    });
-
-    connect(pause_button_, &QPushButton::clicked, this, [this]
-    {
-        postCommand([this]
-        {
-            if (player_)
-                lnplayer_pause(player_);
-        });
+        togglePlayback();
     });
 
     connect(stop_button_, &QPushButton::clicked, this, [this]
@@ -5629,6 +5611,10 @@ void MainWindow::updatePlaybackState(
 
     const bool was_playing = is_playing_;
     is_playing_ = state == LNPLAYER_STATE_PLAYING;
+    play_button_->setIcon(style()->standardIcon(
+        is_playing_ ? QStyle::SP_MediaPause : QStyle::SP_MediaPlay));
+    play_button_->setToolTip(is_playing_ ? QStringLiteral("暂停") : QStringLiteral("播放"));
+    play_button_->setAccessibleName(play_button_->toolTip());
     video_clock_anchor_position_ms_ = position_ms;
     if (is_playing_)
         video_clock_timer_.restart();
