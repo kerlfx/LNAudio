@@ -1070,3 +1070,10 @@ Windows UI 的正式完成条件统一由 [`docs/WINDOWS_UI_ACCEPTANCE.md`](WIND
 - e7ddbe8fda53aebfb681d7ad18baeb82b59c7ae3、4893bc9d473f4f88c2a653f6c6a4963960dd435c — 播放列表右键菜单。
 - bb703fc35ed247f826c5dafa7ce0d4167d09647b、85a295a84701c29b567dec831d47b0101676eaef — 全屏控制栏覆盖层。
 - 7c8f79ddadcc56e2f77d49fd970c316b32dfc135 — 中键配置动作。
+
+补充提交：
+- 3b3b21bbeeefbf540eca5a68ebd1841dcb2aeaaa、ccb0bba153a7052f4e5db3fb45a207bb554b4610 — 拖动窗口改为阈值触发的窗口坐标移动。
+- b9dedb105c399b8eacfa91d5cc988a867080f5fb — 控制栏作为原生子窗口置于 D3D11 视频画布上方。
+- 658a79a9bbe22e0ab45d73f5268261e3db670198 — 设置文案明确控制栏自动隐藏同时适用于窗口化和全屏。
+- b6bc6bb5b30746feb7923a84890d65469a8b9410 — 鼠标行为成员默认值与配置默认值一致。
+- 6d9fbe1b6f1fdcecd7885141fc672a82038c1742 — 验收标准同步更新。
