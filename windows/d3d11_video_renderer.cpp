@@ -636,6 +636,8 @@ public:
             video_processor_.Get(), FALSE, &background);
         video_context_->VideoProcessorSetOutputTargetRect(
             video_processor_.Get(), TRUE, &target_rect);
+        // D3D11's default stream destination rectangle is empty; without
+        // setting it explicitly, the video processor writes no stream pixels.
         video_context_->VideoProcessorSetStreamDestRect(
             video_processor_.Get(), 0, TRUE, &target_rect);
         D3D11_VIDEO_PROCESSOR_STREAM stream{};
