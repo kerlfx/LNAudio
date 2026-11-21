@@ -59,16 +59,16 @@ if(WIN32)
     set(CPACK_NSIS_ENABLE_UNINSTALL_BEFORE_INSTALL ON)
     set(CPACK_NSIS_EXECUTABLES_DIRECTORY ".")
     set(CPACK_NSIS_CREATE_ICONS_EXTRA [=[
-        CreateDirectory "$SMPROGRAMS\\LNPlayer"
-        CreateShortCut "$SMPROGRAMS\\LNPlayer\\LNPlayer Video.lnk" "$INSTDIR\\LNPlayer.exe" "--video"
+        CreateDirectory "$SMPROGRAMS\LNPlayer"
+        CreateShortCut "$SMPROGRAMS\LNPlayer\LNPlayer Video.lnk" "$INSTDIR\LNPlayer.exe" "--video"
     ]=])
     set(CPACK_NSIS_DELETE_ICONS_EXTRA [=[
-        Delete "$SMPROGRAMS\\LNPlayer\\LNPlayer Video.lnk"
-        RMDir "$SMPROGRAMS\\LNPlayer"
+        Delete "$SMPROGRAMS\LNPlayer\LNPlayer Video.lnk"
+        RMDir "$SMPROGRAMS\LNPlayer"
     ]=])
     # Install per-user under LocalAppData so the application-local Data directory
     # remains writable without requiring elevation.
-    set(CPACK_NSIS_INSTALL_ROOT "$LOCALAPPDATA\\\\Programs")
+    set(CPACK_NSIS_INSTALL_ROOT "$LOCALAPPDATA\\Programs")
 
     set(LNPLAYER_VIDEO_EXTENSIONS
         mp4 mkv mov avi webm wmv flv mpeg mpg m4v ts mts m2ts
@@ -77,32 +77,32 @@ if(WIN32)
 
     set(_lnplayer_nsis_install [=[
         SetRegView 64
-        WriteRegStr HKCU "Software\\Classes\\LNPlayer.Video" "" "LNPlayer Video"
-        WriteRegStr HKCU "Software\\Classes\\LNPlayer.Video\\DefaultIcon" "" '"$INSTDIR\\LNPlayer.exe",0'
-        WriteRegStr HKCU "Software\\Classes\\LNPlayer.Video\\shell\\open\\command" "" '"$INSTDIR\\LNPlayer.exe" --video "%1"'
-        WriteRegStr HKCU "Software\\Classes\\Applications\\LNPlayer.exe\\shell\\open\\command" "" '"$INSTDIR\\LNPlayer.exe" --video "%1"'
-        WriteRegStr HKCU "Software\\LNPlayer\\Capabilities" "ApplicationName" "LNPlayer"
-        WriteRegStr HKCU "Software\\LNPlayer\\Capabilities" "ApplicationDescription" "LNPlayer Windows video player"
-        WriteRegStr HKCU "Software\\RegisteredApplications" "LNPlayer" "Software\\LNPlayer\\Capabilities"
+        WriteRegStr HKCU "Software\Classes\LNPlayer.Video" "" "LNPlayer Video"
+        WriteRegStr HKCU "Software\Classes\LNPlayer.Video\DefaultIcon" "" '"$INSTDIR\LNPlayer.exe",0'
+        WriteRegStr HKCU "Software\Classes\LNPlayer.Video\shell\open\command" "" '"$INSTDIR\LNPlayer.exe" --video "%1"'
+        WriteRegStr HKCU "Software\Classes\Applications\LNPlayer.exe\shell\open\command" "" '"$INSTDIR\LNPlayer.exe" --video "%1"'
+        WriteRegStr HKCU "Software\LNPlayer\Capabilities" "ApplicationName" "LNPlayer"
+        WriteRegStr HKCU "Software\LNPlayer\Capabilities" "ApplicationDescription" "LNPlayer Windows video player"
+        WriteRegStr HKCU "Software\RegisteredApplications" "LNPlayer" "Software\LNPlayer\Capabilities"
     ]=])
 
     set(_lnplayer_nsis_uninstall [=[
         SetRegView 64
-        DeleteRegValue HKCU "Software\\RegisteredApplications" "LNPlayer"
-        DeleteRegKey HKCU "Software\\LNPlayer\\Capabilities"
-        DeleteRegKey /ifempty HKCU "Software\\LNPlayer"
-        DeleteRegKey HKCU "Software\\Classes\\LNPlayer.Video"
-        DeleteRegKey HKCU "Software\\Classes\\Applications\\LNPlayer.exe"
+        DeleteRegValue HKCU "Software\RegisteredApplications" "LNPlayer"
+        DeleteRegKey HKCU "Software\LNPlayer\Capabilities"
+        DeleteRegKey /ifempty HKCU "Software\LNPlayer"
+        DeleteRegKey HKCU "Software\Classes\LNPlayer.Video"
+        DeleteRegKey HKCU "Software\Classes\Applications\LNPlayer.exe"
     ]=])
 
     foreach(extension IN LISTS LNPLAYER_VIDEO_EXTENSIONS)
         string(APPEND _lnplayer_nsis_install
-            "        WriteRegStr HKCU \"Software\\Classes\\Applications\\LNPlayer.exe\\SupportedTypes\" \".${extension}\" \"\"\\n"
-            "        WriteRegStr HKCU \"Software\\Classes\\.${extension}\\OpenWithProgids\" \"LNPlayer.Video\" \"\"\\n"
-            "        WriteRegStr HKCU \"Software\\LNPlayer\\Capabilities\\FileAssociations\" \".${extension}\" \"LNPlayer.Video\"\\n"
+            "        WriteRegStr HKCU \"Software\\Classes\\Applications\\LNPlayer.exe\\SupportedTypes\" \".${extension}\" \"\"\n"
+            "        WriteRegStr HKCU \"Software\\Classes\\.${extension}\\OpenWithProgids\" \"LNPlayer.Video\" \"\"\n"
+            "        WriteRegStr HKCU \"Software\\LNPlayer\\Capabilities\\FileAssociations\" \".${extension}\" \"LNPlayer.Video\"\n"
         )
         string(APPEND _lnplayer_nsis_uninstall
-            "        DeleteRegValue HKCU \"Software\\Classes\\.${extension}\\OpenWithProgids\" \"LNPlayer.Video\"\\n"
+            "        DeleteRegValue HKCU \"Software\\Classes\\.${extension}\\OpenWithProgids\" \"LNPlayer.Video\"\n"
         )
     endforeach()
 
