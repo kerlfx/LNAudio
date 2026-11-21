@@ -30,6 +30,31 @@ VideoSurface::VideoSurface(QWidget* parent)
     setAutoFillBackground(false);
     setStyleSheet(QStringLiteral("background-color: #101010;"));
 
+    // Resizing a flip/discard swap chain invalidates its back buffer. Coalesce
+    // the stream of QWidget resize events and redraw the cached frame once the
+    // window geometry has settled.
+    resize_timer_.setSingleShot(true);
+    resize_timer_.setInterval(60);
+    connect(&resize_timer_, &QTimer::timeout, this, [this]
+    {
+        if (!renderer_ || pending_renderer_size_.isEmpty())
+            return;
+
+        renderer_->resize(
+            static_cast<uint32_t>(pending_renderer_size_.width()),
+            static_cast<uint32_t>(pending_renderer_size_.height()));
+        pending_renderer_size_ = {};
+
+        QImage frame;
+        {
+            std::lock_guard<std::mutex> lock(frame_mutex_);
+            frame = frame_;
+        }
+        if (!frame.isNull())
+            renderer_->present(
+                frame.constBits(), frame.width(), frame.height(), frame.bytesPerLine());
+    });
+
     renderer_ = new lnplayer::windows::D3D11VideoRenderer();
     const HWND window = reinterpret_cast<HWND>(static_cast<quintptr>(winId()));
     if (!renderer_->initialize(window))
@@ -341,8 +366,9 @@ void VideoSurface::resizeEvent(QResizeEvent* event)
 {
     QWidget::resizeEvent(event);
     if (renderer_)
-        renderer_->resize(
-            static_cast<uint32_t>(event->size().width()),
-            static_cast<uint32_t>(event->size().height()));
+    {
+        pending_renderer_size_ = event->size();
+        resize_timer_.start();
+    }
 }
 
