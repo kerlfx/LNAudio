@@ -2573,6 +2573,61 @@ void MainWindow::moveEvent(QMoveEvent* event)
         normal_geometry_ = saveGeometry();
 }
 
+bool MainWindow::nativeEvent(
+    const QByteArray& event_type, void* message, qintptr* result)
+{
+#ifdef Q_OS_WIN
+    auto* native_message = static_cast<MSG*>(message);
+    if (mode_ == PlayerMode::Video &&
+        native_message->message == WM_NCHITTEST && !isFullScreen())
+    {
+        const QPoint position = mapFromGlobal(QCursor::pos());
+        if (!isMaximized())
+        {
+            constexpr int border = 6;
+            const bool left = position.x() < border;
+            const bool right = position.x() >= width() - border;
+            const bool top = position.y() < border;
+            const bool bottom = position.y() >= height() - border;
+            if (top && left)
+                *result = HTTOPLEFT;
+            else if (top && right)
+                *result = HTTOPRIGHT;
+            else if (bottom && left)
+                *result = HTBOTTOMLEFT;
+            else if (bottom && right)
+                *result = HTBOTTOMRIGHT;
+            else if (left)
+                *result = HTLEFT;
+            else if (right)
+                *result = HTRIGHT;
+            else if (top)
+                *result = HTTOP;
+            else if (bottom)
+                *result = HTBOTTOM;
+            else
+                goto title_bar_hit_test;
+            return true;
+        }
+
+title_bar_hit_test:
+        if (title_bar_ && title_bar_->isVisible() &&
+            title_bar_->geometry().contains(position))
+        {
+            for (QWidget* child = childAt(position);
+                child && child != title_bar_; child = child->parentWidget())
+            {
+                if (qobject_cast<QAbstractButton*>(child))
+                    return QMainWindow::nativeEvent(event_type, message, result);
+            }
+            *result = HTCAPTION;
+            return true;
+        }
+    }
+#endif
+    return QMainWindow::nativeEvent(event_type, message, result);
+}
+
 void MainWindow::dragEnterEvent(QDragEnterEvent* event)
 {
     if (event->mimeData()->hasUrls())
