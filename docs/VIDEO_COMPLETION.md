@@ -1133,3 +1133,11 @@ Windows UI 的正式完成条件统一由 [`docs/WINDOWS_UI_ACCEPTANCE.md`](WIND
 - 硬件解码路径仍依赖后续硬件帧恢复呈现；本次没有额外延长持有 GPU 解码表面生命周期。
 - 待 Windows 实机验证拖动调整窗口、快速连续改变尺寸、暂停状态下调整窗口、软件/硬件解码、字幕叠加及多显示器场景。
 - 本次未执行 Windows/MSVC 构建、CTest 或 CI。
+
+
+## 2026-11-22：硬件解码绿边尺寸审查
+
+- 核对软件解码 BGRA 输出：逻辑尺寸为 `AVFrame::width × height`，目标 stride 为 `width * 4`；D3D11 上传按源 stride 与映射后的 `RowPitch` 分别逐行拷贝，未发现宽高互换。
+- 核对硬件解码：D3D11 texture 的实际分配尺寸与 `AVFrame::width/height` 是两个独立概念。硬件解码器可能为 NV12/P010 分配对齐后的纹理表面。
+- 在 D3D11 Video Processor 路径显式设置 `VideoProcessorSetStreamSourceRect`，源矩形限定为 `{0, 0, AVFrame::width, AVFrame::height}`，避免将对齐填充区域纳入采样。
+- 此修改属于针对硬件纹理边缘绿条的修正；仍需在 Windows 实机分别测试硬件解码与软件解码，并检查不同编码、分辨率和奇数尺寸源视频。尚未执行 Windows/MSVC 构建或运行验证。
