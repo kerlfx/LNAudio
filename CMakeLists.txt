@@ -33,6 +33,14 @@ if(NOT WIN32 AND NOT ANDROID)
     message(FATAL_ERROR "LNPlayer currently supports Windows and Android builds only.")
 endif()
 
+if(WIN32)
+    # Target Windows 10 and later; avoid the SDK fallback to Windows 7.
+    add_compile_definitions(
+        _WIN32_WINNT=0x0A00
+        WINVER=0x0A00
+    )
+endif()
+
 add_subdirectory(core)
 
 if(WIN32)
