@@ -73,6 +73,8 @@ private:
     std::function<void()> middle_click_callback_;
     std::function<void(int)> gesture_callback_;
     QPoint right_press_position_;
+    QPoint left_press_position_;
+    bool window_move_started_ = false;
     bool gesture_enabled_ = false;
     bool gesture_triggered_ = false;
     float zoom_ = 1.0f;
