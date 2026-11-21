@@ -4240,9 +4240,7 @@ void MainWindow::presentPendingVideoFrame()
                 video_frame_history_.begin() + video_frame_history_index_ + 1,
                 video_frame_history_.end());
         video_frame_history_.append(std::move(history_entry));
-        constexpr int maximum_history_frames = 120;
-        if (video_frame_history_.size() > maximum_history_frames)
-            video_frame_history_.removeFirst();
+        trimVideoFrameHistory();
         video_frame_history_index_ = video_frame_history_.size() - 1;
 
         auto owner = std::move(pending_hardware_frame_owner_);
@@ -4394,9 +4392,7 @@ void MainWindow::presentPendingVideoFrame()
             video_frame_history_.begin() + video_frame_history_index_ + 1,
             video_frame_history_.end());
     video_frame_history_.append(std::move(history_entry));
-    constexpr int maximum_history_frames = 120;
-    if (video_frame_history_.size() > maximum_history_frames)
-        video_frame_history_.removeFirst();
+    trimVideoFrameHistory();
     video_frame_history_index_ = video_frame_history_.size() - 1;
 
     QString subtitle = subtitleAt(pending_video_pts_ms_);
@@ -4745,6 +4741,41 @@ void MainWindow::stepVideoFrame(bool backwards)
     }
 
     requestVideoFrame();
+}
+
+void MainWindow::trimVideoFrameHistory()
+{
+    constexpr qsizetype maximum_software_history_bytes = 256 * 1024 * 1024;
+    constexpr int maximum_history_frames = 120;
+    constexpr int maximum_hardware_history_frames = 8;
+
+    qsizetype software_bytes = 0;
+    int hardware_frames = 0;
+    for (const VideoFrameHistoryEntry& entry : video_frame_history_)
+    {
+        if (entry.hardware_owner)
+            ++hardware_frames;
+        else if (!entry.image.isNull())
+            software_bytes += entry.image.sizeInBytes();
+    }
+
+    while (!video_frame_history_.isEmpty() &&
+        (video_frame_history_.size() > maximum_history_frames ||
+            software_bytes > maximum_software_history_bytes ||
+            hardware_frames > maximum_hardware_history_frames))
+    {
+        const VideoFrameHistoryEntry& oldest = video_frame_history_.first();
+        if (oldest.hardware_owner)
+            --hardware_frames;
+        else if (!oldest.image.isNull())
+            software_bytes -= oldest.image.sizeInBytes();
+        video_frame_history_.removeFirst();
+        if (video_frame_history_index_ >= 0)
+            --video_frame_history_index_;
+    }
+
+    if (video_frame_history_.isEmpty())
+        video_frame_history_index_ = -1;
 }
 
 void MainWindow::presentHistoricalVideoFrame()
