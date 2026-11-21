@@ -595,7 +595,7 @@ MainWindow::MainWindow(
         "QSlider::sub-page:horizontal { background: #4d91cf; border-radius: 2px; }"
         "QSlider::handle:horizontal { width: 12px; margin: -5px 0; "
         "background: #e4edf7; border: 1px solid #6c9bc5; border-radius: 6px; }"
-        "QWidget#controlPanel { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgba(54,66,84,218), stop:0.18 rgba(31,40,54,210), stop:1 rgba(18,24,34,218)); border: 1px solid rgba(150,170,195,105); border-top-color: rgba(205,220,240,145); border-radius: 17px; }"
+        "QWidget#controlPanel { background: #151d29; border: none; border-top: 1px solid #354253; border-radius: 0; }"
         "QWidget#controlPanel QPushButton { min-height: 30px; padding: 2px; color: #f0f4fa; background: rgba(255,255,255,5); border: 1px solid transparent; border-radius: 10px; }"
         "QWidget#controlPanel QPushButton:hover { color: #8fc7ff; background: transparent; border-color: transparent; }"
         "QWidget#controlPanel QPushButton:pressed { background: transparent; border-color: transparent; }"
@@ -1938,13 +1938,12 @@ MainWindow::MainWindow(
     control_panel_ = new QWidget(content);
     // Keep the controls above the D3D11 video HWND while using a translucent
     // dark glass tint. This is alpha blending, not backdrop blur.
-    control_panel_->setAttribute(Qt::WA_NativeWindow);
-    control_panel_->setAutoFillBackground(false);
+    control_panel_->setAutoFillBackground(true);
     control_panel_->setObjectName(QStringLiteral("controlPanel"));
     control_panel_->setMouseTracking(true);
     auto* control_panel_layout = new QVBoxLayout(control_panel_);
-    control_panel_layout->setContentsMargins(14, 7, 14, 7);
-    control_panel_layout->setSpacing(4);
+    control_panel_layout->setContentsMargins(12, 5, 12, 5);
+    control_panel_layout->setSpacing(2);
     auto* seek_layout = new QHBoxLayout();
     seek_layout->setContentsMargins(0, 0, 0, 0);
     seek_layout->setSpacing(6);
@@ -2088,6 +2087,14 @@ MainWindow::MainWindow(
     status_label_->setContentsMargins(2, 0, 2, 0);
     control_panel_layout->addWidget(status_label_);
     setCentralWidget(content);
+    if (mode_ == PlayerMode::Video)
+    {
+        control_panel_->setParent(content);
+        control_panel_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+        control_panel_->setMinimumHeight(control_panel_->sizeHint().height());
+        layout->addWidget(control_panel_);
+        control_panel_->show();
+    }
     if (menu_bar_)
     {
         menu_bar_->setParent(content);
@@ -2101,18 +2108,14 @@ MainWindow::MainWindow(
         title_bar_->hide();
         title_bar_->raise();
     }
-    control_panel_->setParent(content);
-    control_panel_->hide();
-    control_panel_overlay_ = true;
-    positionFullscreenControls();
+    control_panel_overlay_ = false;
 
     fullscreen_hide_timer_->setSingleShot(true);
     fullscreen_hide_timer_->setInterval(fullscreen_hide_delay_ms_);
     connect(fullscreen_hide_timer_, &QTimer::timeout, this, [this]
     {
-        if (mode_ != PlayerMode::Video || !control_panel_)
+        if (mode_ != PlayerMode::Video)
             return;
-        control_panel_->hide();
         if (title_bar_)
             title_bar_->hide();
         fullscreen_controls_visible_ = false;
@@ -2698,60 +2701,6 @@ void MainWindow::fitWindowToVideoAspect(
         move(adjusted_position);
 }
 
-void MainWindow::positionFullscreenControls()
-{
-    if (!video_surface_ || !control_panel_ || !centralWidget())
-        return;
-
-    const QRect image_rect = video_surface_->display_rect();
-    if (image_rect.isEmpty())
-        return;
-
-    const QPoint image_origin = video_surface_->mapTo(
-        centralWidget(), image_rect.topLeft());
-    const int horizontal_inset = std::min(16, image_rect.width() / 30);
-    const int bottom_inset = std::min(14, image_rect.height() / 30);
-    const int panel_width = std::max(
-        1, image_rect.width() - horizontal_inset * 2);
-    const int panel_height = std::min(
-        control_panel_->sizeHint().height(),
-        std::max(1, image_rect.height() - bottom_inset));
-    control_panel_->setGeometry(
-        image_origin.x() + horizontal_inset,
-        image_origin.y() + image_rect.height() - panel_height - bottom_inset,
-        panel_width,
-        panel_height);
-    control_panel_->raise();
-}
-
-void MainWindow::showFullscreenControls()
-{
-    if (mode_ != PlayerMode::Video || !control_panel_)
-        return;
-
-    unsetCursor();
-    if (title_bar_)
-        title_bar_->hide();
-    control_panel_->show();
-    positionFullscreenControls();
-    fullscreen_controls_visible_ = true;
-    if (isFullScreen())
-    {
-        if (menu_bar_)
-            menu_bar_->hide();
-        if (title_bar_)
-            title_bar_->hide();
-        if (statusBar())
-            statusBar()->hide();
-        if (playlist_panel_)
-            playlist_panel_->hide();
-    }
-    if (fullscreen_hide_delay_ms_ > 0)
-        fullscreen_hide_timer_->start(fullscreen_hide_delay_ms_);
-    else
-        fullscreen_hide_timer_->stop();
-}
-
 void MainWindow::updateFullscreenUi()
 {
     fullscreen_hide_timer_->stop();
@@ -2778,11 +2727,6 @@ void MainWindow::updateFullscreenUi()
             playlist_panel_->setVisible(playlist_panel_visible_);
     }
 
-    if (control_panel_)
-    {
-        control_panel_->hide();
-        positionFullscreenControls();
-    }
     if (title_bar_)
         title_bar_->hide();
     fullscreen_controls_visible_ = false;
@@ -2852,8 +2796,6 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event)
         if (watched == video_surface_ && event->type() == QEvent::Resize &&
             osd_label_ && osd_label_->isVisible())
             positionOsd();
-        if (watched == video_surface_ && event->type() == QEvent::Resize)
-            positionFullscreenControls();
         if (event->type() == QEvent::Show && is_menu_widget)
         {
             fullscreen_hide_timer_->stop();
@@ -2885,10 +2827,6 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event)
                         fullscreen_hide_timer_->start(fullscreen_hide_delay_ms_);
                     else
                         fullscreen_hide_timer_->stop();
-                }
-                else if (position.y() >= video_surface_->height() - edge_height)
-                {
-                    showFullscreenControls();
                 }
             }
         }
@@ -2953,7 +2891,6 @@ void MainWindow::resizeEvent(QResizeEvent* event)
     QMainWindow::resizeEvent(event);
     if (mode_ == PlayerMode::Video)
     {
-        positionFullscreenControls();
         if (title_bar_)
         {
             title_bar_->setGeometry(0, 0, centralWidget()->width(),
