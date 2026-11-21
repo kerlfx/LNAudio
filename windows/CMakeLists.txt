@@ -24,6 +24,7 @@ target_link_libraries(LNPlayerApp
         d3d11
         dxgi
         d3dcompiler
+        comctl32
 )
 
 set_target_properties(LNPlayerApp PROPERTIES
