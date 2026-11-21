@@ -22,6 +22,13 @@ namespace lnplayer
 namespace
 {
 
+std::string ffmpeg_error(int error)
+{
+    char buffer[AV_ERROR_MAX_STRING_SIZE]{};
+    av_strerror(error, buffer, sizeof(buffer));
+    return buffer;
+}
+
 std::string detect_subtitle_encoding(const std::string& path)
 {
     AVIOContext* io = nullptr;
@@ -101,7 +108,7 @@ bool SubtitleFilter::open(
         graph_);
     if (result < 0)
     {
-        error = "Unable to create subtitle filter input.";
+        error = "Unable to create subtitle filter input: " + ffmpeg_error(result);
         close();
         return false;
     }
@@ -118,18 +125,25 @@ bool SubtitleFilter::open(
             av_dict_set(&options, "charenc", encoding.c_str(), 0);
     }
 
-    AVFilterContext* subtitles = nullptr;
-    result = avfilter_graph_create_filter(
-        &subtitles,
-        subtitles_filter,
-        "libass_subtitles",
-        nullptr,
-        &options,
-        graph_);
+    // avfilter_graph_create_filter() treats its fifth argument as opaque user
+    // data, not an AVDictionary. Allocate the filter first, then initialize it
+    // with the options dictionary so the filename and stream index are applied.
+    AVFilterContext* subtitles = avfilter_graph_alloc_filter(
+        graph_, subtitles_filter, "libass_subtitles");
+    if (!subtitles)
+    {
+        av_dict_free(&options);
+        error = "Unable to allocate FFmpeg libass subtitle filter.";
+        close();
+        return false;
+    }
+
+    result = avfilter_init_dict(subtitles, &options);
     av_dict_free(&options);
     if (result < 0)
     {
-        error = "Unable to initialize FFmpeg libass subtitle renderer.";
+        error = "Unable to initialize FFmpeg libass subtitle renderer: " +
+            ffmpeg_error(result);
         close();
         return false;
     }
@@ -143,7 +157,7 @@ bool SubtitleFilter::open(
         graph_);
     if (result < 0)
     {
-        error = "Unable to create subtitle filter output.";
+        error = "Unable to create subtitle filter output: " + ffmpeg_error(result);
         close();
         return false;
     }
@@ -155,7 +169,8 @@ bool SubtitleFilter::open(
         result = avfilter_graph_config(graph_, nullptr);
     if (result < 0)
     {
-        error = "Unable to configure FFmpeg libass subtitle renderer.";
+        error = "Unable to configure FFmpeg libass subtitle renderer: " +
+            ffmpeg_error(result);
         close();
         return false;
     }
@@ -198,7 +213,7 @@ bool SubtitleFilter::render(
     if (result < 0)
     {
         av_frame_free(&input);
-        error = "Unable to allocate subtitle filter frame buffer.";
+        error = "Unable to allocate subtitle filter frame buffer: " + ffmpeg_error(result);
         return false;
     }
 
@@ -210,7 +225,7 @@ bool SubtitleFilter::render(
     av_frame_free(&input);
     if (result < 0)
     {
-        error = "Unable to submit frame to subtitle renderer.";
+        error = "Unable to submit frame to subtitle renderer: " + ffmpeg_error(result);
         return false;
     }
 
@@ -230,7 +245,7 @@ bool SubtitleFilter::render(
             error.clear();
             return true;
         }
-        error = "Unable to receive rendered subtitle frame.";
+        error = "Unable to receive rendered subtitle frame: " + ffmpeg_error(result);
         return false;
     }
 
