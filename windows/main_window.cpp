@@ -518,6 +518,16 @@ MainWindow::MainWindow(
             QStringLiteral("Video/Mouse/MiddleClickAction"), 2).toInt();
         double_click_action_ = settings.value(
             QStringLiteral("Video/Mouse/DoubleClickAction"), 1).toInt();
+        if (settings.value(
+            QStringLiteral("Video/Mouse/InteractionDefaultsVersion"), 0).toInt() < 1)
+        {
+            middle_click_action_ = 2;
+            double_click_action_ = 1;
+            settings.setValue(QStringLiteral("Video/Mouse/MiddleClickAction"), middle_click_action_);
+            settings.setValue(QStringLiteral("Video/Mouse/DoubleClickAction"), double_click_action_);
+            settings.setValue(QStringLiteral("Video/Mouse/InteractionDefaultsVersion"), 1);
+            settings.sync();
+        }
         wheel_action_ = std::clamp(
             settings.value(QStringLiteral("Video/Mouse/WheelAction"), 0).toInt(), 0, 2);
         mouse_gestures_enabled_ = settings.value(
@@ -2445,7 +2455,8 @@ void MainWindow::fitWindowToVideoAspect(float aspect_ratio)
         static_cast<float>(video_surface_->width()) / aspect_ratio);
     const int window_height = height() +
         target_surface_height - video_surface_->height();
-    const int maximum_height = target_screen->availableGeometry().height() - 32;
+    const int maximum_height = std::max(
+        minimumHeight(), target_screen->availableGeometry().height() - 32);
     const int adjusted_height = std::clamp(
         window_height, minimumHeight(), maximum_height);
     if (std::abs(adjusted_height - height()) >= 8)
