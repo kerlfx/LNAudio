@@ -217,7 +217,22 @@ else()
 endif()
 
 set_source_files_properties("${SQLITE3_C_SOURCE}" PROPERTIES GENERATED TRUE)
-set(SQLITE_INCLUDE_DIR "${_sqlite_source_dir}")
+
+# Keep SQLite's source root out of the compiler include search path. Its
+# top-level "version" file would otherwise shadow the standard C++ <version>
+# header on MSVC.
+set(SQLITE_INCLUDE_DIR "${LNPLAYER_SQLITE_ROOT}/include-${LNPLAYER_SQLITE_VERSION}")
+set(_sqlite_staged_header "${SQLITE_INCLUDE_DIR}/sqlite3.h")
+add_custom_command(
+    OUTPUT "${_sqlite_staged_header}"
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "${SQLITE_INCLUDE_DIR}"
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+        "${_sqlite_generated_header}" "${_sqlite_staged_header}"
+    DEPENDS "${_sqlite_generated_header}"
+    COMMENT "Staging SQLite public header outside its source tree"
+    VERBATIM
+)
+add_custom_target(lnplayer_sqlite_headers DEPENDS "${_sqlite_staged_header}")
 message(STATUS "[LNPlayer] SQLite source ready; official amalgamation will be generated during the build.")
 message(STATUS "[LNPlayer] Third-party dependencies ready.")
 
@@ -269,6 +284,8 @@ add_library(lnplayer SHARED
     ${LNPLAYER_CORE_SOURCES}
     "${SQLITE3_C_SOURCE}"
 )
+
+add_dependencies(lnplayer lnplayer_sqlite_headers)
 
 target_include_directories(lnplayer
     PUBLIC
