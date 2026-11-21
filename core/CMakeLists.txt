@@ -115,15 +115,18 @@ set(LNPLAYER_SQLITE_VERSION "3.54.1" CACHE STRING
 set(LNPLAYER_SQLITE_ROOT "${PROJECT_SOURCE_DIR}/3rd_cache/sqlite" CACHE PATH
     "Root directory of the SQLite source and generated amalgamation")
 
-# Download the official tagged source archive rather than cloning SQLite's
-# large Git repository history. The archive contains the canonical source tree
-# and upstream amalgamation-generation tools.
+# Use a shallow checkout of the pinned upstream tag. CMake's URL downloader
+# uses libcurl and may negotiate HTTP/2 through local proxies; Git is explicitly
+# configured for HTTP/1.1 here to avoid the Schannel/HTTP2 receive failures seen
+# on some Windows proxy paths, without fetching SQLite's full repository history.
 set(_sqlite_source_dir "${LNPLAYER_SQLITE_ROOT}/source-${LNPLAYER_SQLITE_VERSION}")
 FetchContent_Declare(
     sqlite_source
-    URL "https://github.com/sqlite/sqlite/archive/refs/tags/version-${LNPLAYER_SQLITE_VERSION}.tar.gz"
-    DOWNLOAD_NO_PROGRESS FALSE
-    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    GIT_REPOSITORY "https://github.com/sqlite/sqlite.git"
+    GIT_TAG "version-${LNPLAYER_SQLITE_VERSION}"
+    GIT_SHALLOW TRUE
+    GIT_PROGRESS TRUE
+    GIT_CONFIG http.version=HTTP/1.1
     SOURCE_DIR "${_sqlite_source_dir}"
     SOURCE_SUBDIR _lnplayer_sqlite_source_only
 )
@@ -131,7 +134,7 @@ FetchContent_Declare(
 FetchContent_GetProperties(sqlite_source)
 if(NOT sqlite_source_POPULATED)
     message(STATUS
-        "[LNPlayer] Cloning official SQLite ${LNPLAYER_SQLITE_VERSION} source into ${_sqlite_source_dir}")
+        "[LNPlayer] Cloning official SQLite ${LNPLAYER_SQLITE_VERSION} tag into ${_sqlite_source_dir}...")
     FetchContent_Populate(sqlite_source)
 endif()
 
