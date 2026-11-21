@@ -19,7 +19,7 @@ Version changes must update the CMake pins and this document together.
 |---|---:|---|---|
 | Standalone Asio | 1.38.2 | Header-only, standalone | Official GitHub repository; shallow clone of pinned tag |
 | FFmpeg | 8.1.2 | Windows MSVC x64, shared, LGPL | System233 prebuilt release; SHA-256 checked by FetchContent |
-| SQLite | 3.54.1 | Generated amalgamation | Official GitHub source archive; generated with upstream build rules |
+| SQLite | 3.54.1 | Generated amalgamation | Official GitHub mirror; shallow clone of pinned upstream tag; generated with upstream build rules |
 
 ### Asio Git checkout
 
@@ -84,9 +84,14 @@ The currently pinned archive is:
 
 ### SQLite source and amalgamation generation
 
-SQLite 3.54.1 is downloaded as a source archive from the official GitHub
-repository (`sqlite/sqlite`) at the `version-3.54.1` tag. This obtains the
-canonical release source without cloning the repository history.
+SQLite 3.54.1 is obtained from the official GitHub mirror
+(`sqlite/sqlite`) at the `version-3.54.1` tag using a shallow Git checkout.
+The checkout pins the release tag without downloading the repository's full
+history. Git is configured with `http.version=HTTP/1.1` for this dependency
+because CMake's URL downloader uses libcurl and the local Windows proxy has
+repeatedly interrupted HTTP/2 downloads with Schannel `missing close_notify`
+errors. The Git transport setting avoids that specific HTTP/2 path; it does
+not guarantee recovery from unrelated proxy or network interruptions.
 
 The upstream Git repository contains the canonical source tree and SQLite's
 own code-generation scripts, but does not commit the generated amalgamation
