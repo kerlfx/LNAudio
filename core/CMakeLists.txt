@@ -7,7 +7,7 @@ set(LNPLAYER_ASIO_VERSION "1.38.2" CACHE STRING
     "Pinned standalone Asio version" FORCE)
 string(REPLACE "." "-" LNPLAYER_ASIO_TAG_VERSION "${LNPLAYER_ASIO_VERSION}")
 set(LNPLAYER_ASIO_ROOT "${PROJECT_SOURCE_DIR}/3rd_cache/asio/${LNPLAYER_ASIO_VERSION}" CACHE PATH
-    "Version-specific root directory of the standalone Asio source")
+    "Version-specific root directory of the standalone Asio source" FORCE)
 option(LNPLAYER_DOWNLOAD_ASIO
     "Download the pinned standalone Asio headers when they are not available locally"
     ON
@@ -142,7 +142,7 @@ if(NOT EXISTS "${_sqlite_amalgamation_dir}/sqlite3.c"
    AND NOT EXISTS "${LNPLAYER_SQLITE_ROOT}/sqlite3.c")
     # SQLite publishes a machine-readable CSV manifest inside download.html.
     # Resolve both the archive URL and SHA3-256 from that official manifest.
-    set(_sqlite_metadata_dir "${CMAKE_BINARY_DIR}/_deps")
+    set(_sqlite_metadata_dir "${FETCHCONTENT_BASE_DIR}/sqlite-metadata")
     file(MAKE_DIRECTORY "${_sqlite_metadata_dir}")
     set(_sqlite_metadata_file "${_sqlite_metadata_dir}/sqlite-download-products.html")
     message(STATUS "[LNPlayer] Fetching SQLite download metadata from sqlite.org...")
