@@ -1336,6 +1336,11 @@ MainWindow::MainWindow(
                 item->setSelected(true);
                 playlist_widget_->setCurrentItem(item);
             }
+            else if (!item)
+            {
+                playlist_widget_->clearSelection();
+                playlist_widget_->setCurrentItem(nullptr);
+            }
             QMenu menu(playlist_widget_);
             menu.setMouseTracking(true);
             menu.installEventFilter(this);
@@ -3888,6 +3893,8 @@ void MainWindow::openPlaylistIndex(int index)
     current_media_path_ = QFileInfo(source).absoluteFilePath();
     has_video_ = false;
     has_audio_ = false;
+    video_width_ = 0;
+    video_height_ = 0;
     is_playing_ = false;
     duration_ms_ = -1;
     current_position_ms_ = 0;
