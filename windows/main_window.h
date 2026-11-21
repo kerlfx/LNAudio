@@ -231,6 +231,7 @@ private:
     QPushButton* stop_button_;
     QPushButton* shuffle_button_ = nullptr;
     QPushButton* repeat_button_ = nullptr;
+    QPushButton* playlist_toggle_button_ = nullptr;
     std::shared_ptr<UiTaskTracker> task_tracker_;
     asio::strand<asio::io_context::executor_type> dispatch_executor_;
     asio::thread_pool::executor_type background_executor_;
