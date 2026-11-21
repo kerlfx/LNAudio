@@ -5,6 +5,7 @@
 #include "main_window.h"
 
 #include "lnplayer_windows.h"
+#include "player_icons.h"
 
 #include <algorithm>
 #include <d3d11.h>
@@ -1105,19 +1106,19 @@ MainWindow::MainWindow(
         title_label->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
         title_layout->addWidget(title_label, 1);
         auto* minimize_button = new QPushButton(title_bar_);
-        minimize_button->setIcon(style()->standardIcon(QStyle::SP_TitleBarMinButton));
+        minimize_button->setIcon(PlayerIcons::make(PlayerIcons::Name::Minimize));
         minimize_button->setToolTip(QStringLiteral("最小化"));
         minimize_button->setAccessibleName(QStringLiteral("最小化"));
         title_layout->addWidget(minimize_button);
         auto* maximize_button = new QPushButton(title_bar_);
         maximize_button->setObjectName(QStringLiteral("maximizeWindowButton"));
-        maximize_button->setIcon(style()->standardIcon(QStyle::SP_TitleBarMaxButton));
+        maximize_button->setIcon(PlayerIcons::make(PlayerIcons::Name::Maximize));
         maximize_button->setToolTip(QStringLiteral("最大化"));
         maximize_button->setAccessibleName(QStringLiteral("最大化"));
         title_layout->addWidget(maximize_button);
         auto* close_button = new QPushButton(title_bar_);
         close_button->setObjectName(QStringLiteral("closeWindowButton"));
-        close_button->setIcon(style()->standardIcon(QStyle::SP_TitleBarCloseButton));
+        close_button->setIcon(PlayerIcons::make(PlayerIcons::Name::Close));
         close_button->setToolTip(QStringLiteral("关闭"));
         close_button->setAccessibleName(QStringLiteral("关闭"));
         title_layout->addWidget(close_button);
@@ -1250,15 +1251,27 @@ MainWindow::MainWindow(
         auto* playlist_actions = new QHBoxLayout();
         playlist_actions->setContentsMargins(0, 0, 0, 0);
         playlist_actions->setSpacing(3);
-        auto* add_to_queue = new QPushButton(QStringLiteral("添加"), playlist_panel_);
-        auto* remove_from_queue = new QPushButton(QStringLiteral("移除"), playlist_panel_);
-        auto* clear_queue = new QPushButton(QStringLiteral("清空"), playlist_panel_);
-        auto* move_up = new QPushButton(QStringLiteral("上移"), playlist_panel_);
-        auto* move_down = new QPushButton(QStringLiteral("下移"), playlist_panel_);
+        auto* add_to_queue = new QPushButton(playlist_panel_);
+        add_to_queue->setIcon(PlayerIcons::make(PlayerIcons::Name::Add));
+        add_to_queue->setToolTip(QStringLiteral("添加到播放列表"));
+        auto* remove_from_queue = new QPushButton(playlist_panel_);
+        remove_from_queue->setIcon(PlayerIcons::make(PlayerIcons::Name::Remove));
+        remove_from_queue->setToolTip(QStringLiteral("移除选中项"));
+        auto* clear_queue = new QPushButton(playlist_panel_);
+        clear_queue->setIcon(PlayerIcons::make(PlayerIcons::Name::Clear));
+        clear_queue->setToolTip(QStringLiteral("清空播放列表"));
+        auto* move_up = new QPushButton(playlist_panel_);
+        move_up->setIcon(PlayerIcons::make(PlayerIcons::Name::MoveUp));
+        move_up->setToolTip(QStringLiteral("上移"));
+        auto* move_down = new QPushButton(playlist_panel_);
+        move_down->setIcon(PlayerIcons::make(PlayerIcons::Name::MoveDown));
+        move_down->setToolTip(QStringLiteral("下移"));
         for (QPushButton* button : {add_to_queue, remove_from_queue, clear_queue, move_up, move_down})
         {
             button->setMinimumHeight(24);
             button->setMaximumHeight(26);
+            button->setIconSize(QSize(16, 16));
+            button->setText(QString());
             button->setMinimumWidth(0);
             button->setStyleSheet(QStringLiteral("QPushButton { padding: 2px 3px; border-radius: 3px; }"));
             playlist_actions->addWidget(button, 1);
@@ -1269,6 +1282,16 @@ MainWindow::MainWindow(
         shuffle_button_ = shuffle_button;
         repeat_button_ = repeat_button;
         shuffle_button->setCheckable(true);
+        shuffle_button->setIcon(PlayerIcons::make(PlayerIcons::Name::Shuffle));
+        shuffle_button->setIconSize(QSize(16, 16));
+        shuffle_button->setText(QString());
+        shuffle_button->setToolTip(QStringLiteral("随机播放：关"));
+        shuffle_button->setAccessibleName(QStringLiteral("随机播放：关"));
+        repeat_button->setIcon(PlayerIcons::make(PlayerIcons::Name::Repeat));
+        repeat_button->setIconSize(QSize(16, 16));
+        repeat_button->setText(QString());
+        repeat_button->setToolTip(QStringLiteral("循环播放：关"));
+        repeat_button->setAccessibleName(QStringLiteral("循环播放：关"));
         playlist_panel_layout->addLayout(playlist_actions);
         auto* playback_modes = new QHBoxLayout();
         playback_modes->setSpacing(3);
@@ -1303,14 +1326,18 @@ MainWindow::MainWindow(
         {
             shuffle_enabled_ = enabled;
             resetShuffleOrder();
-            shuffle_button->setText(enabled ? QStringLiteral("随机：开") : QStringLiteral("随机：关"));
+            shuffle_button->setToolTip(enabled ? QStringLiteral("随机播放：开") : QStringLiteral("随机播放：关"));
+            shuffle_button->setAccessibleName(shuffle_button->toolTip());
             saveVideoPlaylist();
         });
         connect(repeat_button, &QPushButton::clicked, this, [this, repeat_button]
         {
             cycleRepeatMode();
-            repeat_button->setText(repeat_mode_ == 0 ? QStringLiteral("循环：关")
-                : repeat_mode_ == 1 ? QStringLiteral("循环：列表") : QStringLiteral("循环：单项"));
+            repeat_button->setIcon(PlayerIcons::make(repeat_mode_ == 2
+                ? PlayerIcons::Name::RepeatOne : PlayerIcons::Name::Repeat));
+            repeat_button->setToolTip(repeat_mode_ == 0 ? QStringLiteral("循环播放：关")
+                : repeat_mode_ == 1 ? QStringLiteral("循环播放：列表") : QStringLiteral("循环播放：单项"));
+            repeat_button->setAccessibleName(repeat_button->toolTip());
             saveVideoPlaylist();
         });
         connect(playlist_widget_->model(), &QAbstractItemModel::rowsMoved, this,
@@ -1870,7 +1897,8 @@ MainWindow::MainWindow(
     seek_layout->addWidget(seek_slider_, 1);
 
     auto* volume_button = new QPushButton(control_panel_);
-    volume_button->setIcon(style()->standardIcon(QStyle::SP_MediaVolume));
+    volume_button->setIcon(PlayerIcons::make(volume_slider_->value() == 0
+        ? PlayerIcons::Name::VolumeMuted : PlayerIcons::Name::Volume));
     volume_button->setIconSize(QSize(16, 16));
     volume_button->setFixedSize(26, 22);
     volume_button->setToolTip(QStringLiteral("静音切换"));
@@ -1880,6 +1908,11 @@ MainWindow::MainWindow(
     volume_slider_->setMaximumWidth(104);
     volume_slider_->setFixedWidth(104);
     seek_layout->addWidget(volume_slider_);
+    connect(volume_slider_, &QSlider::valueChanged, volume_button, [volume_button](int value)
+    {
+        volume_button->setIcon(PlayerIcons::make(value == 0
+            ? PlayerIcons::Name::VolumeMuted : PlayerIcons::Name::Volume));
+    });
     connect(volume_button, &QPushButton::clicked, this, [this]
     {
         if (volume_slider_->value() == 0)
@@ -1896,26 +1929,26 @@ MainWindow::MainWindow(
     control_layout->setContentsMargins(0, 0, 0, 0);
     control_layout->setSpacing(3);
     play_button_->setObjectName(QStringLiteral("playButton"));
-    const auto set_transport_icon = [this](QPushButton* button, QStyle::StandardPixmap icon,
+    const auto set_transport_icon = [this](QPushButton* button, PlayerIcons::Name icon,
         const QString& tooltip, const QString& accessible_name)
     {
         button->setText(QString());
-        button->setIcon(style()->standardIcon(icon));
+        button->setIcon(PlayerIcons::make(icon));
         button->setIconSize(QSize(17, 17));
         button->setFixedSize(30, 26);
         button->setToolTip(tooltip);
         button->setAccessibleName(accessible_name);
         button->setStyleSheet(QStringLiteral("QPushButton { padding: 1px; border-radius: 4px; }"));
     };
-    set_transport_icon(play_button_, QStyle::SP_MediaPlay,
+    set_transport_icon(play_button_, PlayerIcons::Name::Play,
         QStringLiteral("播放"), QStringLiteral("播放"));
-    set_transport_icon(stop_button_, QStyle::SP_MediaStop,
+    set_transport_icon(stop_button_, PlayerIcons::Name::Stop,
         QStringLiteral("停止"), QStringLiteral("停止"));
     auto* previous_button = new QPushButton(content);
     auto* next_button = new QPushButton(content);
-    set_transport_icon(previous_button, QStyle::SP_MediaSkipBackward,
+    set_transport_icon(previous_button, PlayerIcons::Name::Previous,
         QStringLiteral("上一项"), QStringLiteral("上一项"));
-    set_transport_icon(next_button, QStyle::SP_MediaSkipForward,
+    set_transport_icon(next_button, PlayerIcons::Name::Next,
         QStringLiteral("下一项"), QStringLiteral("下一项"));
 
     control_layout->addWidget(play_button_);
@@ -1932,18 +1965,22 @@ MainWindow::MainWindow(
                 return action->menu();
         return nullptr;
     };
-    auto* audio_tracks_button = new QPushButton(QStringLiteral("♫"), control_panel_);
+    auto* audio_tracks_button = new QPushButton(control_panel_);
+    audio_tracks_button->setIcon(PlayerIcons::make(PlayerIcons::Name::AudioTrack));
+    audio_tracks_button->setIconSize(QSize(18, 18));
     audio_tracks_button->setFixedSize(30, 26);
     audio_tracks_button->setToolTip(QStringLiteral("切换音轨"));
     audio_tracks_button->setAccessibleName(QStringLiteral("切换音轨"));
-    audio_tracks_button->setStyleSheet(QStringLiteral("QPushButton { padding: 1px; font-size: 16px; border-radius: 4px; }"));
+    audio_tracks_button->setStyleSheet(QStringLiteral("QPushButton { padding: 1px; border-radius: 4px; }"));
     if (QMenu* audio_tracks_menu = find_menu(QStringLiteral("音轨")))
         audio_tracks_button->setMenu(audio_tracks_menu);
-    auto* subtitles_button = new QPushButton(QStringLiteral("CC"), control_panel_);
+    auto* subtitles_button = new QPushButton(control_panel_);
+    subtitles_button->setIcon(PlayerIcons::make(PlayerIcons::Name::Subtitles));
+    subtitles_button->setIconSize(QSize(18, 18));
     subtitles_button->setFixedSize(30, 26);
     subtitles_button->setToolTip(QStringLiteral("切换字幕"));
     subtitles_button->setAccessibleName(QStringLiteral("切换字幕"));
-    subtitles_button->setStyleSheet(QStringLiteral("QPushButton { padding: 1px; font-size: 11px; font-weight: 600; border-radius: 4px; }"));
+    subtitles_button->setStyleSheet(QStringLiteral("QPushButton { padding: 1px; border-radius: 4px; }"));
     if (QMenu* subtitles_menu = find_menu(QStringLiteral("字幕")))
         subtitles_button->setMenu(subtitles_menu);
     control_layout->addStretch(1);
@@ -2770,8 +2807,8 @@ void MainWindow::changeEvent(QEvent* event)
             if (auto* maximize_button = title_bar_->findChild<QPushButton*>(
                 QStringLiteral("maximizeWindowButton")))
             {
-                maximize_button->setIcon(style()->standardIcon(
-                    isMaximized() ? QStyle::SP_TitleBarNormalButton : QStyle::SP_TitleBarMaxButton));
+                maximize_button->setIcon(PlayerIcons::make(
+                    isMaximized() ? PlayerIcons::Name::Restore : PlayerIcons::Name::Maximize));
                 maximize_button->setToolTip(isMaximized()
                     ? QStringLiteral("还原") : QStringLiteral("最大化"));
                 maximize_button->setAccessibleName(maximize_button->toolTip());
@@ -5607,8 +5644,8 @@ void MainWindow::updatePlaybackState(
 
     const bool was_playing = is_playing_;
     is_playing_ = state == LNPLAYER_STATE_PLAYING;
-    play_button_->setIcon(style()->standardIcon(
-        is_playing_ ? QStyle::SP_MediaPause : QStyle::SP_MediaPlay));
+    play_button_->setIcon(PlayerIcons::make(
+        is_playing_ ? PlayerIcons::Name::Pause : PlayerIcons::Name::Play));
     play_button_->setToolTip(is_playing_ ? QStringLiteral("暂停") : QStringLiteral("播放"));
     play_button_->setAccessibleName(play_button_->toolTip());
     video_clock_anchor_position_ms_ = position_ms;
