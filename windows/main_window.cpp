@@ -585,6 +585,7 @@ MainWindow::MainWindow(
         "QPushButton:pressed { background: #202630; }"
         "QPushButton:checked { background: #345b86; border-color: #4f8cc8; }"
         "QPushButton:disabled { color: #777f8c; background: #22262d; }"
+        "QPushButton[iconOnly=\"true\"]:hover, QPushButton[iconOnly=\"true\"]:pressed, QPushButton[iconOnly=\"true\"]:checked { background: transparent; border-color: transparent; }"
         "QListWidget, QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox { "
         "background: #20252d; border: 1px solid #3b4350; border-radius: 4px; "
         "selection-background-color: #345b86; padding: 4px; }"
