@@ -73,7 +73,6 @@ function(lnplayer_download_dependency)
     file(MAKE_DIRECTORY "${_extract_dir}")
     file(ARCHIVE_EXTRACT INPUT "${_archive}" DESTINATION "${_extract_dir}")
 
-    file(REMOVE_RECURSE "${DL_DESTINATION}")
     file(MAKE_DIRECTORY "${DL_DESTINATION}")
     if(DL_STRIP_TOP_LEVEL)
         file(GLOB _archive_entries LIST_DIRECTORIES TRUE "${_extract_dir}/*")
