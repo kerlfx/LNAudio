@@ -1339,14 +1339,38 @@ MainWindow::MainWindow(
             QMenu menu(playlist_widget_);
             menu.setMouseTracking(true);
             menu.installEventFilter(this);
+            QAction* add_files = menu.addAction(QStringLiteral("添加文件..."));
             QAction* play_selected = menu.addAction(QStringLiteral("播放"));
+            play_selected->setEnabled(item != nullptr);
             QAction* remove_selected = menu.addAction(QStringLiteral("移除选中项"));
+            remove_selected->setEnabled(!playlist_widget_->selectedItems().isEmpty());
+            QAction* move_up = menu.addAction(QStringLiteral("上移"));
+            move_up->setEnabled(item && playlist_widget_->row(item) > 0);
+            QAction* move_down = menu.addAction(QStringLiteral("下移"));
+            move_down->setEnabled(item &&
+                playlist_widget_->row(item) < playlist_widget_->count() - 1);
+            menu.addSeparator();
             QAction* clear_all = menu.addAction(QStringLiteral("清空播放列表"));
+            clear_all->setEnabled(playlist_widget_->count() > 0);
             QAction* selected = menu.exec(playlist_widget_->mapToGlobal(point));
-            if (selected == play_selected && item)
+            if (selected == add_files)
+            {
+                const QStringList files = QFileDialog::getOpenFileNames(
+                    this, QStringLiteral("添加到播放队列"), QString(),
+                    QStringLiteral("视频文件 (*.mp4 *.mkv *.mov *.avi *.webm *.wmv *.flv *.mpeg *.mpg *.m4v *.ts *.mts *.m2ts *.3gp *.3g2 *.vob *.ogv *.mxf *.asf *.f4v *.divx *.mpe *.mpv);;所有文件 (*)"));
+                QList<QUrl> urls;
+                for (const QString& file : files)
+                    urls.append(QUrl::fromLocalFile(file));
+                appendPlaylistFiles(urls);
+            }
+            else if (selected == play_selected && item)
                 openPlaylistIndex(playlist_widget_->row(item));
             else if (selected == remove_selected)
                 removeSelectedPlaylistItem();
+            else if (selected == move_up)
+                moveSelectedPlaylistItem(-1);
+            else if (selected == move_down)
+                moveSelectedPlaylistItem(1);
             else if (selected == clear_all)
                 clearPlaylist();
         });
