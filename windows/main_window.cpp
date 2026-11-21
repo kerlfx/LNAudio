@@ -1925,7 +1925,6 @@ MainWindow::MainWindow(
     control_layout->addWidget(next_button);
     control_layout->addWidget(stop_button_);
     control_layout->addSpacing(8);
-    control_layout->addWidget(status_label_);
     control_layout->addStretch(1);
     connect(previous_button, &QPushButton::clicked, this, [this] { playPrevious(); });
     connect(next_button, &QPushButton::clicked, this, [this] { playNext(); });
