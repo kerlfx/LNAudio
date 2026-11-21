@@ -1268,9 +1268,10 @@ MainWindow::MainWindow(
         playlist_panel_ = new QWidget(video_surface_);
         playlist_panel_->setAttribute(Qt::WA_NativeWindow);
         playlist_panel_->setAutoFillBackground(true);
+        playlist_panel_->setObjectName(QStringLiteral("playlistOverlay"));
         playlist_panel_->setFixedWidth(320);
         playlist_panel_->setStyleSheet(QStringLiteral(
-            "QWidget { background: #171d27; border-left: 1px solid #354253; }"));
+            "QWidget#playlistOverlay { background: #171d27; border-left: 1px solid #354253; }"));
         playlist_panel_->hide();
         auto* playlist_panel_layout = new QVBoxLayout(playlist_panel_);
         playlist_panel_layout->setContentsMargins(0, 0, 0, 0);
@@ -2806,7 +2807,10 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event)
                         title_bar_->sizeHint().height());
                     title_bar_->show();
                     title_bar_->raise();
-                    fullscreen_hide_timer_->start(fullscreen_hide_delay_ms_);
+                    if (fullscreen_hide_delay_ms_ > 0)
+                        fullscreen_hide_timer_->start(fullscreen_hide_delay_ms_);
+                    else
+                        fullscreen_hide_timer_->stop();
                 }
                 else if (playlist_panel_visible_ && playlist_panel_ &&
                     position.x() >= video_surface_->width() - edge_height)
