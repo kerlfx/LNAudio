@@ -39,8 +39,14 @@ if(NOT ASIO_INCLUDE_DIR OR ASIO_INCLUDE_DIR MATCHES "-NOTFOUND$")
         )
 
         message(STATUS
-            "[LNPlayer] Cloning standalone Asio ${LNPLAYER_ASIO_VERSION} (tag asio-1-38-2) into ${LNPLAYER_ASIO_ROOT}")
+            "[LNPlayer] Fetching standalone Asio ${LNPLAYER_ASIO_VERSION} (tag asio-1-38-2)...")
+        # Git's carriage-return progress is not rendered as a live progress
+        # line by all CMake/IDE output panes. Keep this one dependency quiet;
+        # FetchContent still prints the captured output if population fails.
+        set(_lnplayer_fetchcontent_quiet "${FETCHCONTENT_QUIET}")
+        set(FETCHCONTENT_QUIET ON)
         FetchContent_MakeAvailable(AsioGit)
+        set(FETCHCONTENT_QUIET "${_lnplayer_fetchcontent_quiet}")
     endif()
 endif()
 
