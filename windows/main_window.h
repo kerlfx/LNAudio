@@ -144,6 +144,7 @@ private:
     void showFullscreenControls();
     void updateFullscreenUi();
     void fitWindowToVideoAspect(float aspect_ratio);
+    void positionFullscreenControls();
 
     template <typename Executor, typename Handler>
     void postTask(const Executor& executor, Handler&& handler)
@@ -248,6 +249,7 @@ private:
     bool slider_dragging_ = false;
     bool snapshot_pending_ = false;
     bool fullscreen_controls_visible_ = true;
+    bool control_panel_overlay_ = false;
     bool playlist_panel_visible_ = true;
     int fullscreen_hide_delay_ms_ = 2000;
     int osd_duration_ms_ = 1500;
