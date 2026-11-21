@@ -117,15 +117,15 @@ set(LNPLAYER_SQLITE_VERSION "3.54.1" CACHE STRING
 set(LNPLAYER_SQLITE_ROOT "${PROJECT_SOURCE_DIR}/3rd_cache/sqlite" CACHE PATH
     "Root directory of the SQLite source and generated amalgamation")
 
-# Fetch the exact upstream release tag. The source repository does not ship the
-# generated amalgamation, so build it with SQLite's own makefile and scripts.
+# Download the tagged source archive instead of cloning SQLite's Git repository.
+# The repository history is large; the release archive contains only the source
+# tree needed by the official amalgamation-generation rules.
 set(_sqlite_source_dir "${LNPLAYER_SQLITE_ROOT}/source-${LNPLAYER_SQLITE_VERSION}")
 FetchContent_Declare(
     sqlite_source
-    GIT_REPOSITORY https://github.com/sqlite/sqlite.git
-    GIT_TAG "version-${LNPLAYER_SQLITE_VERSION}"
-    GIT_SHALLOW TRUE
-    GIT_PROGRESS TRUE
+    URL "https://github.com/sqlite/sqlite/archive/refs/tags/version-${LNPLAYER_SQLITE_VERSION}.tar.gz"
+    DOWNLOAD_NO_PROGRESS FALSE
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     SOURCE_DIR "${_sqlite_source_dir}"
     SOURCE_SUBDIR _lnplayer_sqlite_source_only
 )
