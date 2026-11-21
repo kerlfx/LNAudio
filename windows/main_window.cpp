@@ -2464,12 +2464,19 @@ void MainWindow::fitWindowToVideoAspect(float aspect_ratio)
         static_cast<float>(video_surface_->width()) / aspect_ratio);
     const int window_height = height() +
         target_surface_height - video_surface_->height();
-    const int maximum_height = std::max(
-        minimumHeight(), target_screen->availableGeometry().height() - 32);
+    const QRect available = target_screen->availableGeometry();
+    const int maximum_height = std::max(minimumHeight(), available.height() - 32);
     const int adjusted_height = std::clamp(
         window_height, minimumHeight(), maximum_height);
     if (std::abs(adjusted_height - height()) >= 8)
         resize(width(), adjusted_height);
+
+    QPoint adjusted_position = pos();
+    if (adjusted_position.y() + adjusted_height > available.bottom() + 1)
+        adjusted_position.setY(std::max(
+            available.top(), available.bottom() + 1 - adjusted_height));
+    if (adjusted_position != pos())
+        move(adjusted_position);
 }
 
 void MainWindow::positionFullscreenControls()
