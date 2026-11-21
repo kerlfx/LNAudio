@@ -116,7 +116,7 @@ endif()
 message(STATUS "[LNPlayer] FFmpeg SDK ready.")
 
 set(LNPLAYER_SQLITE_VERSION "3.54.1" CACHE STRING
-    "Pinned SQLite amalgamation version")
+    "Pinned SQLite amalgamation version" FORCE)
 set(LNPLAYER_SQLITE_ROOT "${PROJECT_SOURCE_DIR}/3rd_cache/sqlite" CACHE PATH
     "Root directory of the SQLite amalgamation source")
 
