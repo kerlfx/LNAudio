@@ -2,6 +2,9 @@ include(FetchContent)
 
 set(FETCHCONTENT_BASE_DIR "${PROJECT_SOURCE_DIR}/3rd_cache/fetchcontent" CACHE PATH
     "Base directory for FetchContent downloads and build metadata")
+set(FETCHCONTENT_QUIET OFF CACHE BOOL
+    "Show FetchContent download and extraction progress")
+message(STATUS "[LNPlayer] Checking third-party dependencies...")
 
 set(LNPLAYER_ASIO_VERSION "1.36.0" CACHE STRING
     "Pinned standalone Asio version")
@@ -19,6 +22,7 @@ if(ASIO_INCLUDE_DIR AND NOT ASIO_INCLUDE_DIR MATCHES "-NOTFOUND$"
         "ASIO_INCLUDE_DIR is set to '${ASIO_INCLUDE_DIR}', but asio.hpp was not found there.")
 endif()
 
+message(STATUS "[LNPlayer] Checking standalone Asio ${LNPLAYER_ASIO_VERSION}...")
 if(NOT ASIO_INCLUDE_DIR OR ASIO_INCLUDE_DIR MATCHES "-NOTFOUND$")
     if(NOT EXISTS "${LNPLAYER_ASIO_ROOT}/asio/include/asio.hpp"
        AND NOT EXISTS "${LNPLAYER_ASIO_ROOT}/include/asio.hpp")
@@ -52,6 +56,7 @@ find_path(ASIO_INCLUDE_DIR
         "${LNPLAYER_ASIO_ROOT}/include"
     REQUIRED
 )
+message(STATUS "[LNPlayer] Asio ready.")
 
 set(LNPLAYER_FFMPEG_ROOT "${PROJECT_SOURCE_DIR}/3rd_cache/ffmpeg" CACHE PATH
     "Root directory of the FFmpeg development SDK")
@@ -61,6 +66,7 @@ option(LNPLAYER_DOWNLOAD_FFMPEG
     ON
 )
 
+message(STATUS "[LNPlayer] Checking FFmpeg SDK...")
 if(NOT EXISTS "${LNPLAYER_FFMPEG_ROOT}/include/libavformat/avformat.h")
     if(NOT LNPLAYER_DOWNLOAD_FFMPEG)
         message(FATAL_ERROR
@@ -110,12 +116,14 @@ if(NOT EXISTS "${LNPLAYER_FFMPEG_ROOT}/include/libavformat/avformat.h")
         FetchContent_Populate(FFmpeg)
     endif()
 endif()
+message(STATUS "[LNPlayer] FFmpeg SDK ready.")
 
 set(LNPLAYER_SQLITE_VERSION "3.50.4" CACHE STRING
     "Pinned SQLite amalgamation version")
 set(LNPLAYER_SQLITE_ROOT "${PROJECT_SOURCE_DIR}/3rd_cache/sqlite" CACHE PATH
     "Root directory of the SQLite amalgamation source")
 
+message(STATUS "[LNPlayer] Checking SQLite ${LNPLAYER_SQLITE_VERSION}...")
 if(NOT EXISTS "${LNPLAYER_SQLITE_ROOT}/sqlite-amalgamation-3500400/sqlite3.c"
    AND NOT EXISTS "${LNPLAYER_SQLITE_ROOT}/sqlite3.c")
     FetchContent_Declare(
@@ -132,6 +140,7 @@ if(NOT EXISTS "${LNPLAYER_SQLITE_ROOT}/sqlite-amalgamation-3500400/sqlite3.c"
         FetchContent_Populate(SQLite)
     endif()
 endif()
+message(STATUS "[LNPlayer] SQLite ready.")
 
 find_file(SQLITE3_C_SOURCE
     NAMES sqlite3.c
@@ -142,6 +151,7 @@ find_file(SQLITE3_C_SOURCE
     REQUIRED
 )
 get_filename_component(SQLITE_INCLUDE_DIR "${SQLITE3_C_SOURCE}" DIRECTORY)
+message(STATUS "[LNPlayer] Third-party dependencies ready.")
 
 find_path(FFMPEG_INCLUDE_DIR
     NAMES libavformat/avformat.h
