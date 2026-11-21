@@ -17,23 +17,22 @@ Version changes must update the CMake pins and this document together.
 
 | Dependency | Pinned version | Variant | Acquisition / verification |
 |---|---:|---|---|
-| Standalone Asio | 1.38.2 | Header-only, standalone | SourceForge release archive; SHA-256 verified by FetchContent |
+| Standalone Asio | 1.38.2 | Header-only, standalone | Official GitHub repository; shallow clone of pinned tag |
 | FFmpeg | 8.1.2 | Windows MSVC x64, shared, LGPL | System233 prebuilt release; SHA-256 checked by FetchContent |
 | SQLite | 3.54.1 | Generated amalgamation | Official GitHub source archive; generated with upstream build rules |
 
-### Asio source archive
+### Asio Git checkout
 
-Standalone Asio 1.38.2 is downloaded from the Asio project files hosted on
-SourceForge, maintained by the upstream project author. The source archive is
-4.7 MB and avoids transferring Git objects and repository metadata. FetchContent
-verifies the archive with this SHA-256 before extraction:
+Standalone Asio 1.38.2 is obtained from the upstream repository
+`https://github.com/chriskohlhoff/asio.git`, pinned to tag `asio-1-38-2`.
+FetchContent uses a shallow clone and enables Git progress output. Git is
+configured to use HTTP/1.1 for this checkout to avoid HTTP/2 transport
+interoperability problems on some Windows network paths.
 
-`4893ad026013d1f64bf111c606e6abd857bb953823a4744e449969f1063fd9ce`
-
-The extracted header tree is stored under
-`3rd_cache/asio/1.38.2-archive`; the include directory is its `include`
-subdirectory. The previous Git checkout location is deliberately not reused,
-so an interrupted clone cannot be mistaken for a populated archive.
+The checkout is stored under `3rd_cache/asio/1.38.2-git`; the include directory
+is its `include` subdirectory. An interrupted checkout is not considered ready:
+CMake checks for `include/asio.hpp` before reusing the directory. If the checkout
+is incomplete, remove that version-specific directory and configure again.
 
 ### FFmpeg version policy
 
@@ -102,7 +101,7 @@ By default, FetchContent source trees and download metadata live under:
 
 The individual SDK/source roots are:
 
-- `3rd_cache/asio/1.38.2-archive`
+- `3rd_cache/asio/1.38.2-git`
 - `3rd_cache/ffmpeg`
 - `3rd_cache/sqlite/source-3.54.1`
 
