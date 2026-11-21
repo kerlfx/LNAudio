@@ -52,6 +52,21 @@ amalgamation archive) now use FetchContent. The manifest is a raw-file download,
 not an extracted source dependency; it is stored under
 `3rd_cache/fetchcontent/sqlite-metadata/download`.
 
+### Repository-local proxy
+
+CMake optionally includes `proxy.cmake` from the repository root before adding
+the Core subdirectory, so proxy environment variables are set before any
+FetchContent dependency download begins. The file is intentionally ignored by
+Git because proxy addresses and credentials are machine-specific.
+
+The repository-local `proxy.cmake` is a ready-to-edit configuration file.
+Its settings are commented out by default; uncomment the required
+`set(ENV{HTTP_PROXY} ...)`, `set(ENV{HTTPS_PROXY} ...)`, or optional
+`ALL_PROXY` / `NO_PROXY` entries when needed. If the file is absent, the
+configure process keeps its inherited environment unchanged. The settings
+apply to the CMake configure process and its child download processes, without
+changing system-wide proxy settings.
+
 ### FetchContent storage
 
 By default, FetchContent source trees and download metadata live under:

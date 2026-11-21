@@ -9,6 +9,14 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# Load optional repository-local proxy settings before any dependency downloads.
+# proxy.cmake is a local file and is intentionally ignored by Git.
+set(_lnplayer_proxy_file "${PROJECT_SOURCE_DIR}/proxy.cmake")
+if(EXISTS "${_lnplayer_proxy_file}")
+    include("${_lnplayer_proxy_file}")
+    message(STATUS "[LNPlayer] Loaded local proxy settings from proxy.cmake")
+endif()
+
 # Keep all FetchContent sources and download metadata under the repository.
 # Replace CMake's previous default build/_deps location, but preserve an explicit
 # user-selected cache directory.
