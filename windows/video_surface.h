@@ -9,6 +9,7 @@
 #include <QWidget>
 #include <QTimer>
 #include <QPoint>
+#include <QRect>
 
 #include <cstdint>
 #include <functional>
@@ -35,6 +36,7 @@ public:
     void set_aspect_ratio(float ratio);
     void adjust_zoom(int direction);
     float zoom() const;
+    QRect display_rect() const;
     void set_source_aspect_ratio(float ratio);
     void set_video_filter(
         float brightness, float contrast, float saturation, float hue_degrees,
