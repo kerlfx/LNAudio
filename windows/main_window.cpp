@@ -2807,7 +2807,10 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event)
                         0, playlist_panel_->width(), video_surface_->height());
                     playlist_panel_->show();
                     playlist_panel_->raise();
-                    fullscreen_hide_timer_->start(fullscreen_hide_delay_ms_);
+                    if (fullscreen_hide_delay_ms_ > 0)
+                        fullscreen_hide_timer_->start(fullscreen_hide_delay_ms_);
+                    else
+                        fullscreen_hide_timer_->stop();
                 }
             }
         }
