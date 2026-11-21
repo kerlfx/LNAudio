@@ -85,8 +85,6 @@ inline QIcon make(Name name, const QColor& color = QColor(QStringLiteral("#f0f4f
     constexpr qreal pixel_ratio = 2.0;
 
     QByteArray data = svg_data();
-    data.replace("currentColor", color.name(QColor::HexRgb).toUtf8());
-
     QSvgRenderer renderer(data);
     if (!renderer.isValid())
         return {};
