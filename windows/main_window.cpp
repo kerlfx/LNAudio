@@ -1107,18 +1107,24 @@ MainWindow::MainWindow(
         title_layout->addWidget(title_label, 1);
         auto* minimize_button = new QPushButton(title_bar_);
         minimize_button->setIcon(PlayerIcons::make(PlayerIcons::Name::Minimize));
+        minimize_button->setIconSize(QSize(16, 16));
+        minimize_button->setFixedSize(42, 28);
         minimize_button->setToolTip(QStringLiteral("最小化"));
         minimize_button->setAccessibleName(QStringLiteral("最小化"));
         title_layout->addWidget(minimize_button);
         auto* maximize_button = new QPushButton(title_bar_);
         maximize_button->setObjectName(QStringLiteral("maximizeWindowButton"));
         maximize_button->setIcon(PlayerIcons::make(PlayerIcons::Name::Maximize));
+        maximize_button->setIconSize(QSize(16, 16));
+        maximize_button->setFixedSize(42, 28);
         maximize_button->setToolTip(QStringLiteral("最大化"));
         maximize_button->setAccessibleName(QStringLiteral("最大化"));
         title_layout->addWidget(maximize_button);
         auto* close_button = new QPushButton(title_bar_);
         close_button->setObjectName(QStringLiteral("closeWindowButton"));
         close_button->setIcon(PlayerIcons::make(PlayerIcons::Name::Close));
+        close_button->setIconSize(QSize(16, 16));
+        close_button->setFixedSize(42, 28);
         close_button->setToolTip(QStringLiteral("关闭"));
         close_button->setAccessibleName(QStringLiteral("关闭"));
         title_layout->addWidget(close_button);
@@ -1287,7 +1293,8 @@ MainWindow::MainWindow(
         shuffle_button->setText(QString());
         shuffle_button->setToolTip(QStringLiteral("随机播放：关"));
         shuffle_button->setAccessibleName(QStringLiteral("随机播放：关"));
-        repeat_button->setIcon(PlayerIcons::make(PlayerIcons::Name::Repeat));
+        repeat_button->setIcon(PlayerIcons::make(
+            PlayerIcons::Name::Repeat, QColor(QStringLiteral("#8f99a8"))));
         repeat_button->setIconSize(QSize(16, 16));
         repeat_button->setText(QString());
         repeat_button->setToolTip(QStringLiteral("循环播放：关"));
@@ -1333,8 +1340,10 @@ MainWindow::MainWindow(
         connect(repeat_button, &QPushButton::clicked, this, [this, repeat_button]
         {
             cycleRepeatMode();
-            repeat_button->setIcon(PlayerIcons::make(repeat_mode_ == 2
-                ? PlayerIcons::Name::RepeatOne : PlayerIcons::Name::Repeat));
+            repeat_button->setIcon(PlayerIcons::make(
+                repeat_mode_ == 2 ? PlayerIcons::Name::RepeatOne : PlayerIcons::Name::Repeat,
+                repeat_mode_ == 0 ? QColor(QStringLiteral("#8f99a8"))
+                    : QColor(QStringLiteral("#d7dde7"))));
             repeat_button->setToolTip(repeat_mode_ == 0 ? QStringLiteral("循环播放：关")
                 : repeat_mode_ == 1 ? QStringLiteral("循环播放：列表") : QStringLiteral("循环播放：单项"));
             repeat_button->setAccessibleName(repeat_button->toolTip());
@@ -2809,6 +2818,7 @@ void MainWindow::changeEvent(QEvent* event)
             {
                 maximize_button->setIcon(PlayerIcons::make(
                     isMaximized() ? PlayerIcons::Name::Restore : PlayerIcons::Name::Maximize));
+                maximize_button->setIconSize(QSize(16, 16));
                 maximize_button->setToolTip(isMaximized()
                     ? QStringLiteral("还原") : QStringLiteral("最大化"));
                 maximize_button->setAccessibleName(maximize_button->toolTip());
