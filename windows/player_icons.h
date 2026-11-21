@@ -5,6 +5,7 @@
 #include <QPainter>
 #include <QPainterPath>
 #include <QPen>
+#include <QPointF>
 #include <QPixmap>
 #include <QRectF>
 #include <QString>
@@ -127,7 +128,7 @@ inline QIcon make(Name name, const QColor& color = QColor(QStringLiteral("#d7dde
         painter.drawLine(5, 5, 7, 7); painter.drawLine(17, 17, 19, 19);
         painter.drawLine(5, 19, 7, 17); painter.drawLine(17, 7, 19, 5); break;
     case Name::General:
-        painter.drawCircle(QPointF(12, 12), 8);
+        painter.drawEllipse(QPointF(12, 12), 8, 8);
         painter.drawLine(12, 4, 12, 8); painter.drawLine(12, 16, 12, 20);
         painter.drawLine(4, 12, 8, 12); painter.drawLine(16, 12, 20, 12); break;
     case Name::Playback:
