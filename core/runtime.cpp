@@ -73,7 +73,7 @@ asio::thread_pool& Runtime::thread_pool()
     return thread_pool_;
 }
 
-bool Runtime::running_in_io_thread() const
+bool Runtime::running_in_io_thread()
 {
     return io_context_.get_executor().running_in_this_thread();
 }
