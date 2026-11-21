@@ -1367,6 +1367,8 @@ MainWindow::MainWindow(
             menu.addSeparator();
             QAction* clear_all = menu.addAction(QStringLiteral("清空播放列表"));
             clear_all->setEnabled(playlist_widget_->count() > 0);
+            menu.addSeparator();
+            QAction* settings_action = menu.addAction(QStringLiteral("播放器设置..."));
             QAction* selected = menu.exec(playlist_widget_->mapToGlobal(point));
             if (selected == add_files)
             {
@@ -1388,6 +1390,8 @@ MainWindow::MainWindow(
                 moveSelectedPlaylistItem(1);
             else if (selected == clear_all)
                 clearPlaylist();
+            else if (selected == settings_action)
+                openVideoSettings();
         });
         video_surface_->set_interaction_callbacks(
             [this]
