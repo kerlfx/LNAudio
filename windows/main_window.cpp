@@ -592,10 +592,14 @@ MainWindow::MainWindow(
         "QSlider::sub-page:horizontal { background: #4d91cf; border-radius: 2px; }"
         "QSlider::handle:horizontal { width: 12px; margin: -5px 0; "
         "background: #e4edf7; border: 1px solid #6c9bc5; border-radius: 6px; }"
-        "QWidget#controlPanel { background: #1c2027; border-top: 1px solid #343a46; }"
-        "QWidget#controlPanel QPushButton { min-height: 26px; padding: 2px 5px; }"
-        "QPushButton#playButton { background: #315f8f; border-color: #477eaf; font-weight: 600; }"
-        "QPushButton#playButton:hover { background: #3d74aa; }"
+        "QWidget#controlPanel { background: rgba(12, 15, 20, 218); border: 1px solid rgba(255,255,255,28); border-radius: 9px; }"
+        "QWidget#controlPanel QPushButton { min-height: 30px; padding: 2px; color: #edf2f8; background: transparent; border: 1px solid transparent; border-radius: 6px; }"
+        "QWidget#controlPanel QPushButton:hover { background: rgba(255,255,255,24); border-color: rgba(255,255,255,35); }"
+        "QWidget#controlPanel QPushButton:pressed { background: rgba(255,255,255,42); }"
+        "QWidget#controlPanel QPushButton:disabled { color: rgba(220,228,238,90); }"
+        "QWidget#controlPanel QSlider::groove:horizontal { height: 3px; background: rgba(230,238,248,85); border-radius: 1px; }"
+        "QWidget#controlPanel QSlider::sub-page:horizontal { background: #78b8f0; border-radius: 1px; }"
+        "QWidget#controlPanel QSlider::handle:horizontal { width: 10px; height: 10px; margin: -4px 0; background: #f2f6fb; border: 0; border-radius: 5px; }"
         "QSplitter::handle { background: #303743; }"
         "QSplitter::handle:hover { background: #4d91cf; }"
         "QTabWidget::pane { border: 1px solid #3b4350; }"
@@ -1903,9 +1907,10 @@ MainWindow::MainWindow(
     control_panel_ = new QWidget(content);
     control_panel_->setAttribute(Qt::WA_NativeWindow);
     control_panel_->setObjectName(QStringLiteral("controlPanel"));
+    control_panel_->setMouseTracking(true);
     auto* control_panel_layout = new QVBoxLayout(control_panel_);
-    control_panel_layout->setContentsMargins(8, 5, 8, 4);
-    control_panel_layout->setSpacing(3);
+    control_panel_layout->setContentsMargins(14, 7, 14, 7);
+    control_panel_layout->setSpacing(4);
     auto* seek_layout = new QHBoxLayout();
     seek_layout->setContentsMargins(0, 0, 0, 0);
     seek_layout->setSpacing(6);
@@ -1917,8 +1922,8 @@ MainWindow::MainWindow(
     auto* volume_button = new QPushButton(control_panel_);
     volume_button->setIcon(PlayerIcons::make(volume_slider_->value() == 0
         ? PlayerIcons::Name::VolumeMuted : PlayerIcons::Name::Volume));
-    volume_button->setIconSize(QSize(16, 16));
-    volume_button->setFixedSize(26, 22);
+    volume_button->setIconSize(QSize(20, 20));
+    volume_button->setFixedSize(34, 30);
     volume_button->setToolTip(QStringLiteral("静音切换"));
     volume_button->setAccessibleName(QStringLiteral("静音切换"));
     volume_button->setStyleSheet(QStringLiteral("QPushButton { padding: 1px; border: 0; background: transparent; }"));
@@ -1952,18 +1957,18 @@ MainWindow::MainWindow(
     {
         button->setText(QString());
         button->setIcon(PlayerIcons::make(icon));
-        button->setIconSize(QSize(17, 17));
-        button->setFixedSize(30, 26);
+        button->setIconSize(QSize(20, 20));
+        button->setFixedSize(36, 32);
         button->setToolTip(tooltip);
         button->setAccessibleName(accessible_name);
-        button->setStyleSheet(QStringLiteral("QPushButton { padding: 1px; border-radius: 4px; }"));
+        button->setStyleSheet(QString());
     };
     set_transport_icon(play_button_, PlayerIcons::Name::Play,
         QStringLiteral("播放"), QStringLiteral("播放"));
     set_transport_icon(stop_button_, PlayerIcons::Name::Stop,
         QStringLiteral("停止"), QStringLiteral("停止"));
-    auto* previous_button = new QPushButton(content);
-    auto* next_button = new QPushButton(content);
+    auto* previous_button = new QPushButton(control_panel_);
+    auto* next_button = new QPushButton(control_panel_);
     set_transport_icon(previous_button, PlayerIcons::Name::Previous,
         QStringLiteral("上一项"), QStringLiteral("上一项"));
     set_transport_icon(next_button, PlayerIcons::Name::Next,
@@ -1985,20 +1990,20 @@ MainWindow::MainWindow(
     };
     auto* audio_tracks_button = new QPushButton(control_panel_);
     audio_tracks_button->setIcon(PlayerIcons::make(PlayerIcons::Name::AudioTrack));
-    audio_tracks_button->setIconSize(QSize(18, 18));
-    audio_tracks_button->setFixedSize(30, 26);
+    audio_tracks_button->setIconSize(QSize(20, 20));
+    audio_tracks_button->setFixedSize(36, 32);
     audio_tracks_button->setToolTip(QStringLiteral("切换音轨"));
     audio_tracks_button->setAccessibleName(QStringLiteral("切换音轨"));
-    audio_tracks_button->setStyleSheet(QStringLiteral("QPushButton { padding: 1px; border-radius: 4px; }"));
+    audio_tracks_button->setStyleSheet(QString());
     if (QMenu* audio_tracks_menu = find_menu(QStringLiteral("音轨")))
         audio_tracks_button->setMenu(audio_tracks_menu);
     auto* subtitles_button = new QPushButton(control_panel_);
     subtitles_button->setIcon(PlayerIcons::make(PlayerIcons::Name::Subtitles));
-    subtitles_button->setIconSize(QSize(18, 18));
-    subtitles_button->setFixedSize(30, 26);
+    subtitles_button->setIconSize(QSize(20, 20));
+    subtitles_button->setFixedSize(36, 32);
     subtitles_button->setToolTip(QStringLiteral("切换字幕"));
     subtitles_button->setAccessibleName(QStringLiteral("切换字幕"));
-    subtitles_button->setStyleSheet(QStringLiteral("QPushButton { padding: 1px; border-radius: 4px; }"));
+    subtitles_button->setStyleSheet(QString());
     if (QMenu* subtitles_menu = find_menu(QStringLiteral("字幕")))
         subtitles_button->setMenu(subtitles_menu);
     control_layout->addStretch(1);
@@ -2010,8 +2015,11 @@ MainWindow::MainWindow(
     status_label_->setMinimumHeight(16);
     status_label_->setContentsMargins(2, 0, 2, 0);
     control_panel_layout->addWidget(status_label_);
-    layout->addWidget(control_panel_);
     setCentralWidget(content);
+    control_panel_->setParent(content);
+    control_panel_->hide();
+    control_panel_overlay_ = true;
+    positionFullscreenControls();
 
     fullscreen_hide_timer_->setSingleShot(true);
     fullscreen_hide_timer_->setInterval(fullscreen_hide_delay_ms_);
