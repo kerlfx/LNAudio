@@ -113,113 +113,91 @@ endif()
 message(STATUS "[LNPlayer] FFmpeg SDK ready.")
 
 set(LNPLAYER_SQLITE_VERSION "3.54.1" CACHE STRING
-    "Pinned SQLite amalgamation version" FORCE)
-set(LNPLAYER_SQLITE_ROOT "${PROJECT_SOURCE_DIR}/3rd_cache/sqlite" CACHE PATH
-    "Root directory of the SQLite amalgamation source")
+    "Pinned SQLite source version" FORCE)
+set(LNPLAYER_SQLITE_ROOT "\${PROJECT_SOURCE_DIR}/3rd_cache/sqlite" CACHE PATH
+    "Root directory of the SQLite source and generated amalgamation")
 
-if(NOT LNPLAYER_SQLITE_VERSION MATCHES "^([0-9]+)\\.([0-9]+)\\.([0-9]+)$")
-    message(FATAL_ERROR
-        "LNPLAYER_SQLITE_VERSION must use major.minor.patch format.")
-endif()
-
-set(_sqlite_major "${CMAKE_MATCH_1}")
-set(_sqlite_minor "${CMAKE_MATCH_2}")
-set(_sqlite_patch "${CMAKE_MATCH_3}")
-if(_sqlite_minor LESS 10)
-    set(_sqlite_minor "0${_sqlite_minor}")
-endif()
-if(_sqlite_patch LESS 10)
-    set(_sqlite_patch "0${_sqlite_patch}")
-endif()
-set(_sqlite_version_number "${_sqlite_major}${_sqlite_minor}${_sqlite_patch}00")
-set(_sqlite_archive_name "sqlite-amalgamation-${_sqlite_version_number}.zip")
-set(_sqlite_source_dir "${LNPLAYER_SQLITE_ROOT}/${LNPLAYER_SQLITE_VERSION}")
-set(_sqlite_amalgamation_dir "${_sqlite_source_dir}/sqlite-amalgamation-${_sqlite_version_number}")
-
-message(STATUS "[LNPlayer] Checking SQLite ${LNPLAYER_SQLITE_VERSION}...")
-if(NOT EXISTS "${_sqlite_amalgamation_dir}/sqlite3.c"
-   AND NOT EXISTS "${_sqlite_source_dir}/sqlite3.c"
-   AND NOT EXISTS "${LNPLAYER_SQLITE_ROOT}/sqlite3.c")
-    # Fetch the official manifest through FetchContent without extracting it.
-    # DOWNLOAD_NO_EXTRACT keeps the HTML file intact; DOWNLOAD_NAME gives it a
-    # deterministic path that can be parsed below.
-    set(_sqlite_metadata_dir "${FETCHCONTENT_BASE_DIR}/sqlite-metadata")
-    set(_sqlite_metadata_download_dir "${_sqlite_metadata_dir}/download")
-    set(_sqlite_metadata_file "${_sqlite_metadata_download_dir}/sqlite-download-products.html")
-    FetchContent_Declare(
-        SQLiteMetadata
-        URL "https://www.sqlite.org/download.html"
-        DOWNLOAD_NO_EXTRACT TRUE
-        DOWNLOAD_DIR "${_sqlite_metadata_download_dir}"
-        DOWNLOAD_NAME sqlite-download-products.html
-        DOWNLOAD_NO_PROGRESS FALSE
-        SOURCE_DIR "${_sqlite_metadata_dir}/source"
-        SOURCE_SUBDIR _lnplayer_metadata_only
-    )
-
-    message(STATUS "[LNPlayer] Fetching SQLite download metadata from sqlite.org...")
-    FetchContent_MakeAvailable(SQLiteMetadata)
-    if(NOT EXISTS "${_sqlite_metadata_file}")
-        message(FATAL_ERROR
-            "FetchContent did not produce the SQLite metadata file at '${_sqlite_metadata_file}'.")
-    endif()
-
-
-    file(STRINGS "${_sqlite_metadata_file}" _sqlite_product_rows
-        REGEX "^PRODUCT,${_sqlite_version_number},sqlite-amalgamation-${_sqlite_version_number}\\.zip,")
-    list(LENGTH _sqlite_product_rows _sqlite_product_count)
-    if(NOT _sqlite_product_count EQUAL 1)
-        message(FATAL_ERROR
-            "SQLite ${LNPLAYER_SQLITE_VERSION} amalgamation was not found exactly once "
-            "in the official SQLite download manifest.")
-    endif()
-
-    list(GET _sqlite_product_rows 0 _sqlite_product_row)
-    string(REPLACE "," ";" _sqlite_product_fields "${_sqlite_product_row}")
-    list(LENGTH _sqlite_product_fields _sqlite_product_field_count)
-    if(_sqlite_product_field_count LESS 5)
-        message(FATAL_ERROR "Invalid SQLite download metadata row: ${_sqlite_product_row}")
-    endif()
-    list(GET _sqlite_product_fields 2 _sqlite_archive_relative_url)
-    list(GET _sqlite_product_fields 4 _sqlite_archive_sha3)
-    string(LENGTH "${_sqlite_archive_sha3}" _sqlite_archive_sha3_length)
-    if(NOT _sqlite_archive_sha3_length EQUAL 64
-       OR NOT _sqlite_archive_sha3 MATCHES "^[0-9a-fA-F]+$")
-        message(FATAL_ERROR
-            "SQLite download manifest returned an invalid SHA3-256 for ${_sqlite_archive_name}.")
-    endif()
-
-    set(_sqlite_archive_url "https://www.sqlite.org/${_sqlite_archive_relative_url}")
-    message(STATUS "[LNPlayer] SQLite archive: ${_sqlite_archive_url}")
-    message(STATUS "[LNPlayer] SQLite SHA3-256 obtained from official manifest.")
-
-    FetchContent_Declare(
-        SQLite
-        URL "${_sqlite_archive_url}"
-        URL_HASH "SHA3_256=${_sqlite_archive_sha3}"
-        DOWNLOAD_NO_PROGRESS FALSE
-        DOWNLOAD_EXTRACT_TIMESTAMP TRUE
-        SOURCE_DIR "${_sqlite_source_dir}"
-        SOURCE_SUBDIR _lnplayer_amalgamation_only
-    )
-
-    message(STATUS "[LNPlayer] Fetching SQLite ${LNPLAYER_SQLITE_VERSION} amalgamation")
-    FetchContent_MakeAvailable(SQLite)
-endif()
-message(STATUS "[LNPlayer] SQLite ready.")
-
-
-
-find_file(SQLITE3_C_SOURCE
-    NAMES sqlite3.c
-    PATHS
-        "${_sqlite_amalgamation_dir}"
-        "${_sqlite_source_dir}"
-        "${LNPLAYER_SQLITE_ROOT}"
-    NO_DEFAULT_PATH
-    REQUIRED
+# Fetch the exact upstream release tag. The source repository does not ship the
+# generated amalgamation, so build it with SQLite's own makefile and scripts.
+set(_sqlite_source_dir "\${LNPLAYER_SQLITE_ROOT}/source-\${LNPLAYER_SQLITE_VERSION}")
+FetchContent_Declare(
+    sqlite_source
+    GIT_REPOSITORY https://github.com/sqlite/sqlite.git
+    GIT_TAG "version-\${LNPLAYER_SQLITE_VERSION}"
+    GIT_SHALLOW TRUE
+    GIT_PROGRESS TRUE
+    SOURCE_DIR "\${_sqlite_source_dir}"
+    SOURCE_SUBDIR _lnplayer_sqlite_source_only
 )
-get_filename_component(SQLITE_INCLUDE_DIR "${SQLITE3_C_SOURCE}" DIRECTORY)
+
+FetchContent_GetProperties(sqlite_source)
+if(NOT sqlite_source_POPULATED)
+    message(STATUS
+        "[LNPlayer] Fetching official SQLite \${LNPLAYER_SQLITE_VERSION} source into \${_sqlite_source_dir}")
+    FetchContent_Populate(sqlite_source)
+endif()
+
+set(SQLITE3_C_SOURCE "\${_sqlite_source_dir}/sqlite3.c")
+set(_sqlite_generated_header "\${_sqlite_source_dir}/sqlite3.h")
+
+if(CMAKE_HOST_WIN32)
+    # SQLite's Makefile.msc builds its small Jim Tcl interpreter (jimsh0.exe)
+    # and source-verification helper with the host MSVC tools, then runs the
+    # official target_source/sqlite3.c generation rules.
+    find_program(LNPLAYER_NMAKE_EXECUTABLE NAMES nmake REQUIRED)
+    add_custom_command(
+        OUTPUT
+            "\${SQLITE3_C_SOURCE}"
+            "\${_sqlite_generated_header}"
+        COMMAND
+            "\${LNPLAYER_NMAKE_EXECUTABLE}" /nologo /f Makefile.msc sqlite3.c
+        WORKING_DIRECTORY "\${_sqlite_source_dir}"
+        DEPENDS
+            "\${_sqlite_source_dir}/Makefile.msc"
+            "\${_sqlite_source_dir}/main.mk"
+            "\${_sqlite_source_dir}/tool/mksqlite3c.tcl"
+            "\${_sqlite_source_dir}/autosetup/jimsh0.c"
+        COMMENT "Generating SQLite \${LNPLAYER_SQLITE_VERSION} amalgamation with the official MSVC makefile"
+        VERBATIM
+    )
+else()
+    # For non-Windows build hosts, use SQLite's documented configure + make
+    # generation path. This builds host-side code generators only; sqlite3.c
+    # is subsequently compiled by LNPlayer for the selected target platform.
+    find_program(LNPLAYER_SH_EXECUTABLE NAMES sh REQUIRED)
+    find_program(LNPLAYER_MAKE_EXECUTABLE NAMES gmake make REQUIRED)
+
+    execute_process(
+        COMMAND "\${LNPLAYER_SH_EXECUTABLE}" configure
+        WORKING_DIRECTORY "\${_sqlite_source_dir}"
+        RESULT_VARIABLE _sqlite_configure_result
+        OUTPUT_VARIABLE _sqlite_configure_output
+        ERROR_VARIABLE _sqlite_configure_error
+    )
+    if(NOT _sqlite_configure_result EQUAL 0)
+        message(FATAL_ERROR
+            "SQLite \${LNPLAYER_SQLITE_VERSION} configure failed:\n"
+            "\${_sqlite_configure_output}\n\${_sqlite_configure_error}")
+    endif()
+
+    add_custom_command(
+        OUTPUT
+            "\${SQLITE3_C_SOURCE}"
+            "\${_sqlite_generated_header}"
+        COMMAND "\${LNPLAYER_MAKE_EXECUTABLE}" sqlite3.c
+        WORKING_DIRECTORY "\${_sqlite_source_dir}"
+        DEPENDS
+            "\${_sqlite_source_dir}/Makefile"
+            "\${_sqlite_source_dir}/main.mk"
+            "\${_sqlite_source_dir}/tool/mksqlite3c.tcl"
+        COMMENT "Generating SQLite \${LNPLAYER_SQLITE_VERSION} amalgamation with the official makefile"
+        VERBATIM
+    )
+endif()
+
+set_source_files_properties("\${SQLITE3_C_SOURCE}" PROPERTIES GENERATED TRUE)
+set(SQLITE_INCLUDE_DIR "\${_sqlite_source_dir}")
+message(STATUS "[LNPlayer] SQLite source ready; official amalgamation will be generated during the build.")
 message(STATUS "[LNPlayer] Third-party dependencies ready.")
 
 find_path(FFMPEG_INCLUDE_DIR
