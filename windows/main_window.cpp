@@ -4,6 +4,8 @@
 
 #include "main_window.h"
 
+#include "lnplayer_windows.h"
+
 #include <algorithm>
 #include <d3d11.h>
 #include <cmath>
@@ -5063,6 +5065,7 @@ void MainWindow::handleCoreEvent(
         break;
 
     case LNPLAYER_EVENT_PLAYBACK_ENDED:
+    {
         if (playlist_open_pending_ || video_seek_pending_)
             break;
         if (repeat_mode_ == 2 && playlist_index_ >= 0)
@@ -5085,6 +5088,7 @@ void MainWindow::handleCoreEvent(
         video_timer_->stop();
         status_label_->setText(QStringLiteral("播放结束"));
         break;
+    }
 
     case LNPLAYER_EVENT_ERROR:
         status_label_->setText(message.isEmpty()
