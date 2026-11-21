@@ -5,6 +5,7 @@ set(FETCHCONTENT_BASE_DIR "${PROJECT_SOURCE_DIR}/3rd_cache/fetchcontent" CACHE P
 
 set(LNPLAYER_ASIO_VERSION "1.36.0" CACHE STRING
     "Pinned standalone Asio version")
+string(REPLACE "." "-" LNPLAYER_ASIO_TAG_VERSION "${LNPLAYER_ASIO_VERSION}")
 set(LNPLAYER_ASIO_ROOT "${PROJECT_SOURCE_DIR}/3rd_cache/asio" CACHE PATH
     "Root directory of the standalone Asio source")
 option(LNPLAYER_DOWNLOAD_ASIO
@@ -30,7 +31,7 @@ if(NOT DEFINED ASIO_INCLUDE_DIR OR ASIO_INCLUDE_DIR STREQUAL "")
         FetchContent_Declare(
             Asio
             GIT_REPOSITORY https://github.com/chriskohlhoff/asio.git
-            GIT_TAG asio-1-36-0
+            GIT_TAG "asio-${LNPLAYER_ASIO_TAG_VERSION}"
             GIT_SHALLOW TRUE
             SOURCE_DIR "${LNPLAYER_ASIO_ROOT}"
         )
