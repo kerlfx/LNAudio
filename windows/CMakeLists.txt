@@ -34,9 +34,20 @@ file(GLOB LNPLAYER_FFMPEG_DLLS CONFIGURE_DEPENDS
     "${LNPLAYER_FFMPEG_ROOT}/bin/*.dll"
 )
 
+# lnplayer is a SHARED library. Linking it creates an import-library
+# dependency, but does not place its runtime DLL beside LNPlayer.exe in the
+# build tree. Copy it explicitly after linking.
+add_custom_command(TARGET LNPlayerApp POST_BUILD
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+        "$<TARGET_FILE:lnplayer>"
+        "$<TARGET_FILE_DIR:LNPlayerApp>"
+    COMMENT "Copying LNPlayer Core runtime"
+    VERBATIM
+)
+
 foreach(ffmpeg_dll IN LISTS LNPLAYER_FFMPEG_DLLS)
     add_custom_command(TARGET LNPlayerApp POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
             "${ffmpeg_dll}"
             "$<TARGET_FILE_DIR:LNPlayerApp>"
         VERBATIM
@@ -59,9 +70,27 @@ qt_generate_deploy_app_script(
 
 # Deploy Qt into a staging directory first, then update the runnable output
 # directory with copy-if-different so unchanged runtime files are not recopied.
+# The staging directory must contain every non-system runtime dependency of
+# LNPlayer.exe, not just the executable, so Qt's dependency scanner sees the
+# same dependency graph as the final application directory.
 set(LNPLAYER_QT_DEPLOY_STAGING_DIR
     "${CMAKE_CURRENT_BINARY_DIR}/qt-deploy/$<CONFIG>"
 )
+
+set(_lnplayer_qt_stage_copy_commands)
+list(APPEND _lnplayer_qt_stage_copy_commands
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+        "$<TARGET_FILE:lnplayer>"
+        "${LNPLAYER_QT_DEPLOY_STAGING_DIR}"
+)
+
+foreach(ffmpeg_dll IN LISTS LNPLAYER_FFMPEG_DLLS)
+    list(APPEND _lnplayer_qt_stage_copy_commands
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+            "${ffmpeg_dll}"
+            "${LNPLAYER_QT_DEPLOY_STAGING_DIR}"
+    )
+endforeach()
 
 add_custom_command(TARGET LNPlayerApp POST_BUILD
     COMMAND "${CMAKE_COMMAND}" -E make_directory
@@ -69,6 +98,7 @@ add_custom_command(TARGET LNPlayerApp POST_BUILD
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different
         "$<TARGET_FILE:LNPlayerApp>"
         "${LNPLAYER_QT_DEPLOY_STAGING_DIR}"
+    ${_lnplayer_qt_stage_copy_commands}
     COMMAND "${CMAKE_COMMAND}"
         "-DQT_DEPLOY_PREFIX=${LNPLAYER_QT_DEPLOY_STAGING_DIR}"
         "-DQT_DEPLOY_BIN_DIR=."
