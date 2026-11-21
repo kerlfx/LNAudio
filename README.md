@@ -19,10 +19,9 @@ The process owns at most one Player. Each independently launched application pro
 - Visual Studio 2022 with the MSVC x64 C++ toolchain.
 - CMake 3.24 or newer.
 - Qt 6.12 or newer, Widgets component, built for the same MSVC toolchain.
-- Standalone Asio headers under 3rd_cache/asio/asio/include (or 3rd_cache/asio/include).
-- Network access during the first configure for the pinned FFmpeg SDK and SQLite amalgamation downloads, unless those dependencies are already present in 3rd_cache.
+- Network access during the first configure for the pinned standalone Asio, FFmpeg SDK and SQLite amalgamation downloads, unless those dependencies are already present in 3rd_cache.
 
-FFmpeg is pinned to the FFmpeg 8.1.2 LGPL MSVC x64 shared SDK. CMake verifies the archive SHA-256 before extraction. The FFmpeg DLLs are copied beside the executable after build and included in the install tree. SQLite is fetched as a single amalgamation source. No Boost dependency is used.
+Standalone Asio is fetched at the pinned 1.36.0 tag when no local headers are found; set `ASIO_INCLUDE_DIR` to use an existing installation or `LNPLAYER_DOWNLOAD_ASIO=OFF` to disable downloading. FFmpeg is pinned to the FFmpeg 8.1.2 LGPL MSVC x64 shared SDK. CMake verifies the archive SHA-256 before extraction. The FFmpeg DLLs are copied beside the executable after build and included in the install tree. SQLite is fetched as a single amalgamation source. No Boost dependency is used.
 
 ## Configure and build
 
@@ -41,7 +40,7 @@ Adjust CMAKE_PREFIX_PATH to the installed Qt version and location. To use a pre-
 cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_PREFIX_PATH="C:/Qt/6.12.0/msvc2022_64" -DLNPLAYER_FFMPEG_ROOT="D:/SDK/ffmpeg" -DLNPLAYER_DOWNLOAD_FFMPEG=OFF
 ~~~
 
-The Asio include directory must be discoverable at one of the paths listed above or supplied through ASIO_INCLUDE_DIR.
+To use a pre-provisioned standalone Asio installation, pass `-DASIO_INCLUDE_DIR="D:/SDK/asio/include"`.
 
 ## Run
 
