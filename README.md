@@ -4,7 +4,7 @@ LNPlayer is a native Windows media player built with Qt 6 Widgets and a C++20 pl
 
 ## Current architecture
 
-- **Windows UI:** Qt 6 Widgets. Audio and video modes share the same executable; use --video for the video interface.
+- **Windows UI:** Qt 6 Widgets. Audio and video modes share the same executable; the video interface is the default, and `--audio` explicitly starts the audio interface.
 - **Core:** C++20 shared library exposed through a versioned C ABI.
 - **Playback coordination:** Standalone Asio, one io_context thread and a shared two-worker thread pool. A per-Player strand serializes media commands.
 - **Media:** FFmpeg for probing, demuxing, decoding, stream selection, subtitle rendering and pixel conversion.
