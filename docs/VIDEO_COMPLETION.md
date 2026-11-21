@@ -1123,3 +1123,13 @@ Windows UI 的正式完成条件统一由 [`docs/WINDOWS_UI_ACCEPTANCE.md`](WIND
 实现提交：
 - `371b0ff0a5e15cc12d4db5b233e9755812a277c3` — 修正 FFmpeg ASS 字幕滤镜 options 初始化。
 - `e0a36428ab3a9e73b866041a2ae269a7f5f71073` — GPU event query 失败时保留硬件帧 owner。
+
+
+### 2026-11-21 — 合并窗口尺寸变化期间的 D3D11 交换链调整
+
+- `VideoSurface::resizeEvent` 不再对每次 Qt resize 事件立即调用 `IDXGISwapChain::ResizeBuffers()`；改为 60 ms 单次定时器合并连续尺寸变化。
+- 尺寸稳定后执行一次交换链调整，并立即重新呈现最近缓存的软件帧，避免 ResizeBuffers 清空后台缓冲区后一直等待下一帧才恢复画面。
+- `present_frame_threadsafe()` 同步维护最近的软件帧缓存，使后台帧呈现路径也能在窗口尺寸变化后恢复画面。
+- 硬件解码路径仍依赖后续硬件帧恢复呈现；本次没有额外延长持有 GPU 解码表面生命周期。
+- 待 Windows 实机验证拖动调整窗口、快速连续改变尺寸、暂停状态下调整窗口、软件/硬件解码、字幕叠加及多显示器场景。
+- 本次未执行 Windows/MSVC 构建、CTest 或 CI。
