@@ -34,4 +34,5 @@
   <g id="folder" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5C3 6.4 3.9 5.5 5 5.5H9L11 8H19C20.1 8 21 8.9 21 10V17.5C21 18.6 20.1 19.5 19 19.5H5C3.9 19.5 3 18.6 3 17.5Z"/></g>
   <g id="external" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 4H20V11M20 4L10 14"/><path d="M18 13V19H5V6H11"/></g>
   <g id="reset" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8V4M5 8H9M5.5 8A8 8 0 1 1 4 13"/></g>
+  <g id="playlist" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6H20M4 11H15M4 16H13"/><path d="M18 13V20M15.5 17.5H20.5"/></g>
 </svg>
