@@ -570,8 +570,8 @@ MainWindow::MainWindow(
         "QWidget#windowTitleBar { background: #191d24; border-bottom: 1px solid #292f39; }"
         "QWidget#windowTitleBar QPushButton { background: transparent; border: 0; "
         "border-radius: 0; padding: 0; min-width: 34px; max-width: 34px; min-height: 26px; max-height: 26px; }"
-        "QWidget#windowTitleBar QPushButton:hover { background: #2a303a; }"
-        "QWidget#windowTitleBar QPushButton#closeWindowButton:hover { background: #a83232; }"
+        "QWidget#windowTitleBar QPushButton:hover { background: transparent; }"
+        "QWidget#windowTitleBar QPushButton#closeWindowButton:hover { background: transparent; }"
         "QWidget { color: #e8eaf0; }"
         "QMenuBar { background: #20242c; border-bottom: 1px solid #343a46; }"
         "QMenuBar::item { padding: 6px 10px; background: transparent; }"
@@ -596,9 +596,9 @@ MainWindow::MainWindow(
         "background: #e4edf7; border: 1px solid #6c9bc5; border-radius: 6px; }"
         "QWidget#controlPanel { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgba(54,66,84,218), stop:0.18 rgba(31,40,54,210), stop:1 rgba(18,24,34,218)); border: 1px solid rgba(150,170,195,105); border-top-color: rgba(205,220,240,145); border-radius: 17px; }"
         "QWidget#controlPanel QPushButton { min-height: 30px; padding: 2px; color: #f0f4fa; background: rgba(255,255,255,5); border: 1px solid transparent; border-radius: 10px; }"
-        "QWidget#controlPanel QPushButton:hover { color: #ffffff; background: rgba(225,239,255,24); border-color: rgba(225,239,255,68); }"
-        "QWidget#controlPanel QPushButton:pressed { background: rgba(160,202,248,42); border-color: rgba(185,218,255,90); }"
-        "QWidget#controlPanel QPushButton:checked { color: #a9d5ff; background: rgba(103,169,231,32); border-color: rgba(151,203,255,72); }"
+        "QWidget#controlPanel QPushButton:hover { color: #8fc7ff; background: transparent; border-color: transparent; }"
+        "QWidget#controlPanel QPushButton:pressed { background: transparent; border-color: transparent; }"
+        "QWidget#controlPanel QPushButton:checked { color: #a9d5ff; background: transparent; border-color: transparent; }"
         "QWidget#controlPanel QPushButton:disabled { color: rgba(220,228,238,90); }"
         "QWidget#controlPanel QPushButton::menu-indicator { image: none; width: 0px; }"
         "QWidget#controlPanel QSlider::groove:horizontal { height: 3px; background: rgba(230,238,248,85); border-radius: 1px; }"
@@ -1117,6 +1117,7 @@ MainWindow::MainWindow(
         title_label->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
         title_layout->addWidget(title_label, 1);
         auto* minimize_button = new QPushButton(title_bar_);
+    minimize_button->setProperty("iconOnly", true);
         minimize_button->setIcon(PlayerIcons::make(PlayerIcons::Name::Minimize, QColor(QStringLiteral("#9aa6b5"))));
         minimize_button->setIconSize(QSize(15, 15));
         minimize_button->setFixedSize(34, 26);
@@ -1124,6 +1125,7 @@ MainWindow::MainWindow(
         minimize_button->setAccessibleName(QStringLiteral("最小化"));
         title_layout->addWidget(minimize_button);
         auto* maximize_button = new QPushButton(title_bar_);
+    maximize_button->setProperty("iconOnly", true);
         maximize_button->setObjectName(QStringLiteral("maximizeWindowButton"));
         maximize_button->setIcon(PlayerIcons::make(PlayerIcons::Name::Maximize, QColor(QStringLiteral("#9aa6b5"))));
         maximize_button->setIconSize(QSize(15, 15));
@@ -1132,6 +1134,7 @@ MainWindow::MainWindow(
         maximize_button->setAccessibleName(QStringLiteral("最大化"));
         title_layout->addWidget(maximize_button);
         auto* close_button = new QPushButton(title_bar_);
+    close_button->setProperty("iconOnly", true);
         close_button->setObjectName(QStringLiteral("closeWindowButton"));
         close_button->setIcon(PlayerIcons::make(PlayerIcons::Name::Close, QColor(QStringLiteral("#9aa6b5"))));
         close_button->setIconSize(QSize(14, 14));
@@ -1271,18 +1274,23 @@ MainWindow::MainWindow(
         playlist_actions->setContentsMargins(0, 0, 0, 0);
         playlist_actions->setSpacing(3);
         auto* add_to_queue = new QPushButton(playlist_panel_);
+    add_to_queue->setProperty("iconOnly", true);
         add_to_queue->setIcon(PlayerIcons::make(PlayerIcons::Name::Add));
         add_to_queue->setToolTip(QStringLiteral("添加到播放列表"));
         auto* remove_from_queue = new QPushButton(playlist_panel_);
+    remove_from_queue->setProperty("iconOnly", true);
         remove_from_queue->setIcon(PlayerIcons::make(PlayerIcons::Name::Remove));
         remove_from_queue->setToolTip(QStringLiteral("移除选中项"));
         auto* clear_queue = new QPushButton(playlist_panel_);
+    clear_queue->setProperty("iconOnly", true);
         clear_queue->setIcon(PlayerIcons::make(PlayerIcons::Name::Clear));
         clear_queue->setToolTip(QStringLiteral("清空播放列表"));
         auto* move_up = new QPushButton(playlist_panel_);
+    move_up->setProperty("iconOnly", true);
         move_up->setIcon(PlayerIcons::make(PlayerIcons::Name::MoveUp));
         move_up->setToolTip(QStringLiteral("上移"));
         auto* move_down = new QPushButton(playlist_panel_);
+    move_down->setProperty("iconOnly", true);
         move_down->setIcon(PlayerIcons::make(PlayerIcons::Name::MoveDown));
         move_down->setToolTip(QStringLiteral("下移"));
         for (QPushButton* button : {add_to_queue, remove_from_queue, clear_queue, move_up, move_down})
@@ -1944,6 +1952,7 @@ MainWindow::MainWindow(
     seek_layout->addWidget(seek_slider_, 1);
 
     auto* volume_button = new QPushButton(control_panel_);
+    volume_button->setProperty("iconOnly", true);
     volume_button->setIcon(PlayerIcons::make(volume_slider_->value() == 0
         ? PlayerIcons::Name::VolumeMuted : PlayerIcons::Name::Volume));
     volume_button->setIconSize(QSize(20, 20));
@@ -2015,6 +2024,7 @@ MainWindow::MainWindow(
     if (mode_ == PlayerMode::Video)
     {
         playlist_toggle_button_ = new QPushButton(control_panel_);
+    playlist_toggle_button_->setProperty("iconOnly", true);
         playlist_toggle_button_->setCheckable(true);
         playlist_toggle_button_->setChecked(playlist_panel_visible_);
         playlist_toggle_button_->setIcon(PlayerIcons::make(PlayerIcons::Name::Playlist,
@@ -2045,6 +2055,7 @@ MainWindow::MainWindow(
         });
     }
     auto* audio_tracks_button = new QPushButton(control_panel_);
+    audio_tracks_button->setProperty("iconOnly", true);
     audio_tracks_button->setIcon(PlayerIcons::make(PlayerIcons::Name::AudioTrack));
     audio_tracks_button->setIconSize(QSize(20, 20));
     audio_tracks_button->setFixedSize(36, 32);
@@ -2054,6 +2065,7 @@ MainWindow::MainWindow(
     if (QMenu* audio_tracks_menu = find_menu(QStringLiteral("音轨")))
         audio_tracks_button->setMenu(audio_tracks_menu);
     auto* subtitles_button = new QPushButton(control_panel_);
+    subtitles_button->setProperty("iconOnly", true);
     subtitles_button->setIcon(PlayerIcons::make(PlayerIcons::Name::Subtitles));
     subtitles_button->setIconSize(QSize(20, 20));
     subtitles_button->setFixedSize(36, 32);
