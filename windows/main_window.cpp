@@ -510,10 +510,8 @@ MainWindow::MainWindow(
             settings.value(QStringLiteral("Video/Subtitle/FontSize"), 0).toInt(), 0, 96);
         subtitle_vertical_position_ = std::clamp(
             settings.value(QStringLiteral("Video/Subtitle/VerticalPosition"), 80).toInt(), 60, 80);
-        middle_click_action_ = std::clamp(
-            settings.value(QStringLiteral("Video/Mouse/MiddleClickAction"), 2).toInt(), 0, 2);
-        double_click_action_ = std::clamp(
-            settings.value(QStringLiteral("Video/Mouse/DoubleClickAction"), 2).toInt(), 0, 2);
+        middle_click_action_ = 2;
+        double_click_action_ = 2;
         wheel_action_ = std::clamp(
             settings.value(QStringLiteral("Video/Mouse/WheelAction"), 0).toInt(), 0, 2);
         mouse_gestures_enabled_ = settings.value(
@@ -1161,10 +1159,9 @@ MainWindow::MainWindow(
         auto* playlist_panel_layout = new QVBoxLayout(playlist_panel_);
         playlist_panel_layout->setContentsMargins(0, 0, 0, 0);
         playlist_panel_layout->setSpacing(3);
-        auto* playlist_actions = new QGridLayout();
+        auto* playlist_actions = new QHBoxLayout();
         playlist_actions->setContentsMargins(0, 0, 0, 0);
-        playlist_actions->setHorizontalSpacing(3);
-        playlist_actions->setVerticalSpacing(3);
+        playlist_actions->setSpacing(3);
         auto* add_to_queue = new QPushButton(QStringLiteral("添加"), playlist_panel_);
         auto* remove_from_queue = new QPushButton(QStringLiteral("移除"), playlist_panel_);
         auto* clear_queue = new QPushButton(QStringLiteral("清空"), playlist_panel_);
@@ -1174,7 +1171,10 @@ MainWindow::MainWindow(
         {
             button->setMinimumHeight(24);
             button->setMaximumHeight(26);
-            button->setStyleSheet(QStringLiteral("QPushButton { padding: 2px 5px; border-radius: 3px; }"));
+            button->setMinimumWidth(0);
+            button->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
+            button->setStyleSheet(QStringLiteral("QPushButton { padding: 2px 3px; border-radius: 3px; }"));
+            playlist_actions->addWidget(button, 1);
             button->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
         }
         auto* shuffle_button = new QPushButton(QStringLiteral("随机：关"), playlist_panel_);
@@ -1182,14 +1182,7 @@ MainWindow::MainWindow(
         shuffle_button_ = shuffle_button;
         repeat_button_ = repeat_button;
         shuffle_button->setCheckable(true);
-        playlist_actions->addWidget(add_to_queue, 0, 0);
-        playlist_actions->addWidget(remove_from_queue, 0, 1);
-        playlist_actions->addWidget(clear_queue, 0, 2);
-        playlist_actions->addWidget(move_up, 1, 0);
-        playlist_actions->addWidget(move_down, 1, 1);
-        playlist_actions->setColumnStretch(0, 1);
-        playlist_actions->setColumnStretch(1, 1);
-        playlist_actions->setColumnStretch(2, 1);
+        playlist_actions->addStretch(0);
         playlist_panel_layout->addLayout(playlist_actions);
         auto* playback_modes = new QHBoxLayout();
         playback_modes->setSpacing(3);
@@ -1285,13 +1278,6 @@ MainWindow::MainWindow(
             {
                 if (double_click_action_ == 1)
                     togglePlayback();
-                else if (double_click_action_ == 0)
-                {
-                    if (isFullScreen())
-                        showNormal();
-                    else
-                        showFullScreen();
-                }
             },
             [this](int direction, bool control)
             {
@@ -1312,9 +1298,7 @@ MainWindow::MainWindow(
             },
             [this]
             {
-                if (middle_click_action_ == 1)
-                    togglePlayback();
-                else if (middle_click_action_ == 2)
+                if (middle_click_action_ == 2)
                 {
                     if (isFullScreen())
                         showNormal();
@@ -3086,15 +3070,13 @@ void MainWindow::openVideoSettings()
     auto* always_on_top = new QCheckBox(QStringLiteral("窗口始终置顶"), interface_page);
     always_on_top->setChecked(always_on_top_);
     auto* middle_click = new QComboBox(interface_page);
-    middle_click->addItem(QStringLiteral("无动作"), 0);
-    middle_click->addItem(QStringLiteral("播放/暂停"), 1);
     middle_click->addItem(QStringLiteral("切换全屏"), 2);
-    middle_click->setCurrentIndex(middle_click_action_);
+    middle_click->setCurrentIndex(0);
+    middle_click->setEnabled(false);
     auto* double_click = new QComboBox(interface_page);
     double_click->addItem(QStringLiteral("无动作"), 2);
-    double_click->addItem(QStringLiteral("播放/暂停"), 1);
-    double_click->addItem(QStringLiteral("切换全屏"), 0);
-    double_click->setCurrentIndex(double_click_action_);
+    double_click->setCurrentIndex(0);
+    double_click->setEnabled(false);
     auto* mouse_gestures = new QCheckBox(
         QStringLiteral("启用右键拖动手势（左/右：快退/快进，上/下：音量）"), interface_page);
     mouse_gestures->setChecked(mouse_gestures_enabled_);
@@ -3406,8 +3388,8 @@ void MainWindow::openVideoSettings()
     fullscreen_hide_timer_->setInterval(fullscreen_hide_delay_ms_);
     playlist_panel_visible_ = show_playlist->isChecked();
     always_on_top_ = always_on_top->isChecked();
-    middle_click_action_ = middle_click->currentData().toInt();
-    double_click_action_ = double_click->currentData().toInt();
+    middle_click_action_ = 2;
+    double_click_action_ = 2;
     mouse_gestures_enabled_ = mouse_gestures->isChecked();
     if (video_surface_)
         video_surface_->set_gesture_enabled(mouse_gestures_enabled_);
