@@ -1333,6 +1333,9 @@ MainWindow::MainWindow(
         {
             shuffle_enabled_ = enabled;
             resetShuffleOrder();
+            shuffle_button->setIcon(PlayerIcons::make(PlayerIcons::Name::Shuffle,
+                enabled ? QColor(QStringLiteral("#d7dde7"))
+                    : QColor(QStringLiteral("#8f99a8"))));
             shuffle_button->setToolTip(enabled ? QStringLiteral("随机播放：开") : QStringLiteral("随机播放：关"));
             shuffle_button->setAccessibleName(shuffle_button->toolTip());
             saveVideoPlaylist();
@@ -3130,13 +3133,23 @@ void MainWindow::loadVideoPlaylist()
     if (shuffle_button_)
     {
         shuffle_button_->setChecked(shuffle_enabled_);
-        shuffle_button_->setText(shuffle_enabled_
-            ? QStringLiteral("随机：开")
-            : QStringLiteral("随机：关"));
+        shuffle_button_->setIcon(PlayerIcons::make(PlayerIcons::Name::Shuffle,
+            shuffle_enabled_ ? QColor(QStringLiteral("#d7dde7"))
+                : QColor(QStringLiteral("#8f99a8"))));
+        shuffle_button_->setToolTip(shuffle_enabled_
+            ? QStringLiteral("随机播放：开") : QStringLiteral("随机播放：关"));
+        shuffle_button_->setAccessibleName(shuffle_button_->toolTip());
     }
     if (repeat_button_)
-        repeat_button_->setText(repeat_mode_ == 0 ? QStringLiteral("循环：关")
-            : repeat_mode_ == 1 ? QStringLiteral("循环：列表") : QStringLiteral("循环：单项"));
+    {
+        repeat_button_->setIcon(PlayerIcons::make(
+            repeat_mode_ == 2 ? PlayerIcons::Name::RepeatOne : PlayerIcons::Name::Repeat,
+            repeat_mode_ == 0 ? QColor(QStringLiteral("#8f99a8"))
+                : QColor(QStringLiteral("#d7dde7"))));
+        repeat_button_->setToolTip(repeat_mode_ == 0 ? QStringLiteral("循环播放：关")
+            : repeat_mode_ == 1 ? QStringLiteral("循环播放：列表") : QStringLiteral("循环播放：单项"));
+        repeat_button_->setAccessibleName(repeat_button_->toolTip());
+    }
     resetShuffleOrder();
     rebuildPlaylistWidget();
     if (playlist_index_ >= 0)
@@ -3850,12 +3863,23 @@ void MainWindow::openVideoSettings()
     if (shuffle_button_)
     {
         shuffle_button_->setChecked(shuffle_enabled_);
-        shuffle_button_->setText(shuffle_enabled_
-            ? QStringLiteral("随机：开") : QStringLiteral("随机：关"));
+        shuffle_button_->setIcon(PlayerIcons::make(PlayerIcons::Name::Shuffle,
+            shuffle_enabled_ ? QColor(QStringLiteral("#d7dde7"))
+                : QColor(QStringLiteral("#8f99a8"))));
+        shuffle_button_->setToolTip(shuffle_enabled_
+            ? QStringLiteral("随机播放：开") : QStringLiteral("随机播放：关"));
+        shuffle_button_->setAccessibleName(shuffle_button_->toolTip());
     }
     if (repeat_button_)
-        repeat_button_->setText(repeat_mode_ == 0 ? QStringLiteral("循环：关")
-            : repeat_mode_ == 1 ? QStringLiteral("循环：列表") : QStringLiteral("循环：单项"));
+    {
+        repeat_button_->setIcon(PlayerIcons::make(
+            repeat_mode_ == 2 ? PlayerIcons::Name::RepeatOne : PlayerIcons::Name::Repeat,
+            repeat_mode_ == 0 ? QColor(QStringLiteral("#8f99a8"))
+                : QColor(QStringLiteral("#d7dde7"))));
+        repeat_button_->setToolTip(repeat_mode_ == 0 ? QStringLiteral("循环播放：关")
+            : repeat_mode_ == 1 ? QStringLiteral("循环播放：列表") : QStringLiteral("循环播放：单项"));
+        repeat_button_->setAccessibleName(repeat_button_->toolTip());
+    }
     resetShuffleOrder();
     saveVideoPlaylist();
     if (playlist_visibility_action_)
@@ -4043,8 +4067,15 @@ void MainWindow::cycleRepeatMode()
 {
     repeat_mode_ = (repeat_mode_ + 1) % 3;
     if (repeat_button_)
-        repeat_button_->setText(repeat_mode_ == 0 ? QStringLiteral("循环：关")
-            : repeat_mode_ == 1 ? QStringLiteral("循环：列表") : QStringLiteral("循环：单项"));
+    {
+        repeat_button_->setIcon(PlayerIcons::make(
+            repeat_mode_ == 2 ? PlayerIcons::Name::RepeatOne : PlayerIcons::Name::Repeat,
+            repeat_mode_ == 0 ? QColor(QStringLiteral("#8f99a8"))
+                : QColor(QStringLiteral("#d7dde7"))));
+        repeat_button_->setToolTip(repeat_mode_ == 0 ? QStringLiteral("循环播放：关")
+            : repeat_mode_ == 1 ? QStringLiteral("循环播放：列表") : QStringLiteral("循环播放：单项"));
+        repeat_button_->setAccessibleName(repeat_button_->toolTip());
+    }
     saveVideoPlaylist();
 }
 
