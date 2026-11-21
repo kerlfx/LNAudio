@@ -54,7 +54,7 @@ By default, FetchContent source trees and download metadata live under:
 
 The individual SDK/source roots are:
 
-- `3rd_cache/asio`
+- `3rd_cache/asio/1.38.2`
 - `3rd_cache/ffmpeg`
 - `3rd_cache/sqlite/3.54.1`
 
