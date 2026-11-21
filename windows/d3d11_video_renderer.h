@@ -38,7 +38,7 @@ public:
     bool present_hardware(
         void* texture, uint32_t array_slice, uint32_t format,
         int width, int height, std::shared_ptr<void> frame_owner,
-        const uint8_t* overlay, int overlay_stride);
+        const uint8_t* overlay, int overlay_width, int overlay_height, int overlay_stride);
     bool capture_bgra(std::vector<uint8_t>& pixels, int& width, int& height);
     void clear();
     void shutdown();
