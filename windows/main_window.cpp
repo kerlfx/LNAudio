@@ -1183,7 +1183,7 @@ MainWindow::MainWindow(
     auto* content = new QWidget(this);
     auto* layout = new QVBoxLayout(content);
     if (mode_ == PlayerMode::Video)
-        layout->setContentsMargins(12, 12, 12, 12);
+        layout->setContentsMargins(0, 0, 0, 0);
 
     if (mode_ == PlayerMode::Video)
     {
