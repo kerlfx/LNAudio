@@ -1935,8 +1935,6 @@ MainWindow::MainWindow(
     volume_slider_->setMaximumWidth(160);
 
     control_panel_ = new QWidget(content);
-    // Keep the controls above the D3D11 video HWND while using a translucent
-    // dark glass tint. This is alpha blending, not backdrop blur.
     control_panel_->setAutoFillBackground(false);
     control_panel_->setObjectName(QStringLiteral("controlPanel"));
     control_panel_->setMouseTracking(true);
@@ -2107,7 +2105,6 @@ MainWindow::MainWindow(
         title_bar_->hide();
         title_bar_->raise();
     }
-    control_panel_overlay_ = false;
 
     fullscreen_hide_timer_->setSingleShot(true);
     fullscreen_hide_timer_->setInterval(fullscreen_hide_delay_ms_);
@@ -2117,7 +2114,6 @@ MainWindow::MainWindow(
             return;
         if (title_bar_)
             title_bar_->hide();
-        fullscreen_controls_visible_ = false;
         if (isFullScreen())
             setCursor(Qt::BlankCursor);
     });
@@ -2727,7 +2723,6 @@ void MainWindow::updateFullscreenUi()
 
     if (title_bar_)
         title_bar_->hide();
-    fullscreen_controls_visible_ = false;
     unsetCursor();
 }
 bool MainWindow::eventFilter(QObject* watched, QEvent* event)
@@ -2832,10 +2827,6 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event)
         {
             unsetCursor();
             fullscreen_hide_timer_->stop();
-        }
-        else if (event->type() == QEvent::Enter && watched == video_surface_)
-        {
-            // The overlays are revealed only by their dedicated edge zones.
         }
         else if (event->type() == QEvent::Leave && is_control_widget)
         {
