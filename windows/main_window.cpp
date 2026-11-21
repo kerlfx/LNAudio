@@ -1937,7 +1937,7 @@ MainWindow::MainWindow(
     control_panel_ = new QWidget(content);
     // Keep the controls above the D3D11 video HWND while using a translucent
     // dark glass tint. This is alpha blending, not backdrop blur.
-    control_panel_->setAutoFillBackground(true);
+    control_panel_->setAutoFillBackground(false);
     control_panel_->setObjectName(QStringLiteral("controlPanel"));
     control_panel_->setMouseTracking(true);
     auto* control_panel_layout = new QVBoxLayout(control_panel_);
