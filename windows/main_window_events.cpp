@@ -204,7 +204,8 @@ void MainWindow::showPlaybackInfo()
     if (fullscreen_before_dialog)
         fullscreen_hide_timer_->stop();
     QMessageBox::information(this, QStringLiteral("播放信息"), details);
-    if (fullscreen_before_dialog && isFullScreen())
+    if (fullscreen_before_dialog && isFullScreen() && fullscreen_hide_delay_ms_ > 0)
+        fullscreen_hide_timer_->start(fullscreen_hide_delay_ms_);
 }
 
 void MainWindow::positionOsd()
