@@ -1097,3 +1097,15 @@ Windows UI 的正式完成条件统一由 [`docs/WINDOWS_UI_ACCEPTANCE.md`](WIND
 - 6945aeb5dddff4e1b94f9f57698d1d2b4e308944 — 使用 HWND 客户区实际像素尺寸调整 D3D11 SwapChain。
 
 - 008229426de43ea12590be08dbabb13ed2925006 — 在 D3D11 StreamDestRect 处补充默认值语义注释，避免后续重构移除必要调用。
+
+
+### 2026-11-21 — D3D11 字幕 Overlay 上传边界修正
+
+- [x] `present_hardware()` 显式接收 Overlay 的源宽度、高度和 stride，不再把 HWND 客户区尺寸当作 Overlay 源尺寸。
+- [x] 动态纹理按 Overlay 实际尺寸创建；上传时仅读取 `overlay_height` 行、每行 `overlay_width * 4` 字节，渲染时再由 viewport 映射到 SwapChain 输出尺寸。
+- [x] 该修改修复了原实现只检查 `overlay_stride >= output_width * 4`、却没有验证源高度的边界缺陷；当输出高度大于 QImage Overlay 高度时，原 `memcpy` 循环可能越过源图像末尾读取。
+- [ ] 需在 Windows 上验证 100%/150%/200% DPI、窗口连续缩放、字幕开关及硬件解码历史帧回放。
+- [ ] 未运行 MSVC 构建、CTest 或实机测试。
+
+实现提交：
+- dfe7e508f378ba75e9d48f8b3104f67afc26b0a6 — D3D11 字幕 Overlay 上传使用显式源尺寸并按源尺寸复制。
