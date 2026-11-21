@@ -1908,6 +1908,8 @@ MainWindow::MainWindow(
 
     control_panel_ = new QWidget(content);
     control_panel_->setAttribute(Qt::WA_NativeWindow);
+    control_panel_->setAttribute(Qt::WA_TranslucentBackground);
+    control_panel_->setAutoFillBackground(false);
     control_panel_->setObjectName(QStringLiteral("controlPanel"));
     control_panel_->setMouseTracking(true);
     auto* control_panel_layout = new QVBoxLayout(control_panel_);
@@ -2906,7 +2908,7 @@ bool MainWindow::nativeEvent(
         const QPoint position = mapFromGlobal(QCursor::pos());
         if (!isMaximized())
         {
-            constexpr int border = 9;
+            constexpr int border = 12;
             const bool left = position.x() < border;
             const bool right = position.x() >= width() - border;
             const bool top = position.y() < border;
