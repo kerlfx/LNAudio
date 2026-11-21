@@ -1024,3 +1024,11 @@ Windows UI 的正式完成条件统一由 [`docs/WINDOWS_UI_ACCEPTANCE.md`](WIND
 审查文档：`docs/PERFORMANCE_AUDIT.md`
 
 实现提交：`3f8a21be8c7cc86e8ec170c2a4c36471b6df23ab`。
+
+
+### 2026-11-21 — 视频帧历史内存限制
+
+- [x] 软件帧历史增加 256 MiB 图像内存预算和 120 帧上限，按最旧帧优先淘汰。
+- [x] 硬件帧历史最多保留 8 个解码表面 owner；淘汰时同步维护逐帧历史索引。
+- [ ] Windows/MSVC 构建、软件/硬件解码长时间播放、逐帧后退范围和实际 Private Bytes/GPU memory 尚未验收。
+- [ ] 本次仅完成源码静态回读，未运行构建、CTest 或 CI。
