@@ -26,6 +26,9 @@
 namespace
 {
 
+template<typename Callback, typename... Args>
+void invoke_callback(Callback callback, Args&&... args) noexcept;
+
 struct PlayerSnapshot
 {
     lnplayer_state_t state = LNPLAYER_STATE_IDLE;
