@@ -1433,6 +1433,10 @@ MainWindow::MainWindow(
                     else
                         showFullScreen();
                 }
+                else if (middle_click_action_ == 1)
+                {
+                    togglePlayback();
+                }
             },
             [this](int direction)
             {
