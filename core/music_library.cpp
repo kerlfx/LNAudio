@@ -72,14 +72,17 @@ bool MusicLibrary::open_default(std::string& error)
         return true;
 
 #ifdef _WIN32
-    const wchar_t* local_app_data = _wgetenv(L"LOCALAPPDATA");
-    if (!local_app_data)
+    wchar_t* local_app_data = nullptr;
+    size_t local_app_data_size = 0;
+    if (_wdupenv_s(&local_app_data, &local_app_data_size, L"LOCALAPPDATA") != 0
+        || !local_app_data)
     {
         error = "LOCALAPPDATA is not available.";
         return false;
     }
     const std::filesystem::path directory =
         std::filesystem::path(local_app_data) / L"LNPlayer";
+    std::free(local_app_data);
     const std::filesystem::path database_path = directory / L"library.db";
 #else
     const char* data_home = std::getenv("XDG_DATA_HOME");
@@ -280,7 +283,9 @@ bool MusicLibrary::scan_directory(
     if (!add_directory(path, recursive, error))
         return false;
 
-    const std::filesystem::path root = std::filesystem::u8path(path);
+    const std::u8string utf8_path(
+        reinterpret_cast<const char8_t*>(path.data()), path.size());
+    const std::filesystem::path root(utf8_path);
     const auto options = std::filesystem::directory_options::skip_permission_denied;
     auto import_file = [this, &imported_count, &error](const std::filesystem::directory_entry& entry)
     {
