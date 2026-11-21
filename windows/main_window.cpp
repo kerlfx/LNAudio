@@ -85,6 +85,7 @@
 #include <QStandardPaths>
 #include <QSettings>
 #include <QSignalBlocker>
+#include <QSizePolicy>
 #include <QTimer>
 #include <QUrl>
 #include <QVariant>
