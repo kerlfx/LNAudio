@@ -1136,6 +1136,13 @@ MainWindow::MainWindow(
             menu_host_layout->addWidget(menuBar());
         }
         setMenuWidget(menu_host);
+        title_bar_->setMouseTracking(true);
+        title_bar_->installEventFilter(this);
+        for (QWidget* child : title_bar_->findChildren<QWidget*>())
+        {
+            child->setMouseTracking(true);
+            child->installEventFilter(this);
+        }
     }
 
     auto* content = new QWidget(this);
@@ -2489,6 +2496,7 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event)
             watched == playlist_panel_ ||
             (playlist_panel_ && watched_widget && playlist_panel_->isAncestorOf(watched_widget)) ||
             watched == menuBar() || (menuBar() && watched_widget && menuBar()->isAncestorOf(watched_widget)) ||
+            watched == title_bar_ || (title_bar_ && watched_widget && title_bar_->isAncestorOf(watched_widget)) ||
             watched == statusBar() || (statusBar() && watched_widget && statusBar()->isAncestorOf(watched_widget)) ||
             is_menu_widget;
         if (watched == video_surface_ && event->type() == QEvent::Resize &&
@@ -2538,6 +2546,8 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event)
                     (cursor_widget == playlist_panel_ || playlist_panel_->isAncestorOf(cursor_widget))) ||
                  (menuBar() &&
                     (cursor_widget == menuBar() || menuBar()->isAncestorOf(cursor_widget))) ||
+                 (title_bar_ &&
+                    (cursor_widget == title_bar_ || title_bar_->isAncestorOf(cursor_widget))) ||
                  (statusBar() &&
                     (cursor_widget == statusBar() || statusBar()->isAncestorOf(cursor_widget))));
             if (!pointer_over_controls && !QApplication::activePopupWidget() &&
@@ -2555,6 +2565,18 @@ void MainWindow::changeEvent(QEvent* event)
     {
         if (!isFullScreen() && !isMinimized())
             normal_geometry_ = saveGeometry();
+        if (title_bar_)
+        {
+            if (auto* maximize_button = title_bar_->findChild<QPushButton*>(
+                QStringLiteral("maximizeWindowButton")))
+            {
+                maximize_button->setIcon(style()->standardIcon(
+                    isMaximized() ? QStyle::SP_TitleBarNormalButton : QStyle::SP_TitleBarMaxButton));
+                maximize_button->setToolTip(isMaximized()
+                    ? QStringLiteral("还原") : QStringLiteral("最大化"));
+                maximize_button->setAccessibleName(maximize_button->toolTip());
+            }
+        }
         updateFullscreenUi();
     }
 }
