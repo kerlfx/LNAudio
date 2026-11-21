@@ -3,11 +3,52 @@ include(FetchContent)
 set(FETCHCONTENT_BASE_DIR "${PROJECT_SOURCE_DIR}/3rd_cache/fetchcontent" CACHE PATH
     "Base directory for FetchContent downloads and build metadata")
 
+set(LNPLAYER_ASIO_VERSION "1.36.0" CACHE STRING
+    "Pinned standalone Asio version")
+set(LNPLAYER_ASIO_ROOT "${PROJECT_SOURCE_DIR}/3rd_cache/asio" CACHE PATH
+    "Root directory of the standalone Asio source")
+option(LNPLAYER_DOWNLOAD_ASIO
+    "Download the pinned standalone Asio headers when they are not available locally"
+    ON
+)
+
+if(DEFINED ASIO_INCLUDE_DIR AND NOT ASIO_INCLUDE_DIR STREQUAL ""
+   AND NOT EXISTS "${ASIO_INCLUDE_DIR}/asio.hpp")
+    message(FATAL_ERROR
+        "ASIO_INCLUDE_DIR is set to '${ASIO_INCLUDE_DIR}', but asio.hpp was not found there.")
+endif()
+
+if(NOT DEFINED ASIO_INCLUDE_DIR OR ASIO_INCLUDE_DIR STREQUAL "")
+    if(NOT EXISTS "${LNPLAYER_ASIO_ROOT}/asio/include/asio.hpp"
+       AND NOT EXISTS "${LNPLAYER_ASIO_ROOT}/include/asio.hpp")
+        if(NOT LNPLAYER_DOWNLOAD_ASIO)
+            message(FATAL_ERROR
+                "Standalone Asio was not found under '${LNPLAYER_ASIO_ROOT}'. "
+                "Enable LNPLAYER_DOWNLOAD_ASIO or provide ASIO_INCLUDE_DIR.")
+        endif()
+
+        FetchContent_Declare(
+            Asio
+            GIT_REPOSITORY https://github.com/chriskohlhoff/asio.git
+            GIT_TAG asio-1-36-0
+            GIT_SHALLOW TRUE
+            SOURCE_DIR "${LNPLAYER_ASIO_ROOT}"
+        )
+
+        FetchContent_GetProperties(Asio)
+        if(NOT asio_POPULATED)
+            message(STATUS
+                "Fetching standalone Asio ${LNPLAYER_ASIO_VERSION} into ${LNPLAYER_ASIO_ROOT}")
+            FetchContent_Populate(Asio)
+        endif()
+    endif()
+endif()
+
 find_path(ASIO_INCLUDE_DIR
     NAMES asio.hpp
     HINTS
-        "${PROJECT_SOURCE_DIR}/3rd_cache/asio/asio/include"
-        "${PROJECT_SOURCE_DIR}/3rd_cache/asio/include"
+        "${LNPLAYER_ASIO_ROOT}/asio/include"
+        "${LNPLAYER_ASIO_ROOT}/include"
     REQUIRED
 )
 
