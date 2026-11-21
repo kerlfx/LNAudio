@@ -2,8 +2,8 @@ include(FetchContent)
 
 set(FETCHCONTENT_BASE_DIR "${PROJECT_SOURCE_DIR}/3rd_cache/fetchcontent" CACHE PATH
     "Base directory for FetchContent downloads and build metadata")
-set(FETCHCONTENT_QUIET OFF CACHE BOOL
-    "Show FetchContent download and extraction progress")
+# Keep FetchContent progress visible even when the build directory has an older cache.
+set(FETCHCONTENT_QUIET OFF)
 message(STATUS "[LNPlayer] Checking third-party dependencies...")
 
 set(LNPLAYER_ASIO_VERSION "1.36.0" CACHE STRING
