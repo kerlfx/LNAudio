@@ -839,6 +839,15 @@ private:
                 pending_hardware_frames_.front().completion.Get(), nullptr, 0, 0);
             if (result == S_FALSE)
                 break;
+            if (FAILED(result))
+            {
+                // A failed query does not prove that the GPU has finished
+                // reading the decoded surface. Keep its owner alive unless
+                // the device has been removed and can no longer access it.
+                if (device_ && FAILED(device_->GetDeviceRemovedReason()))
+                    pending_hardware_frames_.clear();
+                break;
+            }
             pending_hardware_frames_.pop_front();
         }
     }
