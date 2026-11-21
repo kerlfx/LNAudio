@@ -2,6 +2,7 @@
 #define LNPLAYER_MAIN_WINDOW_H
 
 #include <QMainWindow>
+#include <QSize>
 #include <QDebug>
 #include <QByteArray>
 #include <QElapsedTimer>
@@ -143,7 +144,7 @@ private:
     void updatePlaybackState(lnplayer_state_t state, int64_t position_ms, int64_t duration_ms);
     void showFullscreenControls();
     void updateFullscreenUi();
-    void fitWindowToVideoAspect(float aspect_ratio);
+    void fitWindowToVideoAspect(float aspect_ratio, const QSize& source_size);
     void positionFullscreenControls();
 
     template <typename Executor, typename Handler>
