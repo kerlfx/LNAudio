@@ -37,6 +37,7 @@
 #include <QCheckBox>
 #include <QColor>
 #include <QCryptographicHash>
+#include <QCoreApplication>
 #include <QComboBox>
 #include <QCursor>
 #include <QDoubleSpinBox>
@@ -88,6 +89,7 @@
 #include <QSettings>
 #include <QSignalBlocker>
 #include <QSizePolicy>
+#include <QString>
 #include <QTimer>
 #include <QUrl>
 #include <QVariant>
