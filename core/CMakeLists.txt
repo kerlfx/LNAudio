@@ -136,8 +136,24 @@ if(NOT EXISTS "${_sqlite_source_dir}/Makefile.msc")
     if(NOT _sqlite_download_result EQUAL 0)
         message(FATAL_ERROR "SQLite source archive download failed.")
     endif()
-    file(MAKE_DIRECTORY "${_sqlite_source_dir}")
-    file(ARCHIVE_EXTRACT INPUT "${_sqlite_archive}" DESTINATION "${_sqlite_source_dir}")
+    set(_sqlite_extract_root "${LNPLAYER_SQLITE_ROOT}/extract-${LNPLAYER_SQLITE_VERSION}")
+    file(REMOVE_RECURSE "${_sqlite_extract_root}")
+    file(MAKE_DIRECTORY "${_sqlite_extract_root}")
+    file(ARCHIVE_EXTRACT INPUT "${_sqlite_archive}" DESTINATION "${_sqlite_extract_root}")
+
+    if(EXISTS "${_sqlite_extract_root}/sqlite-src-3540100/Makefile.msc")
+        file(REMOVE_RECURSE "${_sqlite_source_dir}")
+        file(RENAME
+            "${_sqlite_extract_root}/sqlite-src-3540100"
+            "${_sqlite_source_dir}"
+        )
+    elseif(EXISTS "${_sqlite_extract_root}/Makefile.msc")
+        file(REMOVE_RECURSE "${_sqlite_source_dir}")
+        file(RENAME "${_sqlite_extract_root}" "${_sqlite_source_dir}")
+    else()
+        message(FATAL_ERROR
+            "SQLite source archive did not contain the expected Makefile.msc.")
+    endif()
 endif()
 
 set(SQLITE3_C_SOURCE "${_sqlite_source_dir}/sqlite3.c")
