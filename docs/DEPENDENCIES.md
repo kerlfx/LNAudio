@@ -40,11 +40,17 @@ The currently pinned archive is:
 ### SQLite metadata policy
 
 The SQLite amalgamation version is converted to its numeric product identifier
-(`3540100`). During configure, CMake downloads the official
-`https://www.sqlite.org/download.html` manifest, selects the exact
-`sqlite-amalgamation-3540100.zip` product row, and reads the relative archive
-URL and SHA3-256 field. The archive itself is downloaded and verified by
-FetchContent. No manually maintained SQLite checksum is embedded in CMake.
+(`3540100`). During configure, FetchContent downloads the official
+`https://www.sqlite.org/download.html` manifest with `DOWNLOAD_NO_EXTRACT`,
+so the HTML/CSV file remains intact for parsing. CMake selects the exact
+`sqlite-amalgamation-3540100.zip` product row and reads its relative archive
+URL and SHA3-256 field. FetchContent then downloads and verifies the archive.
+No manually maintained SQLite checksum is embedded in CMake.
+
+All network downloads (Asio, FFmpeg, the SQLite manifest, and the SQLite
+amalgamation archive) now use FetchContent. The manifest is a raw-file download,
+not an extracted source dependency; it is stored under
+`3rd_cache/fetchcontent/sqlite-metadata/download`.
 
 ### FetchContent storage
 
