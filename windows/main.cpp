@@ -27,9 +27,9 @@ int main(int argc, char* argv[])
 
     parser.process(application);
 
-    const PlayerMode mode = parser.isSet(video_option)
-        ? PlayerMode::Video
-        : PlayerMode::Audio;
+    const PlayerMode mode = parser.isSet(audio_option)
+        ? PlayerMode::Audio
+        : PlayerMode::Video;
 
     const QStringList initial_media_files = parser.positionalArguments();
 
