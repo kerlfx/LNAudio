@@ -122,7 +122,9 @@ set(LNPLAYER_SQLITE_ROOT "${PROJECT_SOURCE_DIR}/3rd_cache/sqlite" CACHE PATH
 # The archive checksum is the SHA3-256 published by sqlite.org.
 set(_sqlite_source_dir "${LNPLAYER_SQLITE_ROOT}/source-${LNPLAYER_SQLITE_VERSION}")
 set(_sqlite_archive "${LNPLAYER_SQLITE_ROOT}/sqlite-src-3540100.zip")
-if(NOT EXISTS "${_sqlite_source_dir}/Makefile.msc")
+if(NOT EXISTS "${_sqlite_source_dir}/Makefile.msc"
+   OR NOT EXISTS "${_sqlite_source_dir}/main.mk"
+   OR NOT EXISTS "${_sqlite_source_dir}/autosetup/jimsh0.c")
     find_program(LNPLAYER_CURL_EXECUTABLE NAMES curl curl.exe REQUIRED)
     execute_process(
         COMMAND "${CMAKE_COMMAND}"
