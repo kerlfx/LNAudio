@@ -134,7 +134,7 @@
 
 ### P2 — D3D11 资源释放轮询 GPU query
 
-`release_resources()` 在持有 Renderer mutex 时循环调用 `GetData()`，返回 `S_FALSE` 时执行 `Sleep(0)`，直到所有 pending hardware frame 完成。
+`release_resources()` 在持有 Renderer mutex 时循环调用 `GetData()`，返回 `S_FALSE` 时执行 `Sleep(1)`，直到所有 pending hardware frame 完成。
 
 这不是播放常态路径，但设备重建、窗口关闭或渲染器释放时可能持续消耗 CPU，并阻止其他 capture/present 调用获取 mutex。后续应评估事件/有界等待策略，并确保不会提前释放 GPU 仍在使用的 AVFrame owner。
 
@@ -181,3 +181,10 @@
 - [ ] Core PlaybackSession::snapshot() 仍与 read_video_frame() 共用 Session mutex；后台快照仍可能等待当前帧读取结束，但不再阻塞 UI 命令调度。
 - [ ] Windows 实机需验证并发调用、控制命令延迟、进度/A-B 循环精度及窗口关闭生命周期。
 - [ ] 本次仅静态源码修改与回读，未运行 Windows/MSVC 构建、CTest 或 CI。
+
+
+### 2026-11-21 — D3D11 释放等待降低忙轮询
+
+- [x] GPU event query 未完成时的 `Sleep(0)` 改为 `Sleep(1)`，避免释放/设备恢复路径持续让出时间片进行高频轮询。
+- [ ] 该等待仍可能无上限持续；必须保留 GPU 完成前的 AVFrame owner，不能用超时后直接释放替代。后续应设计可取消/有界的设备移除处理并实测关闭时延。
+- [ ] 本次仅静态修改与回读，未运行 Windows/MSVC 构建、CTest 或 CI。
