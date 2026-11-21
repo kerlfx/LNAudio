@@ -1951,9 +1951,9 @@ MainWindow::MainWindow(
     subtitles_button->setStyleSheet(QStringLiteral("QPushButton { padding: 1px; font-size: 11px; font-weight: 600; border-radius: 4px; }"));
     if (QMenu* subtitles_menu = find_menu(QStringLiteral("字幕")))
         subtitles_button->setMenu(subtitles_menu);
+    control_layout->addStretch(1);
     control_layout->addWidget(audio_tracks_button);
     control_layout->addWidget(subtitles_button);
-    control_layout->addStretch(1);
     connect(previous_button, &QPushButton::clicked, this, [this] { playPrevious(); });
     connect(next_button, &QPushButton::clicked, this, [this] { playNext(); });
     control_panel_layout->addLayout(control_layout);
