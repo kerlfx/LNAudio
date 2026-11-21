@@ -3359,8 +3359,15 @@ void MainWindow::openVideoSettings()
     dialog.setObjectName(QStringLiteral("settingsDialog"));
     dialog.setWindowTitle(QStringLiteral("LNPlayer 播放器设置"));
     dialog.setWindowIcon(PlayerIcons::make(PlayerIcons::Name::Settings));
-    dialog.setMinimumSize(900, 620);
-    dialog.resize(980, 700);
+    QScreen* settings_screen = screen();
+    if (!settings_screen)
+        settings_screen = QApplication::primaryScreen();
+    const QRect available_geometry = settings_screen->availableGeometry();
+    dialog.setMinimumSize(760, 480);
+    dialog.resize(
+        std::clamp(available_geometry.width() - 64, 760, 980),
+        std::clamp(available_geometry.height() - 64, 480, 700));
+    dialog.move(available_geometry.center() - dialog.rect().center());
     dialog.setSizeGripEnabled(true);
     auto* root = new QVBoxLayout(&dialog);
     root->setContentsMargins(16, 16, 16, 12);
