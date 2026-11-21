@@ -33,6 +33,7 @@ class QListWidget;
 class QListView;
 class QDialog;
 class QListWidgetItem;
+class QMenuBar;
 class QObject;
 class QEvent;
 class QMoveEvent;
@@ -214,6 +215,7 @@ private:
     VideoSurface* video_surface_ = nullptr;
     QWidget* control_panel_ = nullptr;
     QWidget* title_bar_ = nullptr;
+    QMenuBar* menu_bar_ = nullptr;
     QLabel* osd_label_ = nullptr;
     QLabel* empty_state_label_ = nullptr;
     QWidget* playlist_panel_ = nullptr;
