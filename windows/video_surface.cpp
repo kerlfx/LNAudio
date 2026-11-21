@@ -22,8 +22,6 @@
 #include <utility>
 #include <vector>
 
-#include <vector>
-
 namespace
 {
 constexpr int kWindowResizeBorder = 12;
