@@ -145,7 +145,6 @@ private:
     void showFullscreenControls();
     void updateFullscreenUi();
     void fitWindowToVideoAspect(float aspect_ratio, const QSize& source_size);
-    void positionFullscreenControls();
 
     template <typename Executor, typename Handler>
     void postTask(const Executor& executor, Handler&& handler)
