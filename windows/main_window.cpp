@@ -597,6 +597,7 @@ MainWindow::MainWindow(
         "QWidget#controlPanel QPushButton:hover { background: rgba(255,255,255,24); border-color: rgba(255,255,255,35); }"
         "QWidget#controlPanel QPushButton:pressed { background: rgba(255,255,255,42); }"
         "QWidget#controlPanel QPushButton:disabled { color: rgba(220,228,238,90); }"
+        "QWidget#controlPanel QPushButton::menu-indicator { image: none; width: 0px; }"
         "QWidget#controlPanel QSlider::groove:horizontal { height: 3px; background: rgba(230,238,248,85); border-radius: 1px; }"
         "QWidget#controlPanel QSlider::sub-page:horizontal { background: #78b8f0; border-radius: 1px; }"
         "QWidget#controlPanel QSlider::handle:horizontal { width: 10px; height: 10px; margin: -4px 0; background: #f2f6fb; border: 0; border-radius: 5px; }"
@@ -2792,6 +2793,10 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event)
         {
             unsetCursor();
             fullscreen_hide_timer_->stop();
+        }
+        else if (event->type() == QEvent::Enter && watched == video_surface_)
+        {
+            showFullscreenControls();
         }
         else if (event->type() == QEvent::Leave && is_control_widget)
         {
