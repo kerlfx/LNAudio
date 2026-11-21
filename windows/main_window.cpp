@@ -1170,7 +1170,7 @@ MainWindow::MainWindow(
             }
         }
         menu_bar_->hide();
-        setMenuWidget(menu_host);
+        menu_host->hide();
         menu_bar_->installEventFilter(this);
         for (QWidget* child : menu_bar_->findChildren<QWidget*>())
         {
@@ -2087,6 +2087,13 @@ MainWindow::MainWindow(
     status_label_->setContentsMargins(2, 0, 2, 0);
     control_panel_layout->addWidget(status_label_);
     setCentralWidget(content);
+    if (title_bar_)
+    {
+        title_bar_->setParent(content);
+        title_bar_->setGeometry(0, 0, content->width(), title_bar_->sizeHint().height());
+        title_bar_->hide();
+        title_bar_->raise();
+    }
     control_panel_->setParent(content);
     control_panel_->hide();
     control_panel_overlay_ = true;
@@ -2099,6 +2106,8 @@ MainWindow::MainWindow(
         if (mode_ != PlayerMode::Video || !control_panel_)
             return;
         control_panel_->hide();
+        if (title_bar_)
+            title_bar_->hide();
         fullscreen_controls_visible_ = false;
         if (isFullScreen())
             setCursor(Qt::BlankCursor);
@@ -2753,7 +2762,7 @@ void MainWindow::updateFullscreenUi()
     {
         unsetCursor();
         if (title_bar_)
-            title_bar_->show();
+            title_bar_->hide();
         if (statusBar())
             statusBar()->setVisible(mode_ == PlayerMode::Audio);
         if (playlist_panel_)
@@ -2852,9 +2861,23 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event)
                 unsetCursor();
                 fullscreen_hide_timer_->stop();
             }
-            else if (watched == video_surface_ || isFullScreen())
+            else if (watched == video_surface_)
             {
-                showFullscreenControls();
+                const QPoint position = static_cast<QMouseEvent*>(event)->position().toPoint();
+                constexpr int edge_height = 8;
+                if (position.y() <= edge_height && title_bar_)
+                {
+                    unsetCursor();
+                    title_bar_->setGeometry(0, 0, centralWidget()->width(),
+                        title_bar_->sizeHint().height());
+                    title_bar_->show();
+                    title_bar_->raise();
+                    fullscreen_hide_timer_->start(fullscreen_hide_delay_ms_);
+                }
+                else if (position.y() >= video_surface_->height() - edge_height)
+                {
+                    showFullscreenControls();
+                }
             }
         }
         else if (event->type() == QEvent::Enter && is_control_widget)
@@ -2864,7 +2887,7 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event)
         }
         else if (event->type() == QEvent::Enter && watched == video_surface_)
         {
-            showFullscreenControls();
+            // The overlays are revealed only by their dedicated edge zones.
         }
         else if (event->type() == QEvent::Leave && is_control_widget)
         {
@@ -2917,7 +2940,16 @@ void MainWindow::resizeEvent(QResizeEvent* event)
 {
     QMainWindow::resizeEvent(event);
     if (mode_ == PlayerMode::Video)
+    {
         positionFullscreenControls();
+        if (title_bar_)
+        {
+            title_bar_->setGeometry(0, 0, centralWidget()->width(),
+                title_bar_->sizeHint().height());
+            if (title_bar_->isVisible())
+                title_bar_->raise();
+        }
+    }
     if (!isFullScreen() && !isMinimized())
         normal_geometry_ = saveGeometry();
 }
