@@ -941,7 +941,7 @@ private:
                 {
                     result = context_->GetData(frame.completion.Get(), nullptr, 0, 0);
                     if (result == S_FALSE)
-                        Sleep(0);
+                        Sleep(1);
                 }
             }
             pending_hardware_frames_.clear();
