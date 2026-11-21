@@ -3223,7 +3223,9 @@ void MainWindow::openVideoSettings()
     if (mode_ != PlayerMode::Video)
         return;
 
-    QDialog dialog(this);
+    // Keep settings as a real top-level window, independent of the custom
+    // frameless player window and its native title-bar implementation.
+    QDialog dialog(nullptr, Qt::Window);
     dialog.setWindowTitle(QStringLiteral("LNPlayer 播放器设置"));
     dialog.setMinimumSize(820, 600);
     auto* root = new QVBoxLayout(&dialog);
