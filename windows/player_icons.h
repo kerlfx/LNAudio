@@ -18,7 +18,8 @@ enum class Name
     Volume, VolumeMuted, AudioTrack, Subtitles,
     Minimize, Maximize, Restore, Close,
     Add, Remove, Clear, MoveUp, MoveDown,
-    Shuffle, Repeat, RepeatOne, Search
+    Shuffle, Repeat, RepeatOne, Search,
+    Settings, General, Playback, Interface, Video, Filters, Keyboard, Screenshot, Performance
 };
 
 inline QIcon make(Name name, const QColor& color = QColor(QStringLiteral("#d7dde7")))
@@ -118,6 +119,46 @@ inline QIcon make(Name name, const QColor& color = QColor(QStringLiteral("#d7dde
         painter.drawText(QRectF(8, 10, 8, 7), Qt::AlignCenter, QStringLiteral("1")); break;
     case Name::Search:
         painter.drawEllipse(QRectF(4, 4, 11, 11)); painter.drawLine(13, 13, 20, 20); break;
+    case Name::Settings:
+        painter.drawEllipse(QRectF(7, 7, 10, 10));
+        painter.drawEllipse(QRectF(10, 10, 4, 4));
+        painter.drawLine(12, 2, 12, 5); painter.drawLine(12, 19, 12, 22);
+        painter.drawLine(2, 12, 5, 12); painter.drawLine(19, 12, 22, 12);
+        painter.drawLine(5, 5, 7, 7); painter.drawLine(17, 17, 19, 19);
+        painter.drawLine(5, 19, 7, 17); painter.drawLine(17, 7, 19, 5); break;
+    case Name::General:
+        painter.drawCircle(QPointF(12, 12), 8);
+        painter.drawLine(12, 4, 12, 8); painter.drawLine(12, 16, 12, 20);
+        painter.drawLine(4, 12, 8, 12); painter.drawLine(16, 12, 20, 12); break;
+    case Name::Playback:
+        path.moveTo(8, 5); path.lineTo(19, 12); path.lineTo(8, 19); path.closeSubpath();
+        painter.setBrush(color); painter.drawPath(path); break;
+    case Name::Interface:
+        painter.drawRoundedRect(QRectF(3, 4, 18, 16), 2, 2);
+        painter.drawLine(3, 9, 21, 9); painter.drawLine(8, 9, 8, 20); break;
+    case Name::Video:
+        painter.drawRoundedRect(QRectF(3, 6, 18, 12), 2, 2);
+        painter.drawLine(8, 3, 16, 3); painter.drawLine(12, 3, 12, 6);
+        painter.drawLine(8, 18, 6, 21); painter.drawLine(16, 18, 18, 21); break;
+    case Name::Filters:
+        painter.drawLine(4, 6, 20, 6); painter.drawLine(4, 12, 20, 12);
+        painter.drawLine(4, 18, 20, 18);
+        painter.drawEllipse(QRectF(8, 4, 4, 4)); painter.drawEllipse(QRectF(14, 10, 4, 4));
+        painter.drawEllipse(QRectF(6, 16, 4, 4)); break;
+    case Name::Keyboard:
+        painter.drawRoundedRect(QRectF(3, 6, 18, 12), 2, 2);
+        for (int row = 0; row < 2; ++row)
+            for (int column = 0; column < 5; ++column)
+                painter.drawRect(QRectF(5 + column * 3, 8 + row * 4, 1.5, 1.5));
+        painter.drawLine(8, 16, 16, 16); break;
+    case Name::Screenshot:
+        painter.drawRoundedRect(QRectF(3, 7, 18, 13), 2, 2);
+        painter.drawRoundedRect(QRectF(8, 4, 8, 4), 1, 1);
+        painter.drawEllipse(QRectF(8, 10, 8, 8)); break;
+    case Name::Performance:
+        path.arcMoveTo(QRectF(4, 4, 16, 16), 180);
+        path.arcTo(QRectF(4, 4, 16, 16), 180, -180); painter.drawPath(path);
+        painter.drawLine(12, 12, 17, 8); painter.drawLine(5, 18, 19, 18); break;
     }
     return QIcon(pixmap);
 }
