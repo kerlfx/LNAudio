@@ -19,7 +19,7 @@ Version changes must update the CMake pins and this document together.
 |---|---:|---|---|
 | Standalone Asio | 1.38.2 | Header-only, standalone | Git tag `asio-1-38-2` via FetchContent |
 | FFmpeg | 8.1.2 | Windows MSVC x64, shared, LGPL | System233 prebuilt release; SHA-256 checked by FetchContent |
-| SQLite | 3.54.1 | Amalgamation | Official SQLite download manifest supplies archive URL and SHA3-256 |
+| SQLite | 3.54.1 | Generated amalgamation | Official `sqlite/sqlite` GitHub tag; generated with upstream build rules |
 
 ### FFmpeg version policy
 
@@ -90,7 +90,7 @@ The individual SDK/source roots are:
 
 - `3rd_cache/asio/1.38.2`
 - `3rd_cache/ffmpeg`
-- `3rd_cache/sqlite/3.54.1`
+- `3rd_cache/sqlite/source-3.54.1`
 
 An explicitly configured `FETCHCONTENT_BASE_DIR` is preserved. The old CMake
 default `build/_deps` is replaced with the repository-local cache location.
