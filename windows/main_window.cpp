@@ -41,6 +41,7 @@
 #include <QDoubleSpinBox>
 #include <QSpinBox>
 #include <QScrollArea>
+#include <QScreen>
 #include <QDropEvent>
 #include <QEvent>
 #include <QMoveEvent>
@@ -2401,6 +2402,27 @@ void MainWindow::showOsd(const QString& message)
     osd_timer_->start(osd_duration_ms_);
 }
 
+void MainWindow::fitWindowToVideoAspect(float aspect_ratio)
+{
+    if (!video_surface_ || aspect_ratio <= 0.0f ||
+        isMaximized() || isFullScreen() || video_surface_->width() <= 0)
+        return;
+
+    QScreen* target_screen = screen();
+    if (!target_screen)
+        return;
+
+    const int target_surface_height = qRound(
+        static_cast<float>(video_surface_->width()) / aspect_ratio);
+    const int window_height = height() +
+        target_surface_height - video_surface_->height();
+    const int maximum_height = target_screen->availableGeometry().height() - 32;
+    const int adjusted_height = std::clamp(
+        window_height, minimumHeight(), maximum_height);
+    if (std::abs(adjusted_height - height()) >= 8)
+        resize(width(), adjusted_height);
+}
+
 void MainWindow::showFullscreenControls()
 {
     if (mode_ != PlayerMode::Video || !control_panel_)
@@ -4376,8 +4398,14 @@ void MainWindow::requestVideoFrame()
                     video_surface_->set_source_aspect_ratio(display_aspect_ratio);
                 }
                 pending_video_frame_ = image;
+                const bool first_video_frame = video_width_ <= 0 || video_height_ <= 0;
                 video_width_ = hardware_owner ? hardware_width : image.width();
                 video_height_ = hardware_owner ? hardware_height : image.height();
+                if (first_video_frame && display_aspect_ratio > 0.0f)
+                {
+                    fitWindowToVideoAspect(display_aspect_ratio);
+                    showFullscreenControls();
+                }
                 pending_hardware_frame_owner_ = hardware_owner;
                 pending_hardware_texture_ = const_cast<void*>(hardware_texture);
                 pending_hardware_array_slice_ = hardware_array_slice;
