@@ -9,6 +9,15 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# Keep all FetchContent sources and download metadata under the repository.
+# Replace CMake's previous default build/_deps location, but preserve an explicit
+# user-selected cache directory.
+if(NOT DEFINED FETCHCONTENT_BASE_DIR
+   OR FETCHCONTENT_BASE_DIR STREQUAL "${CMAKE_BINARY_DIR}/_deps")
+    set(FETCHCONTENT_BASE_DIR "${PROJECT_SOURCE_DIR}/3rd_cache/fetchcontent" CACHE PATH
+        "Base directory for FetchContent downloads and build metadata" FORCE)
+endif()
+
 # Show FetchContent download and population progress for all dependencies.
 set(FETCHCONTENT_QUIET OFF)
 
