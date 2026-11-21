@@ -124,7 +124,7 @@ if(NOT EXISTS "${LNPLAYER_SQLITE_ROOT}/sqlite-amalgamation-3500400/sqlite3.c"
    AND NOT EXISTS "${LNPLAYER_SQLITE_ROOT}/sqlite3.c")
     FetchContent_Declare(
         SQLite
-        URL "https://www.sqlite.org/2025/sqlite-amalgamation-3500400.zip"
+        URL "https://www2.sqlite.org/2025/sqlite-amalgamation-3500400.zip"
         URL_HASH SHA3_256=f131b68e6ba5fb891cc13ebb5ff955054c77294cb92d8d1268bad5dba4fa2a1
         DOWNLOAD_EXTRACT_TIMESTAMP TRUE
         SOURCE_DIR "${LNPLAYER_SQLITE_ROOT}"
