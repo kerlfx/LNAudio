@@ -6,6 +6,8 @@
 #include <QPainterPath>
 #include <QPen>
 #include <QPixmap>
+#include <QRectF>
+#include <QString>
 
 namespace PlayerIcons
 {
@@ -88,7 +90,7 @@ inline QIcon make(Name name, const QColor& color = QColor(QStringLiteral("#d7dde
         painter.drawLine(5, 12, 19, 12); break;
     case Name::Clear:
         painter.drawLine(5, 7, 19, 7); painter.drawLine(9, 7, 9, 5);
-        painter.drawLine(15, 7, 15, 5); painter.drawPath(QPainterPath());
+        painter.drawLine(15, 7, 15, 5);
         painter.drawLine(7, 8, 8, 19); painter.drawLine(17, 8, 16, 19);
         painter.drawLine(8, 19, 16, 19); painter.drawLine(10, 10, 10, 17);
         painter.drawLine(14, 10, 14, 17); break;
