@@ -2723,6 +2723,8 @@ void MainWindow::showFullscreenControls()
         return;
 
     unsetCursor();
+    if (title_bar_)
+        title_bar_->hide();
     control_panel_->show();
     positionFullscreenControls();
     fullscreen_controls_visible_ = true;
@@ -2872,7 +2874,10 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event)
                         title_bar_->sizeHint().height());
                     title_bar_->show();
                     title_bar_->raise();
-                    fullscreen_hide_timer_->start(fullscreen_hide_delay_ms_);
+                    if (fullscreen_hide_delay_ms_ > 0)
+                        fullscreen_hide_timer_->start(fullscreen_hide_delay_ms_);
+                    else
+                        fullscreen_hide_timer_->stop();
                 }
                 else if (position.y() >= video_surface_->height() - edge_height)
                 {
