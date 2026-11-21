@@ -1109,3 +1109,17 @@ Windows UI 的正式完成条件统一由 [`docs/WINDOWS_UI_ACCEPTANCE.md`](WIND
 
 实现提交：
 - dfe7e508f378ba75e9d48f8b3104f67afc26b0a6 — D3D11 字幕 Overlay 上传使用显式源尺寸并按源尺寸复制。
+
+
+### 2026-11-21 — FFmpeg 字幕滤镜初始化与 D3D11 帧所有权修正
+
+- [x] 修正 ASS/libass 滤镜创建：`avfilter_graph_create_filter()` 的第五个参数是 opaque user data，不是 `AVDictionary`。字幕滤镜现通过 `avfilter_graph_alloc_filter()` + `avfilter_init_dict()` 初始化，确保 filename、alpha、si 和 charenc 参数实际传入滤镜；失败时保留 FFmpeg 错误码文本。
+- [x] 修正 D3D11 GPU event query 回收：`GetData()` 返回失败时不再把“查询失败”误当成“GPU 已完成”，避免过早释放仍可能被视频处理器读取的解码帧 owner。只有查询成功才正常回收；设备已移除时才清空待完成帧。
+- [ ] 用户日志中的 Matroska Attachment: none / unknown codec 属于容器附件流探测警告，不能通过盲目增加 `probesize` / `analyzeduration` 修复；目前未改变全局探测参数。
+- [ ] `CacheOverflowException` 尚未在仓库源码中找到对应异常类型或直接抛出点，不能据此认定是 FFmpeg packet queue 溢出。需要用户提供访问冲突的完整调用堆栈和抛出异常时的调试器调用堆栈。
+- [ ] 需要 Windows/MSVC 实测：ASS/SSA 内嵌字幕与外置字幕、无字幕 MKV、包含附件字体的 MKV、HEVC 10-bit 硬件解码、连续 seek/resize、设备移除和关闭窗口。
+- [ ] 本轮只完成源码静态审查与定点修改，未运行构建、CTest 或 CI。
+
+实现提交：
+- `371b0ff0a5e15cc12d4db5b233e9755812a277c3` — 修正 FFmpeg ASS 字幕滤镜 options 初始化。
+- `e0a36428ab3a9e73b866041a2ae269a7f5f71073` — GPU event query 失败时保留硬件帧 owner。
