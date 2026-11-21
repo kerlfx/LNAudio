@@ -26,7 +26,8 @@ if(NOT DEFINED FETCHCONTENT_BASE_DIR
         "Base directory for FetchContent downloads and build metadata" FORCE)
 endif()
 
-# Show FetchContent download and population progress for all dependencies.
+# Show FetchContent download and population output by default. Dependencies
+# whose progress cannot be rendered live may temporarily enable QUIET locally.
 set(FETCHCONTENT_QUIET OFF)
 
 if(NOT WIN32 AND NOT ANDROID)
