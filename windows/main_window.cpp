@@ -2703,6 +2703,8 @@ void MainWindow::updateFullscreenUi()
 
     if (title_bar_)
         title_bar_->hide();
+    if (playlist_panel_)
+        playlist_panel_->hide();
     unsetCursor();
 }
 bool MainWindow::eventFilter(QObject* watched, QEvent* event)
@@ -3986,8 +3988,8 @@ void MainWindow::openVideoSettings()
         playlist_visibility_action_->setChecked(playlist_panel_visible_);
     if (always_on_top_action_)
         always_on_top_action_->setChecked(always_on_top_);
-    if (playlist_panel_)
-        playlist_panel_->setVisible(playlist_panel_visible_);
+    if (playlist_panel_ && !playlist_panel_visible_)
+        playlist_panel_->hide();
     const bool was_fullscreen = isFullScreen();
     const bool was_maximized = isMaximized();
     setWindowFlag(Qt::WindowStaysOnTopHint, always_on_top_);
