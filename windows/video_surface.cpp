@@ -6,6 +6,7 @@
 #include "d3d11_video_renderer.h"
 
 #include <Windows.h>
+#include <CommCtrl.h>
 
 #include <QMouseEvent>
 #include <QContextMenuEvent>
@@ -19,6 +20,41 @@
 #include <algorithm>
 #include <utility>
 #include <vector>
+
+#include <vector>
+
+namespace
+{
+constexpr int kWindowResizeBorder = 12;
+
+LRESULT CALLBACK video_surface_subclass_proc(
+    HWND window, UINT message, WPARAM wparam, LPARAM lparam,
+    UINT_PTR subclass_id, DWORD_PTR reference_data)
+{
+    auto* surface = reinterpret_cast<VideoSurface*>(reference_data);
+    if (message == WM_NCHITTEST && surface)
+    {
+        QWidget* top_level = surface->window();
+        if (top_level && !top_level->isMaximized() && !top_level->isFullScreen())
+        {
+            const QPoint position = top_level->mapFromGlobal(QCursor::pos());
+            const bool on_edge = position.x() < kWindowResizeBorder ||
+                position.y() < kWindowResizeBorder ||
+                position.x() >= top_level->width() - kWindowResizeBorder ||
+                position.y() >= top_level->height() - kWindowResizeBorder;
+            if (on_edge)
+                return HTTRANSPARENT;
+        }
+    }
+
+    if (message == WM_NCDESTROY)
+    {
+        RemoveWindowSubclass(window, video_surface_subclass_proc, subclass_id);
+        return DefSubclassProc(window, message, wparam, lparam);
+    }
+    return DefSubclassProc(window, message, wparam, lparam);
+}
+}
 
 VideoSurface::VideoSurface(QWidget* parent)
     : QWidget(parent)
@@ -57,6 +93,9 @@ VideoSurface::VideoSurface(QWidget* parent)
 
     renderer_ = new lnplayer::windows::D3D11VideoRenderer();
     const HWND window = reinterpret_cast<HWND>(static_cast<quintptr>(winId()));
+    SetWindowSubclass(
+        window, video_surface_subclass_proc,
+        reinterpret_cast<UINT_PTR>(this), reinterpret_cast<DWORD_PTR>(this));
     if (!renderer_->initialize(window))
     {
         delete renderer_;
@@ -66,6 +105,9 @@ VideoSurface::VideoSurface(QWidget* parent)
 
 VideoSurface::~VideoSurface()
 {
+    const HWND window = reinterpret_cast<HWND>(static_cast<quintptr>(winId()));
+    RemoveWindowSubclass(
+        window, video_surface_subclass_proc, reinterpret_cast<UINT_PTR>(this));
     delete renderer_;
     renderer_ = nullptr;
 }
