@@ -120,28 +120,31 @@ set(LNPLAYER_SQLITE_VERSION "3.54.1" CACHE STRING
 set(LNPLAYER_SQLITE_ROOT "${PROJECT_SOURCE_DIR}/3rd_cache/sqlite" CACHE PATH
     "Root directory of the SQLite amalgamation source")
 
+if(NOT LNPLAYER_SQLITE_VERSION MATCHES "^([0-9]+)\\.([0-9]+)\\.([0-9]+)$")
+    message(FATAL_ERROR
+        "LNPLAYER_SQLITE_VERSION must use major.minor.patch format.")
+endif()
+
+set(_sqlite_major "${CMAKE_MATCH_1}")
+set(_sqlite_minor "${CMAKE_MATCH_2}")
+set(_sqlite_patch "${CMAKE_MATCH_3}")
+if(_sqlite_minor LESS 10)
+    set(_sqlite_minor "0${_sqlite_minor}")
+endif()
+if(_sqlite_patch LESS 10)
+    set(_sqlite_patch "0${_sqlite_patch}")
+endif()
+set(_sqlite_version_number "${_sqlite_major}${_sqlite_minor}${_sqlite_patch}00")
+set(_sqlite_archive_name "sqlite-amalgamation-${_sqlite_version_number}.zip")
+set(_sqlite_source_dir "${LNPLAYER_SQLITE_ROOT}/${LNPLAYER_SQLITE_VERSION}")
+set(_sqlite_amalgamation_dir "${_sqlite_source_dir}/sqlite-amalgamation-${_sqlite_version_number}")
+
 message(STATUS "[LNPlayer] Checking SQLite ${LNPLAYER_SQLITE_VERSION}...")
-if(NOT EXISTS "${LNPLAYER_SQLITE_ROOT}/sqlite-amalgamation-3540100/sqlite3.c"
+if(NOT EXISTS "${_sqlite_amalgamation_dir}/sqlite3.c"
+   AND NOT EXISTS "${_sqlite_source_dir}/sqlite3.c"
    AND NOT EXISTS "${LNPLAYER_SQLITE_ROOT}/sqlite3.c")
     # SQLite publishes a machine-readable CSV manifest inside download.html.
     # Resolve both the archive URL and SHA3-256 from that official manifest.
-    if(NOT LNPLAYER_SQLITE_VERSION MATCHES "^([0-9]+)\\.([0-9]+)\\.([0-9]+)$")
-        message(FATAL_ERROR
-            "LNPLAYER_SQLITE_VERSION must use major.minor.patch format.")
-    endif()
-
-    set(_sqlite_major "${CMAKE_MATCH_1}")
-    set(_sqlite_minor "${CMAKE_MATCH_2}")
-    set(_sqlite_patch "${CMAKE_MATCH_3}")
-    if(_sqlite_minor LESS 10)
-        set(_sqlite_minor "0${_sqlite_minor}")
-    endif()
-    if(_sqlite_patch LESS 10)
-        set(_sqlite_patch "0${_sqlite_patch}")
-    endif()
-    set(_sqlite_version_number "${_sqlite_major}${_sqlite_minor}${_sqlite_patch}00")
-    set(_sqlite_archive_name "sqlite-amalgamation-${_sqlite_version_number}.zip")
-
     set(_sqlite_metadata_dir "${CMAKE_BINARY_DIR}/_deps")
     file(MAKE_DIRECTORY "${_sqlite_metadata_dir}")
     set(_sqlite_metadata_file "${_sqlite_metadata_dir}/sqlite-download-products.html")
@@ -193,7 +196,7 @@ if(NOT EXISTS "${LNPLAYER_SQLITE_ROOT}/sqlite-amalgamation-3540100/sqlite3.c"
         URL_HASH "SHA3_256=${_sqlite_archive_sha3}"
         DOWNLOAD_NO_PROGRESS FALSE
         DOWNLOAD_EXTRACT_TIMESTAMP TRUE
-        SOURCE_DIR "${LNPLAYER_SQLITE_ROOT}"
+        SOURCE_DIR "${_sqlite_source_dir}"
         SOURCE_SUBDIR _lnplayer_amalgamation_only
     )
 
@@ -203,11 +206,13 @@ endif()
 message(STATUS "[LNPlayer] SQLite ready.")
 
 
+
 find_file(SQLITE3_C_SOURCE
     NAMES sqlite3.c
     PATHS
+        "${_sqlite_amalgamation_dir}"
+        "${_sqlite_source_dir}"
         "${LNPLAYER_SQLITE_ROOT}"
-        "${LNPLAYER_SQLITE_ROOT}/sqlite-amalgamation-3500400"
     NO_DEFAULT_PATH
     REQUIRED
 )
