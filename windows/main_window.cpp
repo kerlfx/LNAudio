@@ -5092,7 +5092,7 @@ void MainWindow::refreshSnapshot()
         return;
     snapshot_pending_ = true;
 
-    postCommand([this]
+    postBackground([this]
     {
         lnplayer_snapshot_t snapshot{};
         snapshot.struct_size = sizeof(snapshot);
