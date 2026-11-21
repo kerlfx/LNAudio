@@ -83,7 +83,6 @@
 #include <QStringDecoder>
 #include <QSlider>
 #include <QStackedWidget>
-#include <QSplitter>
 #include <QStatusBar>
 #include <QStandardPaths>
 #include <QSettings>
@@ -2768,9 +2767,18 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event)
                 (video_surface_->width() - empty_state_label_->width()) / 2,
                 (video_surface_->height() - empty_state_label_->height()) / 2);
         }
-        if (watched == video_surface_ && event->type() == QEvent::Resize &&
-            osd_label_ && osd_label_->isVisible())
-            positionOsd();
+        if (watched == video_surface_ && event->type() == QEvent::Resize)
+        {
+            if (osd_label_ && osd_label_->isVisible())
+                positionOsd();
+            if (playlist_panel_ && playlist_panel_->isVisible())
+            {
+                playlist_panel_->setGeometry(
+                    std::max(0, video_surface_->width() - playlist_panel_->width()),
+                    0, playlist_panel_->width(), video_surface_->height());
+                playlist_panel_->raise();
+            }
+        }
         if (event->type() == QEvent::Show && is_menu_widget)
         {
             fullscreen_hide_timer_->stop();
