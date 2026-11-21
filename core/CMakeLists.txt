@@ -6,8 +6,8 @@ message(STATUS "[LNPlayer] Checking third-party dependencies...")
 set(LNPLAYER_ASIO_VERSION "1.38.2" CACHE STRING
     "Pinned standalone Asio version" FORCE)
 string(REPLACE "." "-" LNPLAYER_ASIO_TAG_VERSION "${LNPLAYER_ASIO_VERSION}")
-set(LNPLAYER_ASIO_ROOT "${PROJECT_SOURCE_DIR}/3rd_cache/asio" CACHE PATH
-    "Root directory of the standalone Asio source")
+set(LNPLAYER_ASIO_ROOT "${PROJECT_SOURCE_DIR}/3rd_cache/asio/${LNPLAYER_ASIO_VERSION}" CACHE PATH
+    "Version-specific root directory of the standalone Asio source")
 option(LNPLAYER_DOWNLOAD_ASIO
     "Download the pinned standalone Asio headers when they are not available locally"
     ON
