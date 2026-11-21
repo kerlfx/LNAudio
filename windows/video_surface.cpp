@@ -181,7 +181,14 @@ void VideoSurface::set_video_color_space(int ycbcr_matrix, int full_range)
 
 bool VideoSurface::present_frame_threadsafe(const QImage& frame)
 {
-    return renderer_ && !frame.isNull() && renderer_->present(
+    if (!renderer_ || frame.isNull())
+        return false;
+
+    {
+        std::lock_guard<std::mutex> lock(frame_mutex_);
+        frame_ = frame;
+    }
+    return renderer_->present(
         frame.constBits(),
         frame.width(),
         frame.height(),
