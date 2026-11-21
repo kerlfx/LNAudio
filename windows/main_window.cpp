@@ -1179,6 +1179,8 @@ MainWindow::MainWindow(
 
     auto* content = new QWidget(this);
     auto* layout = new QVBoxLayout(content);
+    if (mode_ == PlayerMode::Video)
+        layout->setContentsMargins(12, 12, 12, 12);
 
     if (mode_ == PlayerMode::Video)
     {
@@ -1191,7 +1193,7 @@ MainWindow::MainWindow(
             "border-radius: 8px; padding: 10px 18px; font-size: 18px; }"));
         osd_label_->hide();
         empty_state_label_ = new QLabel(
-            QStringLiteral("拖放视频文件到此处，或从“文件”菜单打开视频"),
+            QStringLiteral("拖放视频文件到此处，或右键选择打开视频"),
             video_surface_);
         empty_state_label_->setAlignment(Qt::AlignCenter);
         empty_state_label_->setWordWrap(true);
@@ -1507,6 +1509,9 @@ MainWindow::MainWindow(
             QMenu menu(this);
             menu.setMouseTracking(true);
             menu.installEventFilter(this);
+            QAction* open_media = menu.addAction(QStringLiteral("打开文件..."));
+            QAction* open_folder = menu.addAction(QStringLiteral("打开文件夹..."));
+            menu.addSeparator();
             QAction* play_pause = menu.addAction(is_playing_
                 ? QStringLiteral("暂停")
                 : QStringLiteral("播放"));
@@ -1665,7 +1670,16 @@ MainWindow::MainWindow(
             QAction* settings_action = menu.addAction(QStringLiteral("播放器设置..."));
 
             QAction* selected = menu.exec(video_surface_->mapToGlobal(point));
-            if (selected == play_pause)
+            if (selected == open_media)
+                openFile();
+            else if (selected == open_folder)
+            {
+                const QString directory = QFileDialog::getExistingDirectory(
+                    this, QStringLiteral("打开文件夹"));
+                if (!directory.isEmpty())
+                    openFiles({QUrl::fromLocalFile(directory)});
+            }
+            else if (selected == play_pause)
                 togglePlayback();
             else if (selected == reset_zoom)
             {
