@@ -1080,3 +1080,5 @@ Windows UI 的正式完成条件统一由 [`docs/WINDOWS_UI_ACCEPTANCE.md`](WIND
 
 - 2e240f74e23ca0890aa515db706bf8db136e566a — 播放列表右键菜单增加直接打开独立播放器设置窗口的入口。
 - 4df1bab5b92ec6e1a084c04249525bd650bb6751 — 验收矩阵同步右键设置入口。
+
+- de8705a54cbdc8de8627df7200497bb69188f54d — 视频比例适配窗口后，保持窗口在当前显示器工作区内。
