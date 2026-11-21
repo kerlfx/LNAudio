@@ -1867,18 +1867,22 @@ MainWindow::MainWindow(
 
     auto* seek_layout = new QHBoxLayout();
     seek_layout->setContentsMargins(0, 0, 0, 0);
-    seek_layout->setSpacing(8);
+    seek_layout->setSpacing(6);
+    position_label_->setMinimumWidth(86);
+    position_label_->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     seek_layout->addWidget(position_label_);
     seek_layout->addWidget(seek_slider_, 1);
+
     auto* volume_button = new QPushButton(control_panel_);
     volume_button->setIcon(style()->standardIcon(QStyle::SP_MediaVolume));
-    volume_button->setIconSize(QSize(17, 17));
-    volume_button->setFixedSize(28, 24);
+    volume_button->setIconSize(QSize(16, 16));
+    volume_button->setFixedSize(26, 22);
     volume_button->setToolTip(QStringLiteral("静音切换"));
     volume_button->setAccessibleName(QStringLiteral("静音切换"));
-    volume_button->setStyleSheet(QStringLiteral("QPushButton { padding: 2px; border: 0; background: transparent; }"));
+    volume_button->setStyleSheet(QStringLiteral("QPushButton { padding: 1px; border: 0; background: transparent; }"));
     seek_layout->addWidget(volume_button);
-    volume_slider_->setMaximumWidth(112);
+    volume_slider_->setMaximumWidth(104);
+    volume_slider_->setFixedWidth(104);
     seek_layout->addWidget(volume_slider_);
     connect(volume_button, &QPushButton::clicked, this, [this]
     {
@@ -1894,18 +1898,18 @@ MainWindow::MainWindow(
 
     auto* control_layout = new QHBoxLayout();
     control_layout->setContentsMargins(0, 0, 0, 0);
-    control_layout->setSpacing(2);
+    control_layout->setSpacing(3);
     play_button_->setObjectName(QStringLiteral("playButton"));
     const auto set_transport_icon = [this](QPushButton* button, QStyle::StandardPixmap icon,
         const QString& tooltip, const QString& accessible_name)
     {
         button->setText(QString());
         button->setIcon(style()->standardIcon(icon));
-        button->setIconSize(QSize(18, 18));
-        button->setFixedSize(32, 28);
+        button->setIconSize(QSize(17, 17));
+        button->setFixedSize(30, 26);
         button->setToolTip(tooltip);
         button->setAccessibleName(accessible_name);
-        button->setStyleSheet(QStringLiteral("QPushButton { padding: 2px; border-radius: 4px; }"));
+        button->setStyleSheet(QStringLiteral("QPushButton { padding: 1px; border-radius: 4px; }"));
     };
     set_transport_icon(play_button_, QStyle::SP_MediaPlay,
         QStringLiteral("播放"), QStringLiteral("播放"));
@@ -1919,12 +1923,36 @@ MainWindow::MainWindow(
         QStringLiteral("上一项"), QStringLiteral("上一项"));
     set_transport_icon(next_button, QStyle::SP_MediaSkipForward,
         QStringLiteral("下一项"), QStringLiteral("下一项"));
+
     control_layout->addWidget(play_button_);
     control_layout->addWidget(pause_button_);
     control_layout->addWidget(previous_button);
     control_layout->addWidget(next_button);
     control_layout->addWidget(stop_button_);
-    control_layout->addSpacing(8);
+    control_layout->addSpacing(6);
+    const auto find_menu = [this](const QString& title) -> QMenu*
+    {
+        for (QAction* action : menuBar()->actions())
+            if (action->text() == title)
+                return action->menu();
+        return nullptr;
+    };
+    auto* audio_tracks_button = new QPushButton(QStringLiteral("♫"), control_panel_);
+    audio_tracks_button->setFixedSize(30, 26);
+    audio_tracks_button->setToolTip(QStringLiteral("切换音轨"));
+    audio_tracks_button->setAccessibleName(QStringLiteral("切换音轨"));
+    audio_tracks_button->setStyleSheet(QStringLiteral("QPushButton { padding: 1px; font-size: 16px; border-radius: 4px; }"));
+    if (QMenu* audio_tracks_menu = find_menu(QStringLiteral("音轨")))
+        audio_tracks_button->setMenu(audio_tracks_menu);
+    auto* subtitles_button = new QPushButton(QStringLiteral("CC"), control_panel_);
+    subtitles_button->setFixedSize(30, 26);
+    subtitles_button->setToolTip(QStringLiteral("切换字幕"));
+    subtitles_button->setAccessibleName(QStringLiteral("切换字幕"));
+    subtitles_button->setStyleSheet(QStringLiteral("QPushButton { padding: 1px; font-size: 11px; font-weight: 600; border-radius: 4px; }"));
+    if (QMenu* subtitles_menu = find_menu(QStringLiteral("字幕")))
+        subtitles_button->setMenu(subtitles_menu);
+    control_layout->addWidget(audio_tracks_button);
+    control_layout->addWidget(subtitles_button);
     control_layout->addStretch(1);
     connect(previous_button, &QPushButton::clicked, this, [this] { playPrevious(); });
     connect(next_button, &QPushButton::clicked, this, [this] { playNext(); });
