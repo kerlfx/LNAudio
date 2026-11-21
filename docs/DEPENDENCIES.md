@@ -37,20 +37,33 @@ The currently pinned archive is:
 - SHA-256:
   `80dc78fd43aa32e7c3b75401d0aae8bcd260127e528999198ac9d0b033a854df`
 
-### SQLite metadata policy
+### SQLite source and amalgamation generation
 
-The SQLite amalgamation version is converted to its numeric product identifier
-(`3540100`). During configure, FetchContent downloads the official
-`https://www.sqlite.org/download.html` manifest with `DOWNLOAD_NO_EXTRACT`,
-so the HTML/CSV file remains intact for parsing. CMake selects the exact
-`sqlite-amalgamation-3540100.zip` product row and reads its relative archive
-URL and SHA3-256 field. FetchContent then downloads and verifies the archive.
-No manually maintained SQLite checksum is embedded in CMake.
+SQLite 3.54.1 is fetched from the official GitHub mirror
+(`sqlite/sqlite`) at the `version-3.54.1` release tag. The mirror contains
+the canonical source tree and SQLite's own code-generation scripts, but does
+not commit the generated amalgamation files.
 
-All network downloads (Asio, FFmpeg, the SQLite manifest, and the SQLite
-amalgamation archive) now use FetchContent. The manifest is a raw-file download,
-not an extracted source dependency; it is stored under
-`3rd_cache/fetchcontent/sqlite-metadata/download`.
+LNPlayer therefore generates `sqlite3.c` and `sqlite3.h` from that source
+using the upstream build rules:
+
+- On Windows build hosts, CMake invokes
+  `nmake /f Makefile.msc sqlite3.c`. The makefile builds its bundled
+  `jimsh0.exe` Jim Tcl interpreter and source-verification helper as needed,
+  then runs the official source collection and amalgamation scripts.
+- On non-Windows build hosts, CMake runs the documented `configure` step and
+  invokes `make sqlite3.c`.
+
+A full Tcl installation is not required to generate the SQLite core
+amalgamation. The small Jim Tcl bootstrap interpreter is built from the
+SQLite source tree. A full Tcl installation is needed for SQLite's test
+suite and optional Tcl extension targets, which LNPlayer does not build.
+
+The source checkout and generated files are stored under
+`3rd_cache/sqlite/source-3.54.1`. The generated `sqlite3.c` is compiled
+directly into LNPlayer Core; the generated `sqlite3.h` is used as its
+include directory. This removes the dependency on parsing the SQLite website
+download manifest and on downloading a pre-generated amalgamation archive.
 
 ### Repository-local proxy
 
