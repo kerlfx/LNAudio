@@ -618,8 +618,18 @@ public:
         const float black[] = {0.0f, 0.0f, 0.0f, 1.0f};
         context_->OMSetRenderTargets(0, nullptr, nullptr);
         context_->ClearRenderTargetView(hardware_output_render_target_.Get(), black);
+
+        D3D11_VIDEO_COLOR background{};
+        background.RGBA.R = 0.0f;
+        background.RGBA.G = 0.0f;
+        background.RGBA.B = 0.0f;
+        background.RGBA.A = 1.0f;
+        video_context_->VideoProcessorSetOutputBackgroundColor(
+            video_processor_.Get(), FALSE, &background);
         video_context_->VideoProcessorSetOutputTargetRect(
             video_processor_.Get(), TRUE, &target_rect);
+        video_context_->VideoProcessorSetStreamDestRect(
+            video_processor_.Get(), 0, TRUE, &target_rect);
         D3D11_VIDEO_PROCESSOR_STREAM stream{};
         stream.Enable = TRUE;
         stream.pInputSurface = input_view.Get();
