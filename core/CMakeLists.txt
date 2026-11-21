@@ -37,6 +37,7 @@ if(NOT ASIO_INCLUDE_DIR OR ASIO_INCLUDE_DIR MATCHES "-NOTFOUND$")
             GIT_REPOSITORY https://github.com/chriskohlhoff/asio.git
             GIT_TAG "asio-${LNPLAYER_ASIO_TAG_VERSION}"
             GIT_SHALLOW TRUE
+            GIT_PROGRESS TRUE
             SOURCE_DIR "${LNPLAYER_ASIO_ROOT}"
             SOURCE_SUBDIR _lnplayer_headers_only
         )
@@ -104,6 +105,7 @@ if(NOT EXISTS "${LNPLAYER_FFMPEG_ROOT}/include/libavformat/avformat.h")
         FFmpeg
         URL "${_ffmpeg_url}"
         URL_HASH SHA256=80dc78fd43aa32e7c3b75401d0aae8bcd260127e528999198ac9d0b033a854df
+        DOWNLOAD_NO_PROGRESS FALSE
         DOWNLOAD_EXTRACT_TIMESTAMP TRUE
         SOURCE_DIR "${LNPLAYER_FFMPEG_ROOT}"
         SOURCE_SUBDIR _lnplayer_prebuilt_sdk
@@ -126,6 +128,7 @@ if(NOT EXISTS "${LNPLAYER_SQLITE_ROOT}/sqlite-amalgamation-3500400/sqlite3.c"
         SQLite
         URL "https://www2.sqlite.org/2025/sqlite-amalgamation-3500400.zip"
         URL_HASH SHA3_256=f131b68e6ba5fb891cc13ebb5ff955054c77294cb92d8d1268bad5dba4fa2a1
+        DOWNLOAD_NO_PROGRESS FALSE
         DOWNLOAD_EXTRACT_TIMESTAMP TRUE
         SOURCE_DIR "${LNPLAYER_SQLITE_ROOT}"
         SOURCE_SUBDIR _lnplayer_amalgamation_only
