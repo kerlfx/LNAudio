@@ -1169,6 +1169,7 @@ MainWindow::MainWindow(
                 menu_bar_->addAction(action);
             }
         }
+        original_menu_bar->hide();
         menu_bar_->hide();
         menu_host->hide();
         menu_bar_->installEventFilter(this);
@@ -2087,6 +2088,11 @@ MainWindow::MainWindow(
     status_label_->setContentsMargins(2, 0, 2, 0);
     control_panel_layout->addWidget(status_label_);
     setCentralWidget(content);
+    if (menu_bar_)
+    {
+        menu_bar_->setParent(content);
+        menu_bar_->hide();
+    }
     if (title_bar_)
     {
         title_bar_->setParent(content);
