@@ -1125,6 +1125,7 @@ MainWindow::MainWindow(
         {
             if (QMenu* menu = action->menu())
             {
+                original_menu_bar->removeAction(action);
                 menu->setParent(menu_bar_);
                 menu_bar_->addMenu(menu);
             }
@@ -2617,28 +2618,27 @@ bool MainWindow::nativeEvent(
             const bool right = position.x() >= width() - border;
             const bool top = position.y() < border;
             const bool bottom = position.y() >= height() - border;
-            if (top && left)
-                *result = HTTOPLEFT;
-            else if (top && right)
-                *result = HTTOPRIGHT;
-            else if (bottom && left)
-                *result = HTBOTTOMLEFT;
-            else if (bottom && right)
-                *result = HTBOTTOMRIGHT;
-            else if (left)
-                *result = HTLEFT;
-            else if (right)
-                *result = HTRIGHT;
-            else if (top)
-                *result = HTTOP;
-            else if (bottom)
-                *result = HTBOTTOM;
-            else
-                goto title_bar_hit_test;
-            return true;
+            if (left || right || top || bottom)
+            {
+                if (top && left)
+                    *result = HTTOPLEFT;
+                else if (top && right)
+                    *result = HTTOPRIGHT;
+                else if (bottom && left)
+                    *result = HTBOTTOMLEFT;
+                else if (bottom && right)
+                    *result = HTBOTTOMRIGHT;
+                else if (left)
+                    *result = HTLEFT;
+                else if (right)
+                    *result = HTRIGHT;
+                else if (top)
+                    *result = HTTOP;
+                else
+                    *result = HTBOTTOM;
+                return true;
+            }
         }
-
-title_bar_hit_test:
         if (title_bar_ && title_bar_->isVisible() &&
             title_bar_->geometry().contains(position))
         {
