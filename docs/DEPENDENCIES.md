@@ -27,7 +27,12 @@ Standalone Asio 1.38.2 is obtained from the upstream repository
 `https://github.com/chriskohlhoff/asio.git`, pinned to tag `asio-1-38-2`.
 FetchContent uses a shallow clone and enables Git progress output. Git is
 configured to use HTTP/1.1 for this checkout to avoid HTTP/2 transport
-interoperability problems on some Windows network paths.
+interoperability problems on some Windows network paths. Since Git refreshes
+progress with carriage returns that are not reliably rendered live by IDE
+output panes, LNPlayer suppresses successful Asio population output locally.
+FetchContent still prints the captured output when the download fails, so
+transport errors remain diagnosable. Other dependencies retain the project's
+default FetchContent output behavior.
 
 The checkout is stored under `3rd_cache/asio/1.38.2-git`; the include directory
 is its `include` subdirectory. An interrupted checkout is not considered ready:
