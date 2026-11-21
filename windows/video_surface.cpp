@@ -23,7 +23,7 @@
 VideoSurface::VideoSurface(QWidget* parent)
     : QWidget(parent)
 {
-    setMinimumSize(480, 270);
+    setMinimumSize(160, 90);
     setAttribute(Qt::WA_NativeWindow);
     setAttribute(Qt::WA_NoSystemBackground);
     setAttribute(Qt::WA_OpaquePaintEvent);
