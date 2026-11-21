@@ -565,11 +565,11 @@ MainWindow::MainWindow(
     setStyleSheet(QStringLiteral(
         "QMainWindow, QDialog { background: #171a20; color: #e8eaf0; }"
         "QMainWindow { border: 1px solid #343a46; }"
-        "QWidget#windowTitleBar { background: #20242c; border-bottom: 1px solid #343a46; }"
+        "QWidget#windowTitleBar { background: #191d24; border-bottom: 1px solid #292f39; }"
         "QWidget#windowTitleBar QPushButton { background: transparent; border: 0; "
-        "border-radius: 0; padding: 0; min-width: 42px; max-width: 42px; min-height: 28px; max-height: 28px; }"
-        "QWidget#windowTitleBar QPushButton:hover { background: #343b48; }"
-        "QWidget#windowTitleBar QPushButton#closeWindowButton:hover { background: #c42b1c; }"
+        "border-radius: 0; padding: 0; min-width: 34px; max-width: 34px; min-height: 26px; max-height: 26px; }"
+        "QWidget#windowTitleBar QPushButton:hover { background: #2a303a; }"
+        "QWidget#windowTitleBar QPushButton#closeWindowButton:hover { background: #a83232; }
         "QWidget { color: #e8eaf0; }"
         "QMenuBar { background: #20242c; border-bottom: 1px solid #343a46; }"
         "QMenuBar::item { padding: 6px 10px; background: transparent; }"
@@ -1104,33 +1104,33 @@ MainWindow::MainWindow(
         menu_host_layout->setSpacing(0);
         title_bar_ = new QWidget(menu_host);
         title_bar_->setObjectName(QStringLiteral("windowTitleBar"));
-        title_bar_->setFixedHeight(30);
+        title_bar_->setFixedHeight(27);
         auto* title_layout = new QHBoxLayout(title_bar_);
-        title_layout->setContentsMargins(10, 0, 0, 0);
+        title_layout->setContentsMargins(12, 0, 0, 0);
         title_layout->setSpacing(0);
         auto* title_label = new QLabel(windowTitle(), title_bar_);
         title_label->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
         title_layout->addWidget(title_label, 1);
         auto* minimize_button = new QPushButton(title_bar_);
-        minimize_button->setIcon(PlayerIcons::make(PlayerIcons::Name::Minimize));
-        minimize_button->setIconSize(QSize(16, 16));
-        minimize_button->setFixedSize(42, 28);
+        minimize_button->setIcon(PlayerIcons::make(PlayerIcons::Name::Minimize, QColor(QStringLiteral("#9aa6b5"))));
+        minimize_button->setIconSize(QSize(15, 15));
+        minimize_button->setFixedSize(34, 26);
         minimize_button->setToolTip(QStringLiteral("最小化"));
         minimize_button->setAccessibleName(QStringLiteral("最小化"));
         title_layout->addWidget(minimize_button);
         auto* maximize_button = new QPushButton(title_bar_);
         maximize_button->setObjectName(QStringLiteral("maximizeWindowButton"));
-        maximize_button->setIcon(PlayerIcons::make(PlayerIcons::Name::Maximize));
-        maximize_button->setIconSize(QSize(16, 16));
-        maximize_button->setFixedSize(42, 28);
+        maximize_button->setIcon(PlayerIcons::make(PlayerIcons::Name::Maximize, QColor(QStringLiteral("#9aa6b5"))));
+        maximize_button->setIconSize(QSize(15, 15));
+        maximize_button->setFixedSize(34, 26);
         maximize_button->setToolTip(QStringLiteral("最大化"));
         maximize_button->setAccessibleName(QStringLiteral("最大化"));
         title_layout->addWidget(maximize_button);
         auto* close_button = new QPushButton(title_bar_);
         close_button->setObjectName(QStringLiteral("closeWindowButton"));
-        close_button->setIcon(PlayerIcons::make(PlayerIcons::Name::Close));
-        close_button->setIconSize(QSize(16, 16));
-        close_button->setFixedSize(42, 28);
+        close_button->setIcon(PlayerIcons::make(PlayerIcons::Name::Close, QColor(QStringLiteral("#9aa6b5"))));
+        close_button->setIconSize(QSize(14, 14));
+        close_button->setFixedSize(34, 26);
         close_button->setToolTip(QStringLiteral("关闭"));
         close_button->setAccessibleName(QStringLiteral("关闭"));
         title_layout->addWidget(close_button);
@@ -2884,8 +2884,9 @@ void MainWindow::changeEvent(QEvent* event)
                 QStringLiteral("maximizeWindowButton")))
             {
                 maximize_button->setIcon(PlayerIcons::make(
-                    isMaximized() ? PlayerIcons::Name::Restore : PlayerIcons::Name::Maximize));
-                maximize_button->setIconSize(QSize(16, 16));
+                    isMaximized() ? PlayerIcons::Name::Restore : PlayerIcons::Name::Maximize,
+                    QColor(QStringLiteral("#9aa6b5"))));
+                maximize_button->setIconSize(QSize(15, 15));
                 maximize_button->setToolTip(isMaximized()
                     ? QStringLiteral("还原") : QStringLiteral("最大化"));
                 maximize_button->setAccessibleName(maximize_button->toolTip());
