@@ -34,6 +34,35 @@ is its `include` subdirectory. An interrupted checkout is not considered ready:
 CMake checks for `include/asio.hpp` before reusing the directory. If the checkout
 is incomplete, remove that version-specific directory and configure again.
 
+
+
+### FetchContent download progress
+
+The project keeps `FETCHCONTENT_QUIET OFF` and enables Git's progress output
+for the Asio clone. FetchContent already gives its ExternalProject population
+download step direct terminal access: this is built into CMake's
+`FetchContent/CMakeLists.cmake.in` (including CMake 3.24 and 4.3), where
+`USES_TERMINAL_DOWNLOAD` is set to `YES`. FetchContent also reserves the
+Ninja console job pool for that step.
+
+Do not add `USES_TERMINAL_DOWNLOAD` to `FetchContent_Declare()` as a proposed
+fix. FetchContent handles this internally; the option is consumed by its
+argument parser rather than forwarded as a user-controlled setting. Adding it
+does not improve progress rendering.
+
+Git updates its progress line with carriage returns (`\\r`) rather than
+emitting a newline for every percentage. A build/output pane that records
+process output instead of behaving as an interactive terminal may display
+those updates concatenated on one line. This is a presentation limitation,
+not evidence that Git progress is disabled or that Ninja is dropping progress.
+The exact rendering depends on the terminal/output host used to run CMake.
+
+A Git transport error such as Schannel's `missing close_notify`, followed by
+`early EOF` or an invalid pack index, is a separate failure: the clone did not
+receive a complete pack. Terminal access and progress rendering do not repair
+an interrupted TLS connection. Diagnose transport failures independently
+from progress display.
+
 ### FFmpeg version policy
 
 FFmpeg 8.1.3 is an upstream stable maintenance release, but the selected Windows
