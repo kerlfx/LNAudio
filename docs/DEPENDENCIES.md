@@ -86,8 +86,8 @@ CMake downloads this archive through `cmake/DownloadFile.cmake`, using the
 system curl executable. Interrupted transfers retain a `.part` file and
 subsequent configure attempts request continuation with HTTP byte ranges.
 Curl's progress bar is shown during transfer. Transfers are retried up to
-five times. The completed archive is SHA-256 verified before it is renamed into the cache and extracted. A verified archive
-is reused on later configure runs.
+five times. The completed archive is SHA-256 verified before it is renamed into
+the cache and extracted. A verified archive is reused on later configure runs.
 
 ### SQLite source and amalgamation generation
 
