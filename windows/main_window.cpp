@@ -49,6 +49,7 @@
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QHBoxLayout>
+#include <QGridLayout>
 #include <QLabel>
 #include <QLocale>
 #include <QLineEdit>
@@ -333,28 +334,32 @@ public:
 
         const QRect text_rect = style->subElementRect(
             QStyle::SE_ItemViewItemText, &item_option, widget);
-        const int gap = 8;
-        const int title_width = text_rect.width() * 55 / 100;
-        const int duration_width = text_rect.width() * 20 / 100;
-        const int resolution_width = text_rect.width() - title_width - duration_width - gap * 2;
         const QColor text_color = item_option.state & QStyle::State_Selected
             ? item_option.palette.color(QPalette::HighlightedText)
             : item_option.palette.color(QPalette::Text);
         painter->save();
         painter->setPen(text_color);
         const QFontMetrics metrics(item_option.font);
-        painter->drawText(QRect(text_rect.left(), text_rect.top(), title_width,
-            text_rect.height()), Qt::AlignVCenter | Qt::AlignLeft,
-            metrics.elidedText(title, Qt::ElideRight, title_width));
+        const int metadata_height = std::max(14, metrics.height());
+        const QRect title_rect(
+            text_rect.left(), text_rect.top(),
+            text_rect.width(), text_rect.height() - metadata_height);
+        painter->drawText(title_rect, Qt::AlignVCenter | Qt::AlignLeft,
+            metrics.elidedText(title, Qt::ElideRight, title_rect.width()));
+
+        QFont metadata_font = item_option.font;
+        metadata_font.setPointSize(std::max(8, metadata_font.pointSize() - 1));
+        painter->setFont(metadata_font);
+        painter->setPen(item_option.palette.color(QPalette::Mid));
+        const QFontMetrics metadata_metrics(metadata_font);
         const QString duration = index.data(Qt::UserRole + 1).toString();
         const QString resolution = index.data(Qt::UserRole + 2).toString();
-        painter->drawText(QRect(text_rect.left() + title_width + gap, text_rect.top(),
-            duration_width, text_rect.height()), Qt::AlignVCenter | Qt::AlignLeft,
-            metrics.elidedText(duration, Qt::ElideRight, duration_width));
-        painter->drawText(QRect(text_rect.left() + title_width + duration_width + gap * 2,
-            text_rect.top(), resolution_width, text_rect.height()),
-            Qt::AlignVCenter | Qt::AlignLeft,
-            metrics.elidedText(resolution, Qt::ElideRight, resolution_width));
+        const QString metadata = QStringLiteral("%1    %2").arg(duration, resolution);
+        const QRect metadata_rect(
+            text_rect.left(), title_rect.bottom(),
+            text_rect.width(), metadata_height);
+        painter->drawText(metadata_rect, Qt::AlignVCenter | Qt::AlignLeft,
+            metadata_metrics.elidedText(metadata, Qt::ElideRight, metadata_rect.width()));
         painter->restore();
     }
 
@@ -362,7 +367,7 @@ public:
         const QModelIndex& index) const override
     {
         QSize size = QStyledItemDelegate::sizeHint(option, index);
-        size.setHeight(std::max(size.height(), 34));
+        size.setHeight(std::max(size.height(), 46));
         return size;
     }
 };
@@ -371,14 +376,12 @@ QWidget* create_playlist_header(QWidget* parent)
 {
     auto* header = new QWidget(parent);
     auto* layout = new QHBoxLayout(header);
-    layout->setContentsMargins(8, 4, 8, 4);
-    layout->setSpacing(8);
+    layout->setContentsMargins(8, 5, 8, 5);
     auto* title = new QLabel(QStringLiteral("文件名"), header);
-    auto* duration = new QLabel(QStringLiteral("时长"), header);
-    auto* resolution = new QLabel(QStringLiteral("分辨率"), header);
-    layout->addWidget(title, 55);
-    layout->addWidget(duration, 20);
-    layout->addWidget(resolution, 25);
+    auto* metadata = new QLabel(QStringLiteral("时长  ·  分辨率"), header);
+    metadata->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    layout->addWidget(title, 1);
+    layout->addWidget(metadata);
     header->setStyleSheet(QStringLiteral("QWidget { color: palette(mid); font-size: 11px; }"));
     return header;
 }
@@ -1151,22 +1154,29 @@ MainWindow::MainWindow(
         playlist_panel_ = new QWidget(content);
         auto* playlist_panel_layout = new QVBoxLayout(playlist_panel_);
         playlist_panel_layout->setContentsMargins(0, 0, 0, 0);
-        auto* playlist_actions = new QHBoxLayout();
+        auto* playlist_actions = new QGridLayout();
+        playlist_actions->setHorizontalSpacing(5);
+        playlist_actions->setVerticalSpacing(5);
         auto* add_to_queue = new QPushButton(QStringLiteral("添加"), playlist_panel_);
         auto* remove_from_queue = new QPushButton(QStringLiteral("移除"), playlist_panel_);
         auto* clear_queue = new QPushButton(QStringLiteral("清空"), playlist_panel_);
         auto* move_up = new QPushButton(QStringLiteral("上移"), playlist_panel_);
         auto* move_down = new QPushButton(QStringLiteral("下移"), playlist_panel_);
+        for (QPushButton* button : {add_to_queue, remove_from_queue, clear_queue, move_up, move_down})
+        {
+            button->setMinimumHeight(30);
+            button->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+        }
         auto* shuffle_button = new QPushButton(QStringLiteral("随机：关"), playlist_panel_);
         auto* repeat_button = new QPushButton(QStringLiteral("循环：关"), playlist_panel_);
         shuffle_button_ = shuffle_button;
         repeat_button_ = repeat_button;
         shuffle_button->setCheckable(true);
-        playlist_actions->addWidget(add_to_queue);
-        playlist_actions->addWidget(remove_from_queue);
-        playlist_actions->addWidget(clear_queue);
-        playlist_actions->addWidget(move_up);
-        playlist_actions->addWidget(move_down);
+        playlist_actions->addWidget(add_to_queue, 0, 0);
+        playlist_actions->addWidget(remove_from_queue, 0, 1);
+        playlist_actions->addWidget(clear_queue, 0, 2);
+        playlist_actions->addWidget(move_up, 1, 0);
+        playlist_actions->addWidget(move_down, 1, 1);
         playlist_panel_layout->addLayout(playlist_actions);
         auto* playback_modes = new QHBoxLayout();
         playback_modes->addWidget(shuffle_button);
@@ -1637,7 +1647,21 @@ MainWindow::MainWindow(
         video_splitter->addWidget(playlist_panel_);
         video_splitter->setStretchFactor(0, 1);
         video_splitter->setStretchFactor(1, 0);
-        video_splitter->setSizes({700, 280});
+        {
+            QSettings settings(settings_file_path(), QSettings::IniFormat);
+            const QByteArray saved_splitter_state = settings.value(
+                QStringLiteral("Video/UI/PlaylistSplitterState")).toByteArray();
+            if (saved_splitter_state.isEmpty() || !video_splitter->restoreState(saved_splitter_state))
+                video_splitter->setSizes({700, 280});
+            connect(video_splitter, &QSplitter::splitterMoved, this,
+                [video_splitter]
+                {
+                    QSettings settings(settings_file_path(), QSettings::IniFormat);
+                    settings.setValue(
+                        QStringLiteral("Video/UI/PlaylistSplitterState"),
+                        video_splitter->saveState());
+                });
+        }
         playlist_panel_->setMinimumWidth(250);
         playlist_panel_->setMaximumWidth(440);
         playlist_panel_->setVisible(playlist_panel_visible_);
