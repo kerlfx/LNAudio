@@ -80,12 +80,12 @@
 
 位置：
 - `windows/main_window.cpp`：视频模式打开成功后将 `snapshot_timer_` 设置为 25ms，并调用 `refreshSnapshot()`。
-- `refreshSnapshot()`：使用 `postCommand()` 执行 `lnplayer_get_snapshot()`。
+- `refreshSnapshot()`：通过共享后台线程池执行 `lnplayer_get_snapshot()`，不再排入命令 Strand。
 - `core/lnplayer.cpp`：Controller 的 `get_snapshot()` 调用 `session_.snapshot()`。
 - `core/playback_session.cpp`：`snapshot()` 与 `read_video_frame()` 共用 `mutex_`；`read_video_frame()` 持锁执行整个 backend frame pull。
 
 影响：
-- 视频播放期间最多每秒触发约 40 次快照查询。
+- 视频播放期间最多每秒触发约 4 次快照查询。
 - 快照可能等待当前完整帧读取结束。
 - 查询任务在 command Strand 上等待时，后续播放控制任务被排在它后面。
 - 即使快照最终只读取少量字段，锁等待时间仍由 FFmpeg 解码/解封装路径决定。
@@ -172,3 +172,12 @@
 - [x] 淘汰时同步维护图像字节数、硬件 owner 数量与历史游标。
 - [ ] 预算不包含当前帧、待呈现帧、renderer/GPU 在途引用及共享字幕位图；仍需 Windows 实测内存峰值和硬件解码表面池行为。
 - [ ] 本次仅静态修改与回读，未运行 Windows/MSVC 构建、CTest 或 CI。
+
+
+### 2026-11-21 — 快照轮询与控制命令隔离
+
+- [x] refreshSnapshot 的只读快照请求从 command Strand 移到共享后台线程池，避免快照等待 Session mutex 时阻塞同一 Strand 上的播放/暂停/停止/Seek 命令。
+- [x] 保留 snapshot_pending_ 单请求门闩，防止慢快照积压；完成后仍通过 Qt QueuedConnection 回到 UI 线程更新控件。
+- [ ] Core PlaybackSession::snapshot() 仍与 read_video_frame() 共用 Session mutex；后台快照仍可能等待当前帧读取结束，但不再阻塞 UI 命令调度。
+- [ ] Windows 实机需验证并发调用、控制命令延迟、进度/A-B 循环精度及窗口关闭生命周期。
+- [ ] 本次仅静态源码修改与回读，未运行 Windows/MSVC 构建、CTest 或 CI。
