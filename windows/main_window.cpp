@@ -609,6 +609,9 @@ MainWindow::MainWindow(
         "QTabBar::tab:selected { background: #345b86; }"
         "QStatusBar { background: #20242c; border-top: 1px solid #343a46; }"));
 
+    if (mode_ == PlayerMode::Video)
+        statusBar()->hide();
+
     auto* file_menu = menuBar()->addMenu(QStringLiteral("文件"));
     auto* open_action = file_menu->addAction(QStringLiteral("打开文件..."));
     connect(open_action, &QAction::triggered, this, [this]
@@ -2737,7 +2740,7 @@ void MainWindow::updateFullscreenUi()
         if (title_bar_)
             title_bar_->show();
         if (statusBar())
-            statusBar()->show();
+            statusBar()->setVisible(mode_ == PlayerMode::Audio);
         if (playlist_panel_)
             playlist_panel_->setVisible(playlist_panel_visible_);
     }
