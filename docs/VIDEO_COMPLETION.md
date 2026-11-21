@@ -1040,3 +1040,10 @@ Windows UI 的正式完成条件统一由 [`docs/WINDOWS_UI_ACCEPTANCE.md`](WIND
 - [x] 同步更正性能审查中快照周期为当前 250ms（约 4Hz）。
 - [ ] Session 快照仍会等待完整帧读取持有的 mutex；Windows 控制延迟、A-B 循环与关闭场景待实机验证。
 - [ ] 未运行 Windows/MSVC 构建、CTest 或 CI。
+
+
+### 2026-11-21 — D3D11 资源释放轮询降频
+
+- [x] pending hardware frame 的 GPU query 未完成时，将 `Sleep(0)` 调整为 `Sleep(1)`，减少资源释放期间的高频忙轮询。
+- [ ] 等待仍可能持续较久，GPU 完成前 owner 不能释放；需 Windows 实机验证设备移除、窗口关闭和资源重建。
+- [ ] 未运行 Windows/MSVC 构建、CTest 或 CI。
