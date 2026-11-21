@@ -5,6 +5,7 @@
 #include "main_window.h"
 
 #include <algorithm>
+#include <d3d11.h>
 #include <cmath>
 #include <functional>
 #include <iterator>
@@ -136,6 +137,14 @@ protected:
     }
 
 private:
+    QRect sliderHandleRect() const
+    {
+        QStyleOptionSlider option;
+        const_cast<SeekSlider*>(this)->initStyleOption(&option);
+        return style()->subControlRect(
+            QStyle::CC_Slider, &option, QStyle::SC_SliderHandle, this);
+    }
+
     void setValueFromPosition(int x)
     {
         QStyleOptionSlider option;
@@ -200,8 +209,11 @@ void initialize_settings_file()
         return;
 
 #ifdef Q_OS_WIN
-    QSettings legacy(QStringLiteral("LNPlayer"), QStringLiteral("LNPlayer"),
-        QSettings::NativeFormat);
+    QSettings legacy(
+        QSettings::NativeFormat,
+        QSettings::UserScope,
+        QStringLiteral("LNPlayer"),
+        QStringLiteral("LNPlayer"));
     for (const QString& key : legacy.allKeys())
     {
         if (!settings.contains(key))
