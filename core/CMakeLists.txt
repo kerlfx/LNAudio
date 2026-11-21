@@ -123,60 +123,85 @@ set(LNPLAYER_SQLITE_ROOT "${PROJECT_SOURCE_DIR}/3rd_cache/sqlite" CACHE PATH
 message(STATUS "[LNPlayer] Checking SQLite ${LNPLAYER_SQLITE_VERSION}...")
 if(NOT EXISTS "${LNPLAYER_SQLITE_ROOT}/sqlite-amalgamation-3540100/sqlite3.c"
    AND NOT EXISTS "${LNPLAYER_SQLITE_ROOT}/sqlite3.c")
-    # SQLite publishes machine-readable product metadata, including SHA3-256,
-    # in an HTML comment on its official download page. Fetch only this small
-    # metadata document here; FetchContent remains responsible for the archive.
-    set(_sqlite_download_page "${CMAKE_BINARY_DIR}/sqlite-download-page.html")
+    # SQLite publishes a machine-readable CSV manifest inside download.html.
+    # Resolve both the archive URL and SHA3-256 from that official manifest.
+    if(NOT LNPLAYER_SQLITE_VERSION MATCHES "^([0-9]+)\\.([0-9]+)\\.([0-9]+)$")
+        message(FATAL_ERROR
+            "LNPLAYER_SQLITE_VERSION must use major.minor.patch format.")
+    endif()
+
+    set(_sqlite_major "${CMAKE_MATCH_1}")
+    set(_sqlite_minor "${CMAKE_MATCH_2}")
+    set(_sqlite_patch "${CMAKE_MATCH_3}")
+    if(_sqlite_minor LESS 10)
+        set(_sqlite_minor "0${_sqlite_minor}")
+    endif()
+    if(_sqlite_patch LESS 10)
+        set(_sqlite_patch "0${_sqlite_patch}")
+    endif()
+    set(_sqlite_version_number "${_sqlite_major}${_sqlite_minor}${_sqlite_patch}00")
+    set(_sqlite_archive_name "sqlite-amalgamation-${_sqlite_version_number}.zip")
+
+    set(_sqlite_metadata_dir "${CMAKE_BINARY_DIR}/_deps")
+    file(MAKE_DIRECTORY "${_sqlite_metadata_dir}")
+    set(_sqlite_metadata_file "${_sqlite_metadata_dir}/sqlite-download-products.html")
+    message(STATUS "[LNPlayer] Fetching SQLite download metadata from sqlite.org...")
     file(DOWNLOAD
         "https://www.sqlite.org/download.html"
-        "${_sqlite_download_page}"
-        TLS_VERIFY ON
+        "${_sqlite_metadata_file}"
         STATUS _sqlite_metadata_status
+        TLS_VERIFY ON
     )
-    list(GET _sqlite_metadata_status 0 _sqlite_metadata_status_code)
-    list(GET _sqlite_metadata_status 1 _sqlite_metadata_status_message)
-    if(NOT _sqlite_metadata_status_code EQUAL 0)
+    list(GET _sqlite_metadata_status 0 _sqlite_metadata_result)
+    list(GET _sqlite_metadata_status 1 _sqlite_metadata_message)
+    if(NOT _sqlite_metadata_result EQUAL 0)
         message(FATAL_ERROR
-            "Failed to retrieve SQLite download metadata: ${_sqlite_metadata_status_message}")
+            "Failed to retrieve SQLite download metadata: ${_sqlite_metadata_message}")
     endif()
 
-    file(READ "${_sqlite_download_page}" _sqlite_download_metadata)
-    string(REPLACE "." "" _sqlite_version_number "${LNPLAYER_SQLITE_VERSION}")
-    set(_sqlite_archive_name
-        "sqlite-amalgamation-${_sqlite_version_number}00.zip")
-    string(REGEX MATCH
-        "PRODUCT,[^\\r\\n]*${_sqlite_archive_name}[^\\r\\n]*"
-        _sqlite_product_record
-        "${_sqlite_download_metadata}"
-    )
-    if(NOT _sqlite_product_record)
+    file(STRINGS "${_sqlite_metadata_file}" _sqlite_product_rows
+        REGEX "^PRODUCT,${_sqlite_version_number},sqlite-amalgamation-${_sqlite_version_number}\\.zip,")
+    list(LENGTH _sqlite_product_rows _sqlite_product_count)
+    if(NOT _sqlite_product_count EQUAL 1)
         message(FATAL_ERROR
-            "SQLite official download metadata does not contain ${_sqlite_archive_name}.")
+            "SQLite ${LNPLAYER_SQLITE_VERSION} amalgamation was not found exactly once "
+            "in the official SQLite download manifest.")
     endif()
 
-    string(REGEX MATCH "[0-9a-fA-F]+$" LNPLAYER_SQLITE_SHA3
-        "${_sqlite_product_record}")
-    string(LENGTH "${LNPLAYER_SQLITE_SHA3}" _sqlite_sha3_length)
-    if(NOT _sqlite_sha3_length EQUAL 64)
-        message(FATAL_ERROR
-            "SQLite official metadata returned an invalid SHA3-256 for ${_sqlite_archive_name}.")
+    list(GET _sqlite_product_rows 0 _sqlite_product_row)
+    string(REPLACE "," ";" _sqlite_product_fields "${_sqlite_product_row}")
+    list(LENGTH _sqlite_product_fields _sqlite_product_field_count)
+    if(_sqlite_product_field_count LESS 5)
+        message(FATAL_ERROR "Invalid SQLite download metadata row: ${_sqlite_product_row}")
     endif()
+    list(GET _sqlite_product_fields 2 _sqlite_archive_relative_url)
+    list(GET _sqlite_product_fields 4 _sqlite_archive_sha3)
+    string(LENGTH "${_sqlite_archive_sha3}" _sqlite_archive_sha3_length)
+    if(NOT _sqlite_archive_sha3_length EQUAL 64
+       OR NOT _sqlite_archive_sha3 MATCHES "^[0-9a-fA-F]+$")
+        message(FATAL_ERROR
+            "SQLite download manifest returned an invalid SHA3-256 for ${_sqlite_archive_name}.")
+    endif()
+
+    set(_sqlite_archive_url "https://www.sqlite.org/${_sqlite_archive_relative_url}")
+    message(STATUS "[LNPlayer] SQLite archive: ${_sqlite_archive_url}")
+    message(STATUS "[LNPlayer] SQLite SHA3-256 obtained from official manifest.")
 
     FetchContent_Declare(
         SQLite
-        URL "https://www.sqlite.org/2026/${_sqlite_archive_name}"
-        URL_HASH "SHA3_256=${LNPLAYER_SQLITE_SHA3}"
+        URL "${_sqlite_archive_url}"
+        URL_HASH "SHA3_256=${_sqlite_archive_sha3}"
         DOWNLOAD_NO_PROGRESS FALSE
         DOWNLOAD_EXTRACT_TIMESTAMP TRUE
         SOURCE_DIR "${LNPLAYER_SQLITE_ROOT}"
         SOURCE_SUBDIR _lnplayer_amalgamation_only
     )
 
-    message(STATUS
-        "[LNPlayer] Fetching SQLite ${LNPLAYER_SQLITE_VERSION} amalgamation (SHA3-256 from sqlite.org)")
+    message(STATUS "[LNPlayer] Fetching SQLite ${LNPLAYER_SQLITE_VERSION} amalgamation")
     FetchContent_MakeAvailable(SQLite)
 endif()
 message(STATUS "[LNPlayer] SQLite ready.")
+
 
 find_file(SQLITE3_C_SOURCE
     NAMES sqlite3.c
